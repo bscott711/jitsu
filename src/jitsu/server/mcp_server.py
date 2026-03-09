@@ -5,11 +5,13 @@ from mcp import types
 from mcp.server import Server
 from pydantic import ValidationError
 
+from jitsu.core.compiler import ContextCompiler
 from jitsu.core.state import JitsuStateManager
 from jitsu.models.core import PhaseReport
 
-# Initialize the global state manager for the server
+# Initialize the global state manager and compiler for the server
 state_manager = JitsuStateManager()
+context_compiler = ContextCompiler()
 
 # Initialize the MCP Server
 app = Server("jitsu")
@@ -60,7 +62,9 @@ async def handle_call_tool(
         if not directive:
             return [types.TextContent(type="text", text="No pending phases in the queue.")]
 
-        return [types.TextContent(type="text", text=directive.model_dump_json(indent=2))]
+        # CHANGE: We must now await the async compiler
+        compiled_markdown = await context_compiler.compile_directive(directive)
+        return [types.TextContent(type="text", text=compiled_markdown)]
 
     if name == "jitsu_report_status":
         if not arguments:
