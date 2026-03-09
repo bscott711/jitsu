@@ -1,0 +1,9 @@
+# **Jitsu Workflow Protocol**
+
+You are operating under Jitsu (実) orchestration.
+
+1. **Initialization:** At the start of every session or task, you MUST call the jitsu\_get\_next\_phase tool.  
+2. **Strict Context:** Read the compiled Markdown context provided by Jitsu. This is your "Ground Truth." Do not rely on stale file states or previous conversation memory if it conflicts with the JIT context.  
+3. **Execution:** Execute the instructions within the specified module\_scope.  
+4. **Reporting:** Once the task is complete, you MUST call jitsu\_report\_status with your artifacts and notes.  
+5. **Errors:** If you encounter a validation error or become stuck, report the status as STUCK to trigger the meta-feedback loop.
