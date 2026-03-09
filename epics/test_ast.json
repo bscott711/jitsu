@@ -1,0 +1,16 @@
+[
+  {
+    "epic_id": "test-ast-integration",
+    "phase_id": "phase-01-verify",
+    "module_scope": "src/jitsu",
+    "instructions": "Read the AST structure of the ast.py file provided in your context. List out the names of the classes and methods you see. Do not write any code.",
+    "context_targets": [
+      {
+        "provider_name": "ast",
+        "target_identifier": "src/jitsu/providers/ast.py",
+        "is_required": true
+      }
+    ],
+    "anti_patterns": []
+  }
+]

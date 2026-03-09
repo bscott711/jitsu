@@ -1,9 +1,7 @@
 """JIT Context Compiler for weaving directives and codebase state."""
 
 from jitsu.models.core import AgentDirective
-from jitsu.providers.base import BaseProvider
-from jitsu.providers.file import FileStateProvider
-from jitsu.providers.pydantic import PydanticV2Provider
+from jitsu.providers import ASTProvider, BaseProvider, FileStateProvider, PydanticV2Provider
 
 
 class ContextCompiler:
@@ -13,9 +11,12 @@ class ContextCompiler:
         """Initialize the compiler with registered providers."""
         file_provider = FileStateProvider()
         pydantic_provider = PydanticV2Provider()
+        ast_provider = ASTProvider()
+
         self._providers: dict[str, BaseProvider] = {
             file_provider.name: file_provider,
             pydantic_provider.name: pydantic_provider,
+            ast_provider.name: ast_provider,
         }
 
     async def compile_directive(self, directive: AgentDirective) -> str:
