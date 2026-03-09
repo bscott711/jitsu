@@ -1,0 +1,42 @@
+#Environments & Secrets
+.env
+.env.*
+.venv/
+venv/
+env/
+
+#Python Cache
+pycache/
+*.py[cod]
+*$py.class
+*.so
+
+#Build / Distribution
+build/
+dist/
+*.egg-info/
+.eggs/
+
+#Type Checking & Linting
+.ruff_cache/
+.mypy_cache/
+.pyright/
+
+#Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+#IDEs, Editors & AI Workspaces
+.vscode/
+.idea/
+.cursor/
+.windsurf/
+.agents/
+*.swp
+*.swo
+.DS_Store
+
+#Logs
+*.log

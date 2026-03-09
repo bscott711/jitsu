@@ -1,0 +1,125 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jitsu"
+version = "0.1.0"
+description = "JIT Context & Workflow Orchestrator for AI IDEs via MCP"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Mines Bioimaging" }
+]
+dependencies = [
+    "pydantic",
+    "mcp",
+    "anyio",
+]
+
+[project.scripts]
+jitsu = "jitsu.cli:main"
+jit = "jitsu.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "pytest-asyncio",
+    "ruff",
+    "pyright",
+    "import-linter",
+    "pymarkdownlnt",
+    "deptry",
+    "pre-commit",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jitsu"]
+
+# ==========================================
+# STRICT LINTING & FORMATTING (Ruff)
+# ==========================================
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Enable ALL rules by default, then selectively ignore
+select = ["ALL"]
+ignore = [
+    "D203",    # 1 blank line required before class docstring (conflicts with D211)
+    "D205",    # 1 blank line required between summary line and description (often pedantic)
+    "D212",    # Multi-line docstring summary should start at the first line
+    "E501",    # Line too long (let the formatter handle formatting, ignore for strings)
+    "FIX002",  # Line contains TODO (we want to allow TODOs during dev)
+    "TC001",   # Move application import into a type-checking block
+    "TC002",   # Move third-party import into a type-checking block
+    "TC003",   # Move standard library import into a type-checking block
+    "COM812",  # Conflicts with the Ruff formatter
+    "ISC001",  # Conflicts with the Ruff formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+# S101: Allow use of `assert` in tests
+# PGH003: Allow blanket type ignores in tests (needed to test strict validation failures)
+"tests/**/*" = ["S101", "PGH003"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ==========================================
+# MARKDOWN LINTING (PyMarkdown)
+# ==========================================
+[tool.pymarkdown.plugins.md013]
+enabled = false
+
+# ==========================================
+# STRICT TYPE CHECKING (Pyright)
+# ==========================================
+[tool.pyright]
+include = ["src"]
+exclude = ["**/node_modules", "**/__pycache__"]
+strict = ["src"]
+reportMissingTypeStubs = true
+reportUnknownMemberType = true
+reportUnknownParameterType = true
+reportUnknownVariableType = true
+reportUnknownArgumentType = true
+reportUntypedFunctionDecorator = true
+
+# ==========================================
+# STRICT TESTING (Pytest)
+# ==========================================
+[tool.pytest.ini_options]
+addopts = "--cov=jitsu --cov-report=term-missing --cov-fail-under=100 --strict-markers"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+omit = [
+    "src/jitsu/cli.py",  # TODO: Remove from omit list once CLI is implemented
+]
+
+# ==========================================
+# DEPENDENCY ENFORCEMENT (Deptry)
+# ==========================================
+[tool.deptry.per_rule_ignores]
+DEP002 = ["mcp", "anyio"]  # TODO: Remove ignores once the MCP server is implemented
+
+# ==========================================
+# ARCHITECTURE ENFORCEMENT (Import Linter)
+# ==========================================
+[tool.importlinter]
+root_package = "jitsu"
+
+[[tool.importlinter.contracts]]
+name = "Models should not import from Providers or Server (Domain Driven Design)"
+type = "independence"
+modules = [
+    "jitsu.models",
+    "jitsu.providers",
+    # "jitsu.server"  # TODO: Uncomment once the MCP server module is implemented
+]

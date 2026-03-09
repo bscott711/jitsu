@@ -1,0 +1,43 @@
+repos:
+  # --------------------------------------------------------
+  # FILE-LEVEL HOOKS (Run only on changed files)
+  # --------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: Ruff Format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+      
+      - id: ruff-check
+        name: Ruff Check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+
+  # --------------------------------------------------------
+  # PROJECT-LEVEL HOOKS (Run globally, ignore staged files)
+  # --------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: pyright
+        name: Pyright Type Checking
+        entry: uv run pyright
+        language: system
+        types: [python]
+        pass_filenames: false
+        
+      - id: deptry
+        name: Deptry Dependency Check
+        entry: uv run deptry src
+        language: system
+        pass_filenames: false
+        always_run: true
+        
+      - id: import-linter
+        name: Import Linter (Architecture Contracts)
+        entry: uv run lint-imports
+        language: system
+        pass_filenames: false
+        always_run: true

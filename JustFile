@@ -1,0 +1,55 @@
+set shell := ["bash", "-c"]
+
+# Default command for the fast loop
+default: verify-fast
+
+# ==========================================
+# 1. THE AGENT'S TOOLKIT (Self-Correction)
+# ==========================================
+
+# Format code (Ruff)
+format:
+	@echo "🎨 Formatting code..."
+	uv run ruff format .
+
+# Lint and fix code (Ruff) and check Markdown (pymarkdownlnt)
+lint:
+	@echo "🧹 Linting code..."
+	uv run ruff check --fix .
+	@echo "📝 Linting markdown..."
+	uv run pymarkdown scan -e "**/node_modules/**" -e "**/.venv/**" -e "**/.git/**" -e "**/.pytest_cache/**" -e "**/__pycache__/**" -e "**/.ruff_cache/**" -r .
+
+# Strict type checking (Pyright)
+check-types:
+	@echo "🔒 Checking types..."
+	uv run pyright
+
+# Enforce architectural boundaries (Import Linter)
+contracts:
+	@echo "🏛️ Checking architectural layer contracts..."
+	uv run lint-imports
+
+# Detect dead code and unused dependencies (Deptry)
+check-deps:
+	@echo "🗑️ Checking for unused dependencies and dead code..."
+	uv run deptry src
+
+# Install pre-commit hooks
+install-hooks:
+	@echo "🪝 Installing git hooks..."
+	uv run pre-commit install
+
+# ==========================================
+# 2. THE VERIFICATION LOOPS (Agent Checkpoints)
+# ==========================================
+
+# THE FAST LOOP: Used by workers during iteration.
+verify-fast: format lint check-types test-unit
+
+# THE FULL GATE: Used by the Orchestrator/Pre-Commit. Runs EVERYTHING.
+verify-full: format lint check-types check-deps contracts test-unit
+
+# Run tests with strict 100% coverage limit (configured in pyproject.toml)
+test-unit:
+	@echo "🧪 Running strict tests..."
+	uv run pytest
