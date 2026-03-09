@@ -1,11 +1,15 @@
 """Command Line Interface main entry point for Jitsu."""
 
 import sys
+from pathlib import Path
+from typing import Annotated
 
 import anyio
 import typer
+from pydantic import TypeAdapter, ValidationError
 
-from jitsu.server.mcp_server import run_server
+from jitsu.models.core import AgentDirective
+from jitsu.server.mcp_server import run_server, state_manager
 
 app = typer.Typer(
     name="jitsu",
@@ -17,15 +21,61 @@ app = typer.Typer(
 @app.callback()
 def main_callback() -> None:
     """Jitsu CLI."""
-    # This empty callback forces Typer to retain the group structure
-    # so that `jitsu serve` doesn't get collapsed into just `jitsu`.
 
 
 @app.command()
-def serve() -> None:
+def serve(
+    epic: Annotated[
+        Path | None,
+        typer.Option(
+            "--epic",
+            "-e",
+            help="Path to a JSON Epic plan to preload into the queue.",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            resolve_path=True,
+        ),
+    ] = None,
+) -> None:
     """Start the Jitsu MCP Server over stdio."""
-    # CRITICAL: MCP over stdio requires stdout to be strictly reserved for JSON-RPC.
-    # All CLI informational output MUST go to stderr (err=True) to avoid corrupting the protocol.
+    if epic:
+        typer.secho(
+            f"📦 Loading Epic plan from {epic.name}...",
+            fg="cyan",
+            err=True,
+        )
+        try:
+            content = epic.read_text(encoding="utf-8")
+            adapter = TypeAdapter(list[AgentDirective])
+            directives = adapter.validate_json(content)
+
+            for directive in directives:
+                state_manager.queue_directive(directive)
+
+            typer.secho(
+                f"✅ Successfully queued {len(directives)} phase(s).",
+                fg="green",
+                bold=True,
+                err=True,
+            )
+        except ValidationError as e:
+            typer.secho(
+                f"\n❌ Validation Error parsing {epic.name}:\n{e}",
+                fg="red",
+                bold=True,
+                err=True,
+            )
+            sys.exit(1)
+        except Exception as e:  # noqa: BLE001
+            typer.secho(
+                f"\n❌ Failed to load {epic.name}: {e}",
+                fg="red",
+                bold=True,
+                err=True,
+            )
+            sys.exit(1)
+
     typer.secho(
         "⚡ Starting Jitsu MCP Server...",
         fg="green",
