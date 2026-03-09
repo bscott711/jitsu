@@ -1,0 +1,58 @@
+[
+  {
+    "epic_id": "ast-provider-beta",
+    "phase_id": "phase-01-scaffolding",
+    "module_scope": "src/jitsu/providers",
+    "instructions": "Research the BaseProvider and design the ASTProvider. The goal of the ASTProvider is to use Python's built-in `ast` module to parse a target Python file and extract a structural outline (Classes, Methods, Functions, and their docstrings/signatures). We do not want the raw source code, just the structural skeleton to save token space in the context window. Do not write the provider yet. Output a brief design document or plan.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/providers/base.py",
+        "is_required": true
+      }
+    ],
+    "anti_patterns": [
+      "Do not use third-party AST libraries like `libcst`. Stick to the standard `ast` module.",
+      "Do not extract the entire method bodies. Only signatures and docstrings."
+    ]
+  },
+  {
+    "epic_id": "ast-provider-beta",
+    "phase_id": "phase-02-implementation",
+    "module_scope": "src/jitsu/providers",
+    "instructions": "Implement the `ASTProvider` in `src/jitsu/providers/ast.py`. The provider must accept a file path as the target. It should safely read the file, parse it using `ast.parse()`, and return a formatted Markdown block outlining the classes, functions, and docstrings. It MUST use the new `jitsu.utils.logger` for any exception handling. Export it in `src/jitsu/providers/__init__.py`.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/providers/base.py",
+        "is_required": true
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/utils/logger.py",
+        "is_required": true
+      }
+    ],
+    "anti_patterns": [
+      "Do not use `print()` or standard `logging`. You MUST use `from jitsu.utils.logger import get_logger`.",
+      "Do not crash if a file is missing or contains invalid Python syntax. Catch these explicitly, log via stderr, and return a formatted markdown error string."
+    ]
+  },
+  {
+    "epic_id": "ast-provider-beta",
+    "phase_id": "phase-03-verification",
+    "module_scope": "tests/providers",
+    "instructions": "Write comprehensive tests for the `ASTProvider` in `tests/providers/test_ast.py`. You must achieve 100% code coverage for the new file. Test the happy path (valid python file), missing file path, and syntax errors. Once written, run the `verify-fast` Make/Just command to ensure formatting, linting, typing, and tests all pass perfectly.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/providers/test_pydantic.py",
+        "is_required": false
+      }
+    ],
+    "anti_patterns": [
+      "Do not finish the phase if test coverage is below 100%.",
+      "Do not ignore type errors. Use Pyright strict compatibility."
+    ]
+  }
+]
