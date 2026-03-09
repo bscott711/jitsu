@@ -1,0 +1,63 @@
+[
+  {
+    "epic_id": "ipc-queue-daemon",
+    "phase_id": "phase-01-ipc-listener",
+    "module_scope": "src/jitsu/server",
+    "instructions": "Create `src/jitsu/server/ipc.py`. Implement an `IPCServer` class using `anyio` that listens on local TCP port 8765. It must accept an instance of `JitsuStateManager`. When a client connects and sends a JSON string, it should parse the string and append it to the StateManager's queue. Use `jitsu.utils.logger` to safely log connections and errors to stderr.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/state.py",
+        "is_required": true
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/utils/logger.py",
+        "is_required": true
+      }
+    ],
+    "anti_patterns": [
+      "Do not use the standard `socket` or `asyncio` libraries directly. You MUST use `anyio.create_tcp_listener` for strict concurrency management.",
+      "Do not print to stdout. All IPC connection logs must go through the stderr logger."
+    ]
+  },
+  {
+    "epic_id": "ipc-queue-daemon",
+    "phase_id": "phase-02-cli-submit",
+    "module_scope": "src/jitsu/cli",
+    "instructions": "Update `src/jitsu/cli/main.py` to add a new Typer command called `submit`. This command should accept a `file_path` argument, read the JSON file, and use `anyio.connect_tcp('127.0.0.1', 8765)` to send the raw JSON string to the IPC daemon. It should gracefully handle `ConnectionRefusedError` if the server isn't running and print a helpful Typer secho error (err=True).",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true
+      }
+    ],
+    "anti_patterns": [
+      "Do not add complex logic to the CLI. It is a dumb pipe that just reads the file and sends the bytes.",
+      "Do not forget to use `err=True` on all Typer secho outputs."
+    ]
+  },
+  {
+    "epic_id": "ipc-queue-daemon",
+    "phase_id": "phase-03-server-wiring",
+    "module_scope": "src/jitsu/server",
+    "instructions": "Update `src/jitsu/server/mcp_server.py` to spawn the `IPCServer` listener concurrently alongside the stdio MCP server. You will need to use `anyio.create_task_group()` inside the server's run loop to ensure both the MCP stdio listener and the TCP socket listener run side-by-side without blocking each other.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/server/ipc.py",
+        "is_required": true
+      }
+    ],
+    "anti_patterns": [
+      "Do not break the MCP stdio initialization.",
+      "Ensure the task group cancels cleanly if the main process receives a termination signal."
+    ]
+  }
+]
