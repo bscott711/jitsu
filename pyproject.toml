@@ -15,6 +15,7 @@ dependencies = [
     "pydantic",
     "mcp",
     "anyio",
+    "typer>=0.24.1",
 ]
 
 [project.scripts]
