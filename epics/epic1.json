@@ -1,0 +1,41 @@
+[
+{
+"epic_id": "pydantic-provider-alpha",
+"phase_id": "phase-01-research",
+"module_scope": "src/jitsu/models",
+"instructions": "Review the current core domain models. We need to ensure that the upcoming Pydantic provider can handle these specific structures, including Enums and nested lists, when generating JSON schemas.",
+"context_targets": [
+{
+"provider_name": "file_state",
+"target_identifier": "src/jitsu/models/core.py",
+"is_required": true
+}
+],
+"anti_patterns": [
+"Do not alter core.py schemas in this phase.",
+"Avoid proposing changes that break Pydantic V2 compatibility."
+]
+},
+{
+"epic_id": "pydantic-provider-alpha",
+"phase_id": "phase-02-implementation",
+"module_scope": "src/jitsu/providers",
+"instructions": "Implement the PydanticV2Provider in src/jitsu/providers/pydantic.py. The provider must use importlib to dynamically load the class defined in target_identifier and return a formatted Markdown block containing its model_json_schema().",
+"context_targets": [
+{
+"provider_name": "file_state",
+"target_identifier": "src/jitsu/providers/base.py",
+"is_required": true
+},
+{
+"provider_name": "pydantic_v2",
+"target_identifier": "jitsu.models.core.AgentDirective",
+"is_required": false
+}
+],
+"anti_patterns": [
+"Do not use raw string parsing for class names; use formal import resolution.",
+"Do not fail the entire compilation if an optional pydantic_v2 target fails to resolve."
+]
+}
+]
