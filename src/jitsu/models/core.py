@@ -1,108 +1,48 @@
-"""
-Core domain models for the Jitsu Context Orchestrator.
-
-These models define the strict contracts between the external orchestrator,
-the context providers, and the IDE agents executing the code.
-"""
+"""Core domain models for the Jitsu orchestration layer."""
 
 from enum import Enum
-from typing import cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class PhaseStatus(str, Enum):
-    """The allowed statuses an agent can report back to the orchestrator."""
+    """The execution status of a specific Jitsu phase."""
 
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
     STUCK = "STUCK"
 
 
 class ContextTarget(BaseModel):
-    """
-    Defines a specific piece of context the agent needs to complete a task.
+    """A specific target for JIT context resolution."""
 
-    This tells the JIT Context Compiler what to parse and inject.
-    """
+    model_config = ConfigDict(frozen=True, strict=True)
 
-    model_config = ConfigDict(strict=True, frozen=True)
-
-    provider_name: str = Field(
-        ...,
-        description=(
-            "The registered name of the Context Provider (e.g., 'pydantic_v2', 'sqlalchemy_orm')."
-        ),
-    )
-    target_identifier: str = Field(
-        ...,
-        description="The specific class, file path, or object to resolve.",
-    )
-    is_required: bool = Field(
-        default=True,
-        description=(
-            "If True, failure to resolve this context aborts the phase before agent execution."
-        ),
-    )
+    provider_name: str
+    target_identifier: str
+    is_required: bool = True
 
 
 class AgentDirective(BaseModel):
-    """
-    The mathematical 'Ground Truth' instructions for a specific coding phase.
+    """A task directive sent to an AI agent via MCP."""
 
-    This replaces stale Markdown files.
-    """
-
-    model_config = ConfigDict(strict=True, frozen=True)
-
-    epic_id: str = Field(
-        ...,
-        description="The parent epic identifier.",
-    )
-    phase_id: str = Field(
-        ...,
-        description="The specific phase identifier.",
-    )
-    module_scope: str = Field(
-        ...,
-        description="The directory path this agent is allowed to modify (e.g., 'src/auth').",
-    )
-    instructions: str = Field(
-        ...,
-        description="The exact functional requirements the agent must execute.",
-    )
-    context_targets: list[ContextTarget] = Field(
-        default_factory=lambda: cast("list[ContextTarget]", []),
-        description="Codebase contexts to resolve and inject Just-In-Time.",
-    )
-    anti_patterns: list[str] = Field(
-        default_factory=lambda: cast("list[str]", []),
-        description="Strict negative constraints (what NOT to do).",
-    )
+    epic_id: str
+    phase_id: str
+    module_scope: str
+    instructions: str
+    context_targets: list[ContextTarget] = []
+    anti_patterns: list[str] = []
 
 
 class PhaseReport(BaseModel):
-    """
-    The payload the IDE agent sends back to the orchestrator via MCP.
+    """A report submitted by an agent upon phase completion."""
 
-    This is sent when it has finished its work or reached an infinite loop.
-    """
+    # Allow passing strings that match Enum names/values
+    model_config = ConfigDict(use_enum_values=True)
 
-    model_config = ConfigDict(strict=True, frozen=True)
-
-    phase_id: str = Field(
-        ...,
-        description="The ID of the phase being reported on.",
-    )
-    status: PhaseStatus = Field(
-        ...,
-        description="The final outcome of the phase execution.",
-    )
-    artifacts_generated: list[str] = Field(
-        default_factory=lambda: cast("list[str]", []),
-        description="List of file paths modified or created.",
-    )
-    agent_notes: str = Field(
-        default="",
-        description="Any notes or context the agent wants to pass back to the orchestrator.",
-    )
+    phase_id: str
+    status: PhaseStatus
+    artifacts_generated: list[str] = []
+    agent_notes: str = ""

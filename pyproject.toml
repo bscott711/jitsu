@@ -18,8 +18,8 @@ dependencies = [
 ]
 
 [project.scripts]
-jitsu = "jitsu.cli:main"
-jit = "jitsu.cli:main"
+jitsu = "jitsu.cli.main:main"
+jit = "jitsu.cli.main:main"
 
 [dependency-groups]
 dev = [
@@ -81,6 +81,8 @@ enabled = false
 # ==========================================
 [tool.pyright]
 include = ["src"]
+# CRITICAL: Tell pyright where to resolve imports from for src layout
+extraPaths = ["src"]
 exclude = ["**/node_modules", "**/__pycache__"]
 strict = ["src"]
 reportMissingTypeStubs = true
@@ -98,16 +100,6 @@ addopts = "--cov=jitsu --cov-report=term-missing --cov-fail-under=100 --strict-m
 testpaths = ["tests"]
 asyncio_mode = "auto"
 
-[tool.coverage.run]
-omit = [
-    "src/jitsu/cli.py",  # TODO: Remove from omit list once CLI is implemented
-]
-
-# ==========================================
-# DEPENDENCY ENFORCEMENT (Deptry)
-# ==========================================
-[tool.deptry.per_rule_ignores]
-DEP002 = ["mcp", "anyio"]  # TODO: Remove ignores once the MCP server is implemented
 
 # ==========================================
 # ARCHITECTURE ENFORCEMENT (Import Linter)
@@ -117,9 +109,17 @@ root_package = "jitsu"
 
 [[tool.importlinter.contracts]]
 name = "Models should not import from Providers or Server (Domain Driven Design)"
-type = "independence"
-modules = [
-    "jitsu.models",
-    "jitsu.providers",
-    # "jitsu.server"  # TODO: Uncomment once the MCP server module is implemented
+type = "forbidden"
+source_modules = [
+    "jitsu.models"
 ]
+forbidden_modules = [
+    "jitsu.providers",
+    "jitsu.server"
+]
+
+# ==========================================
+# ARCHITECTURE ENFORCEMENT (Deptry)
+# ==========================================
+[tool.deptry]
+known_first_party = ["jitsu"]

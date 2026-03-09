@@ -1,0 +1,102 @@
+"""Tests for the Jitsu MCP server."""
+
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from unittest.mock import MagicMock, patch
+
+import pytest
+from jitsu.server.mcp_server import handle_call_tool, handle_list_tools, run_server, state_manager
+from mcp.types import TextContent
+
+from jitsu.models.core import AgentDirective
+
+EXPECTED_TOOL_COUNT = 2
+
+
+@pytest.mark.asyncio
+async def test_list_tools() -> None:
+    """Test that the server lists the correct tools."""
+    tools = await handle_list_tools()
+    assert len(tools) == EXPECTED_TOOL_COUNT
+    names = [tool.name for tool in tools]
+    assert "jitsu_get_next_phase" in names
+    assert "jitsu_report_status" in names
+
+
+@pytest.mark.asyncio
+async def test_get_next_phase_empty() -> None:
+    """Test getting a phase when the queue is empty."""
+    while state_manager.get_next_directive():
+        pass
+
+    result = await handle_call_tool("jitsu_get_next_phase", {})
+    assert isinstance(result[0], TextContent)
+    assert result[0].text == "No pending phases in the queue."
+
+
+@pytest.mark.asyncio
+async def test_get_next_phase_with_data() -> None:
+    """Test getting a phase when data exists in the queue."""
+    directive = AgentDirective(
+        epic_id="epic-1",
+        phase_id="phase-1",
+        module_scope="src/test",
+        instructions="Do a thing",
+    )
+    state_manager.queue_directive(directive)
+
+    result = await handle_call_tool("jitsu_get_next_phase", {})
+    assert isinstance(result[0], TextContent)
+    assert "phase-1" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_report_status_success() -> None:
+    """Test reporting a successful status."""
+    result = await handle_call_tool(
+        "jitsu_report_status", {"phase_id": "phase-1", "status": "SUCCESS"}
+    )
+    assert isinstance(result[0], TextContent)
+    assert "Successfully recorded status SUCCESS" in result[0].text
+    assert state_manager.completed_reports[-1].phase_id == "phase-1"
+
+
+@pytest.mark.asyncio
+async def test_report_status_missing_args() -> None:
+    """Test reporting status with missing arguments."""
+    result = await handle_call_tool("jitsu_report_status", None)
+    assert isinstance(result[0], TextContent)
+    assert "Error: Missing arguments." in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_report_status_invalid() -> None:
+    """Test reporting an invalid status (Pydantic validation catch)."""
+    result = await handle_call_tool(
+        "jitsu_report_status", {"phase_id": "phase-1", "status": "INVALID_STATUS"}
+    )
+    assert isinstance(result[0], TextContent)
+    assert "Validation Error" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_unknown_tool() -> None:
+    """Test calling an unknown tool throws a clean error."""
+    with pytest.raises(ValueError, match="Unknown tool: unknown_tool"):
+        await handle_call_tool("unknown_tool", {})
+
+
+@patch("jitsu.server.mcp_server.mcp.server.stdio.stdio_server")
+@patch("jitsu.server.mcp_server.app.run")
+@pytest.mark.asyncio
+async def test_run_server(mock_run: MagicMock, mock_stdio: MagicMock) -> None:
+    """Test the server runner initialization."""
+
+    @asynccontextmanager
+    async def mock_ctx() -> AsyncGenerator[tuple[str, str], None]:
+        yield ("read", "write")
+
+    mock_stdio.return_value = mock_ctx()
+
+    await run_server()
+    mock_run.assert_called_once()
