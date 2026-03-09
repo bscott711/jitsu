@@ -3,6 +3,7 @@
 from jitsu.models.core import AgentDirective
 from jitsu.providers.base import BaseProvider
 from jitsu.providers.file import FileStateProvider
+from jitsu.providers.pydantic import PydanticV2Provider
 
 
 class ContextCompiler:
@@ -11,8 +12,10 @@ class ContextCompiler:
     def __init__(self) -> None:
         """Initialize the compiler with registered providers."""
         file_provider = FileStateProvider()
+        pydantic_provider = PydanticV2Provider()
         self._providers: dict[str, BaseProvider] = {
             file_provider.name: file_provider,
+            pydantic_provider.name: pydantic_provider,
         }
 
     async def compile_directive(self, directive: AgentDirective) -> str:
