@@ -299,3 +299,20 @@ async def test_unknown_resolution_mode_internal() -> None:
     res, provider = await compiler._resolve_explicit("target", "INVALID")  # type: ignore # noqa: SLF001
     assert res == ""
     assert provider == "none"
+
+
+@pytest.mark.asyncio
+async def test_compile_execution_environment_injection() -> None:
+    """Test that the execution environment reminder is injected."""
+    compiler = ContextCompiler()
+    directive = AgentDirective(
+        epic_id="epic-1",
+        phase_id="phase-1",
+        module_scope="test",
+        instructions="do stuff",
+    )
+    res = await compiler.compile_directive(directive)
+    assert "## Execution Environment" in res
+    assert "STRICT PROTOCOL" in res
+    assert "uv run" in res
+    assert "just" in res

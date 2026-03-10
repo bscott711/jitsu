@@ -1,0 +1,42 @@
+[
+  {
+    "epic_id": "epic-4.5-execution-environment",
+    "phase_id": "phase-01-jitsurules-definition",
+    "module_scope": "Project Root",
+    "instructions": "Update the `.jitsurules` file to explicitly define the execution environment. Instruct the agent that it MUST NEVER use system `python3` or global `pytest`. It must ALWAYS use `uv run <command>` (e.g., `uv run pytest`) or `just <recipe>` (e.g., `just verify-fast`) for all execution, testing, and linting.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": ".jitsurules",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "JustFile",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not instruct the agent to manually activate virtual environments or reference `./.venv/bin/python` directly."
+    ]
+  },
+  {
+    "epic_id": "epic-4.5-execution-environment",
+    "phase_id": "phase-02-compiler-environment-injection",
+    "module_scope": "src/jitsu/core",
+    "instructions": "Update the `ContextCompiler` in `src/jitsu/core/compiler.py` to automatically include an 'Execution Environment' section in the generated Markdown payload. This section should explicitly remind the agent to use `uv run` or `just` commands. This ensures that even if an agent ignores `.jitsurules`, the JIT payload guarantees they know how to run tests immediately.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "AUTO"
+      }
+    ],
+    "anti_patterns": [
+      "Do not hardcode the entire JustFile into the compiler output; simply inject a standard reminder string about `uv run` and `just test` / `just verify-fast`."
+    ]
+  }
+]

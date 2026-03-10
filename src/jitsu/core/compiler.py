@@ -6,6 +6,12 @@ from jitsu.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+EXECUTION_ENV_REMINDER = """
+## Execution Environment
+**STRICT PROTOCOL:** You MUST NEVER use system `python3` or global `pytest`.
+Use `uv run <command>` (e.g., `uv run pytest`) or `just <recipe>` (e.g., `just verify-fast`) for all execution, testing, and linting.
+"""
+
 
 class ContextCompiler:
     """Compiles AgentDirectives into highly-contextualized Markdown prompts."""
@@ -35,6 +41,9 @@ class ContextCompiler:
         if directive.anti_patterns:
             payload_parts.append("\n## Anti-Patterns (STRICTLY FORBIDDEN)")
             payload_parts.extend([f"- {pattern}" for pattern in directive.anti_patterns])
+
+        # Inject Execution Environment Reminder
+        payload_parts.append(EXECUTION_ENV_REMINDER)
 
         payload_parts.append("\n## JIT Context")
         manifest_lines: list[str] = []
