@@ -3,7 +3,13 @@
 import pytest
 from pydantic import ValidationError
 
-from jitsu.models.core import AgentDirective, ContextTarget, PhaseReport, PhaseStatus
+from jitsu.models.core import (
+    AgentDirective,
+    ContextTarget,
+    PhaseReport,
+    PhaseStatus,
+    TargetResolutionMode,
+)
 
 
 def test_phase_status_enum() -> None:
@@ -11,6 +17,14 @@ def test_phase_status_enum() -> None:
     assert PhaseStatus.SUCCESS.value == "SUCCESS"
     assert PhaseStatus.FAILED.value == "FAILED"
     assert PhaseStatus.STUCK.value == "STUCK"
+
+
+def test_target_resolution_mode_enum() -> None:
+    """Test the TargetResolutionMode enum values."""
+    assert TargetResolutionMode.AUTO.value == "AUTO"
+    assert TargetResolutionMode.STRUCTURE_ONLY.value == "STRUCTURE_ONLY"
+    assert TargetResolutionMode.FULL_SOURCE.value == "FULL_SOURCE"
+    assert TargetResolutionMode.SCHEMA_ONLY.value == "SCHEMA_ONLY"
 
 
 def test_context_target_initialization() -> None:
@@ -22,6 +36,7 @@ def test_context_target_initialization() -> None:
     assert target.provider_name == "pydantic_v2"
     assert target.target_identifier == "src.schemas.User"
     assert target.is_required is True  # Default value
+    assert target.resolution_mode == TargetResolutionMode.AUTO  # Default value
 
 
 def test_context_target_strictness_and_frozen() -> None:

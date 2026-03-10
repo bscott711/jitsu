@@ -15,6 +15,15 @@ class PhaseStatus(str, Enum):
     STUCK = "STUCK"
 
 
+class TargetResolutionMode(str, Enum):
+    """The mode used to resolve JIT context for a target."""
+
+    AUTO = "AUTO"
+    STRUCTURE_ONLY = "STRUCTURE_ONLY"
+    FULL_SOURCE = "FULL_SOURCE"
+    SCHEMA_ONLY = "SCHEMA_ONLY"
+
+
 class ContextTarget(BaseModel):
     """A specific target for JIT context resolution."""
 
@@ -23,6 +32,7 @@ class ContextTarget(BaseModel):
     provider_name: str
     target_identifier: str
     is_required: bool = True
+    resolution_mode: TargetResolutionMode = TargetResolutionMode.AUTO
 
 
 class AgentDirective(BaseModel):

@@ -1,0 +1,58 @@
+[
+  {
+    "epic_id": "epic-4-compiler-optimization",
+    "phase_id": "phase-01-domain-models",
+    "module_scope": "src/jitsu/models",
+    "instructions": "Update the core domain models to support compiler-first context optimization. Introduce a `TargetResolutionMode` Enum (AUTO, STRUCTURE_ONLY, FULL_SOURCE, SCHEMA_ONLY) and add it to the `ContextTarget` Pydantic V2 model. Ensure all models remain strictly typed and frozen.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true
+      }
+    ],
+    "anti_patterns": [
+      "Do not import anything from `jitsu.providers` or `jitsu.server` (Domain Driven Design strictness).",
+      "Do not break existing Pydantic V2 compatibility."
+    ]
+  },
+  {
+    "epic_id": "epic-4-compiler-optimization",
+    "phase_id": "phase-02-compiler-planning-layer",
+    "module_scope": "src/jitsu/core",
+    "instructions": "Upgrade the `ContextCompiler` to implement the AST-first policy. If a `ContextTarget` uses `AUTO` mode, the compiler should proactively attempt to use the `ast` or `pydantic_v2` provider based on the target type, falling back to `file_state` only if necessary. Add logic to emit a compiled context manifest summarizing what was summarized and omitted.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true
+      }
+    ],
+    "anti_patterns": [
+      "Do not execute whole-file dumps if AST or Schema extraction succeeds in AUTO mode.",
+      "Do not use `print()` or standard logging; any fatal errors must go to `stderr`."
+    ]
+  },
+  {
+    "epic_id": "epic-4-compiler-optimization",
+    "phase_id": "phase-03-strict-verification",
+    "module_scope": "tests/core",
+    "instructions": "Write comprehensive tests for the updated `ContextCompiler` to guarantee 100% test coverage. Specifically test the 'AST preferred over file_state' routing, the fallback to `file_state` on AST failure, and the inclusion of the context manifest in the final markdown payload. Run the `verify-fast` command to confirm strict formatting, linting, and Pyright typing.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/core/test_compiler.py",
+        "is_required": true
+      }
+    ],
+    "anti_patterns": [
+      "Do not report SUCCESS if code coverage drops below 100%.",
+      "Do not use `Any` types in the tests; maintain Pyright strict mode."
+    ]
+  }
+]
