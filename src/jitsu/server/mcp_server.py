@@ -9,7 +9,12 @@ from pydantic import ValidationError
 from jitsu.core.compiler import ContextCompiler
 from jitsu.core.state import JitsuStateManager
 from jitsu.models.core import PhaseReport
-from jitsu.providers import ASTProvider, FileStateProvider, PydanticV2Provider
+from jitsu.providers import (
+    ASTProvider,
+    DirectoryTreeProvider,
+    FileStateProvider,
+    PydanticV2Provider,
+)
 from jitsu.server.ipc import IPCServer
 
 # Initialize the global state manager and compiler for the server
@@ -65,7 +70,7 @@ async def handle_list_tools() -> list[types.Tool]:
                     },
                     "provider_name": {
                         "type": "string",
-                        "description": "Provider to use (file_state, pydantic_v2, ast).",
+                        "description": "Provider to use (file_state, pydantic_v2, ast, tree).",
                         "default": "file_state",
                     },
                 },
@@ -127,6 +132,8 @@ async def _handle_request_context(arguments: dict[str, object] | None) -> list[t
         "file_state": FileStateProvider,
         "pydantic_v2": PydanticV2Provider,
         "ast": ASTProvider,
+        "tree": DirectoryTreeProvider,
+        "directory_tree": DirectoryTreeProvider,
     }
 
     provider_cls = providers.get(provider_name)

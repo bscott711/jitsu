@@ -1,11 +1,12 @@
 """Tests for the Context Compiler engine."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from jitsu.core.compiler import ContextCompiler
 from jitsu.models.core import AgentDirective, ContextTarget, TargetResolutionMode
+from jitsu.providers import DirectoryTreeProvider
 
 
 @pytest.mark.asyncio
@@ -338,3 +339,30 @@ async def test_compile_no_verification_commands() -> None:
     assert "### Verification" in res
     assert "*No specific verification commands required for this phase.*" in res
     assert "just verify-fast" not in res
+
+
+@pytest.mark.asyncio
+async def test_compiler_resolve_auto_tree_fallback() -> None:
+    """Test that AUTO resolution successfully falls back to the tree provider."""
+    compiler = ContextCompiler()
+
+    # We mock the tree provider to return a success string.
+    # We pass a target without '.py' or '.' so AST and Pydantic skip it.
+    with patch.object(DirectoryTreeProvider, "resolve", return_value="### Directory Tree"):
+        res, provider = await compiler._resolve_auto("my_directory", "file_state")  # noqa: SLF001
+
+        assert provider == "tree"
+        assert "### Directory Tree" in res
+
+
+@pytest.mark.asyncio
+async def test_compiler_resolve_auto_unknown_preferred() -> None:
+    """Test that an unknown preferred provider triggers a warning but continues."""
+    compiler = ContextCompiler()
+
+    with patch("jitsu.core.compiler.logger.warning") as mock_logger:
+        # Pass a completely unknown provider name
+        # It will fail all resolution and drop to the bottom, returning "none"
+        await compiler._resolve_auto("fake_target", "hallucinated_provider")  # noqa: SLF001
+
+        mock_logger.assert_called_with("Unknown provider '%s' requested", "hallucinated_provider")

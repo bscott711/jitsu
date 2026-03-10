@@ -1,0 +1,86 @@
+[
+  {
+    "epic_id": "epic-8-directory-tree-provider",
+    "phase_id": "phase-01-provider-implementation",
+    "module_scope": "src/jitsu/providers",
+    "instructions": "Create a new `DirectoryTreeProvider` in `src/jitsu/providers/tree.py` that inherits from `BaseProvider`. Implement the `resolve(target_identifier: str)` method to take a directory path and return a Markdown-formatted string representing the file tree. It MUST ignore common noisy directories: `.git`, `__pycache__`, `.venv`, `.pytest_cache`, and `node_modules`. Expose this provider in `src/jitsu/providers/__init__.py`.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/providers/base.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/providers/__init__.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not use external dependencies or shell commands (like `os.system('tree')`). You must use standard library `pathlib`.",
+      "Do not include the contents of the files, only their names and structural hierarchy."
+    ],
+    "completion_criteria": [
+      "The provider outputs a clean, visually accurate text-based tree.",
+      "Noisy directories are strictly filtered out."
+    ],
+    "verification_commands": [
+      "just verify-fast"
+    ]
+  },
+  {
+    "epic_id": "epic-8-directory-tree-provider",
+    "phase_id": "phase-02-compiler-and-server-wiring",
+    "module_scope": "src/jitsu",
+    "instructions": "Audit `src/jitsu/core/compiler.py` and `src/jitsu/server/mcp_server.py` to ensure the new `DirectoryTreeProvider` (registered as 'tree' or 'directory_tree') can be requested both in directives and via the `jitsu_request_context` progressive disclosure tool.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not break existing provider routing."
+    ],
+    "completion_criteria": [
+      "The MCP server can successfully route requests to the DirectoryTreeProvider."
+    ],
+    "verification_commands": [
+      "just verify-fast"
+    ]
+  },
+  {
+    "epic_id": "epic-8-directory-tree-provider",
+    "phase_id": "phase-03-strict-verification",
+    "module_scope": "tests/providers",
+    "instructions": "Write comprehensive unit tests for `DirectoryTreeProvider` in `tests/providers/test_tree.py`. Use the `tmp_path` fixture to construct mock directory structures (including ignored folders) and assert that the output string matches the expected tree format perfectly. Ensure test coverage remains at 100%.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/providers/test_ast.py",
+        "is_required": false,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not use `Any` types in the tests. Ensure Pyright strict compliance."
+    ],
+    "completion_criteria": [
+      "100% test coverage for `tree.py`.",
+      "Strict type checking passes."
+    ],
+    "verification_commands": [
+      "just verify-fast"
+    ]
+  }
+]

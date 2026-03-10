@@ -1,7 +1,13 @@
 """JIT Context Compiler for weaving directives and codebase state."""
 
 from jitsu.models.core import AgentDirective, TargetResolutionMode
-from jitsu.providers import ASTProvider, BaseProvider, FileStateProvider, PydanticV2Provider
+from jitsu.providers import (
+    ASTProvider,
+    BaseProvider,
+    DirectoryTreeProvider,
+    FileStateProvider,
+    PydanticV2Provider,
+)
 from jitsu.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -15,11 +21,13 @@ class ContextCompiler:
         file_provider = FileStateProvider()
         pydantic_provider = PydanticV2Provider()
         ast_provider = ASTProvider()
+        tree_provider = DirectoryTreeProvider()
 
         self._providers: dict[str, BaseProvider] = {
             file_provider.name: file_provider,
             pydantic_provider.name: pydantic_provider,
             ast_provider.name: ast_provider,
+            tree_provider.name: tree_provider,
         }
 
     async def compile_directive(self, directive: AgentDirective) -> str:
@@ -110,11 +118,16 @@ class ContextCompiler:
                 return res, "pydantic_v2"
 
         # Try preferred provider if it's not one we already tried
-        if preferred_provider not in ("ast", "pydantic_v2", "file_state"):
+        if preferred_provider not in ("ast", "pydantic_v2", "file_state", "tree"):
             res = await self._try_resolve(preferred_provider, target_id)
             if res:
                 return res, preferred_provider
             logger.warning("Unknown provider '%s' requested", preferred_provider)
+
+        # Try Directory Tree representation
+        res = await self._try_resolve("tree", target_id)
+        if res:
+            return res, "tree"
 
         # Fallback to Full Source
         res = await self._try_resolve("file_state", target_id)
@@ -165,4 +178,5 @@ class ContextCompiler:
             "ast": "Summarized (Structural AST)",
             "pydantic_v2": "Condensed (JSON Schema)",
             "file_state": "Full Source",
+            "tree": "Visual Tree Structure",
         }.get(provider_name, "Included")
