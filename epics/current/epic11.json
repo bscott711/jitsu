@@ -1,0 +1,98 @@
+[
+  {
+    "epic_id": "epic-11-autonomous-planner",
+    "phase_id": "phase-01-instructor-planner",
+    "module_scope": "src/jitsu/core",
+    "instructions": "Refactor `JitsuPlanner` in `src/jitsu/core/planner.py` to use `openai`, `instructor`, and `dotenv`. Update `generate_plan` to accept an optional `model` string (defaulting to 'google/gemini-2.5-flash'). It must: 1) Call `dotenv.load_dotenv()` to ensure environment variables are loaded. 2) Initialize the `instructor.from_openai(OpenAI(...))` client using the `OPENROUTER_API_KEY` environment variable and `base_url='https://openrouter.ai/api/v1'`. 3) Read the system prompt from `docs/jitsu_orchestrator_prompt.md`. 4) Get the repository skeleton by instantiating `DirectoryTreeProvider` and resolving the current directory. 5) Call the LLM with `response_model=list[AgentDirective]` and return the validated list.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/providers/tree.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not hardcode the API key. Raise a clear RuntimeError if `OPENROUTER_API_KEY` is missing after loading dotenv.",
+      "Do not use async OpenAI clients if it overcomplicates the execution; standard synchronous `OpenAI` wrapped with `instructor` is fine."
+    ],
+    "completion_criteria": [
+      "JitsuPlanner loads the .env file and uses instructor to return a validated list of AgentDirective objects via OpenRouter."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-11-autonomous-planner",
+    "phase_id": "phase-02-cli-integration",
+    "module_scope": "src/jitsu/cli",
+    "instructions": "Update the `plan` command in `src/jitsu/cli/main.py`. Add a new CLI option `--model` (or `-m`) that defaults to 'google/gemini-2.5-flash'. Pass this model down to `JitsuPlanner.generate_plan`. Catch any `RuntimeError` related to missing API keys and print a helpful error message to stderr using `typer.secho` before exiting with code 1.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not let raw unhandled exceptions crash the CLI if the user forgets their API key."
+    ],
+    "completion_criteria": [
+      "The CLI exposes a `--model` flag and gracefully handles missing OpenRouter credentials."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-11-autonomous-planner",
+    "phase_id": "phase-03-mock-planner-tests",
+    "module_scope": "tests",
+    "instructions": "Update `tests/core/test_planner.py` to achieve 100% coverage on the new `JitsuPlanner` logic. You MUST mock `dotenv.load_dotenv` alongside the `instructor` and `openai` network calls so the test suite runs offline and rapidly. Mock `os.environ.get` to simulate missing API keys and assert that `RuntimeError` is raised.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/core/test_planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not allow tests to make actual HTTP requests to OpenRouter.",
+      "Do not read actual local .env files during testing.",
+      "Do not leave coverage below 100%."
+    ],
+    "completion_criteria": [
+      "All tests pass offline and coverage for `planner.py` remains at 100%."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

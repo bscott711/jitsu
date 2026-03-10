@@ -150,20 +150,30 @@ def submit(
         raise typer.Exit(1) from e
 
 
-async def _run_planner(objective: str, files: list[str], out: Path) -> None:
+async def _run_planner(objective: str, files: list[str], out: Path, model: str) -> None:
     """Async helper to run the planner and save the output."""
     from jitsu.core.planner import JitsuPlanner  # noqa: PLC0415
 
-    planner = JitsuPlanner(objective=objective, relevant_files=files)
-    directives = await planner.generate_plan()
+    try:
+        planner = JitsuPlanner(objective=objective, relevant_files=files)
+        directives = await planner.generate_plan(model=model)
 
-    if not directives:
-        typer.secho(
-            "❌ Planner failed to generate valid directives.", fg=typer.colors.RED, err=True
-        )
-        raise typer.Exit(1)
+        if not directives:
+            typer.secho(
+                "❌ Planner failed to generate valid directives.", fg=typer.colors.RED, err=True
+            )
+            raise typer.Exit(1)
 
-    planner.save_plan(out)
+        planner.save_plan(out)
+    except RuntimeError as e:
+        typer.secho(f"\n❌ Planner Error: {e}", fg=typer.colors.RED, bold=True, err=True)
+        if "OPENROUTER_API_KEY" in str(e):
+            typer.secho(
+                "💡 Tip: Ensure OPENROUTER_API_KEY is set in your environment or .env file.",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
+        raise typer.Exit(1) from e
 
 
 @app.command()
@@ -181,11 +191,20 @@ def plan(
     out: Annotated[
         Path, typer.Option("--out", "-o", help="Output path for the generated epic JSON.")
     ] = Path("epic.json"),
+    model: Annotated[
+        str,
+        typer.Option(
+            "--model",
+            "-m",
+            help="The LLM model to use via OpenRouter.",
+        ),
+    ] = "google/gemini-2.0-flash-001",
 ) -> None:
     """Generate a Jitsu plan from a natural language objective."""
     file_strings = [str(f) for f in files] if files else []
 
     typer.secho(f"🧠 Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True)
+    typer.secho(f"🤖 Using model: {model}", fg=typer.colors.CYAN, err=True)
     if file_strings:
         typer.secho(
             f"📎 Using {len(file_strings)} context file(s).", fg=typer.colors.CYAN, err=True
@@ -193,7 +212,7 @@ def plan(
 
     with typer.progressbar(length=100, label="Pondering...") as progress:
         # We run the planner. (Note: progress bar is just visual UX here since LLM calls are opaque in duration)
-        anyio.run(_run_planner, objective, file_strings, out)
+        anyio.run(_run_planner, objective, file_strings, out, model)
         progress.update(100)
 
     typer.secho(

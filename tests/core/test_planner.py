@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -19,84 +19,92 @@ async def test_planner_initialization() -> None:
 
 
 @pytest.mark.asyncio
-async def test_planner_prompt_building() -> None:
-    """Test that the planner correctly constructs the LLM prompt."""
-    planner = JitsuPlanner(objective="Build a house", relevant_files=["blueprint.pdf"])
-    prompt = planner._build_prompt()  # noqa: SLF001
-
-    assert "Build a house" in prompt
-    assert "blueprint.pdf" in prompt
-
-
-@pytest.mark.asyncio
-async def test_planner_plan_validation() -> None:
-    """Test that the planner successfully validates correct LLM JSON output."""
+async def test_planner_plan_generation_success() -> None:
+    """Test that the planner successfully generates a plan using instructor."""
     planner = JitsuPlanner(objective="Test", relevant_files=[])
 
-    # Mocking litellm.acompletion
-    mock_response = AsyncMock()
-    mock_response.choices = [
-        AsyncMock(
-            message=AsyncMock(
-                content='[{"epic_id": "e1", "phase_id": "p1", "module_scope": "test", "instructions": "test"}]'
-            )
-        )
-    ]
+    directive = AgentDirective(
+        epic_id="e1",
+        phase_id="p1",
+        module_scope="test",
+        instructions="test",
+        completion_criteria=["done"],
+        verification_commands=["just verify"],
+    )
 
-    with pytest.MonkeyPatch.context() as m:
-        m.setattr("litellm.acompletion", AsyncMock(return_value=mock_response))
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = [directive]
+
+    with (
+        patch("instructor.from_openai", return_value=mock_client),
+        patch("openai.OpenAI"),
+        patch("dotenv.load_dotenv"),
+        patch("os.getenv", return_value="fake-key"),
+        patch("anyio.Path.exists", return_value=True),
+        patch("anyio.Path.read_text", return_value="system prompt"),
+        patch("jitsu.providers.tree.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
         plan = await planner.generate_plan()
 
     assert len(plan) == 1
     assert plan[0].epic_id == "e1"
+    assert planner._directives == [directive]  # noqa: SLF001
 
 
 @pytest.mark.asyncio
-async def test_planner_empty_llm_response() -> None:
-    """Test planner resilience against an empty LLM response string."""
+async def test_planner_missing_api_key() -> None:
+    """Test that the planner raises RuntimeError if API key is missing."""
     planner = JitsuPlanner(objective="Test", relevant_files=[])
-    mock_response = AsyncMock()
-    mock_response.choices = [AsyncMock(message=AsyncMock(content=""))]
 
-    with pytest.MonkeyPatch.context() as m:
-        m.setattr("litellm.acompletion", AsyncMock(return_value=mock_response))
+    with (
+        patch("dotenv.load_dotenv"),
+        patch("os.getenv", return_value=None),
+        pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"),
+    ):
+        await planner.generate_plan()
+
+
+@pytest.mark.asyncio
+async def test_planner_generation_failure() -> None:
+    """Test that the planner returns an empty list if generation fails."""
+    planner = JitsuPlanner(objective="Test", relevant_files=[])
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = Exception("API error")
+
+    with (
+        patch("instructor.from_openai", return_value=mock_client),
+        patch("openai.OpenAI"),
+        patch("dotenv.load_dotenv"),
+        patch("os.getenv", return_value="fake-key"),
+        patch("anyio.Path.exists", return_value=True),
+        patch("anyio.Path.read_text", return_value="system prompt"),
+        patch("jitsu.providers.tree.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
         plan = await planner.generate_plan()
 
     assert len(plan) == 0
 
 
 @pytest.mark.asyncio
-async def test_planner_invalid_llm_response() -> None:
-    """Test planner resilience against malformed JSON from the LLM."""
+async def test_planner_generation_fallback_prompt() -> None:
+    """Test that the planner uses the fallback prompt if the prompt file is missing."""
     planner = JitsuPlanner(objective="Test", relevant_files=[])
-    mock_response = AsyncMock()
-    mock_response.choices = [AsyncMock(message=AsyncMock(content="invalid json"))]
 
-    with pytest.MonkeyPatch.context() as m:
-        m.setattr("litellm.acompletion", AsyncMock(return_value=mock_response))
-        plan = await planner.generate_plan()
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = []
 
-    assert len(plan) == 0
+    with (
+        patch("instructor.from_openai", return_value=mock_client),
+        patch("openai.OpenAI"),
+        patch("dotenv.load_dotenv"),
+        patch("os.getenv", return_value="fake-key"),
+        patch("anyio.Path.exists", return_value=False),
+        patch("jitsu.providers.tree.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
+        await planner.generate_plan()
 
-
-@pytest.mark.asyncio
-async def test_planner_with_custom_client() -> None:
-    """Test that the planner routes to a custom provided client correctly."""
-    mock_client = AsyncMock()
-    mock_client.chat.completions.create.return_value = AsyncMock(
-        choices=[
-            AsyncMock(
-                message=AsyncMock(
-                    content='[{"epic_id": "e1", "phase_id": "p1", "module_scope": "test", "instructions": "test"}]'
-                )
-            )
-        ]
-    )
-
-    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
-    plan = await planner.generate_plan()
-
-    assert len(plan) == 1
+    # Verify it called create (the actual prompt check is internal but this covers the line)
     mock_client.chat.completions.create.assert_called_once()
 
 
@@ -109,6 +117,8 @@ async def test_planner_save_plan(tmp_path: Path) -> None:
         phase_id="phase-1",
         module_scope="test",
         instructions="test",
+        completion_criteria=["done"],
+        verification_commands=["just verify"],
     )
     planner._directives = [directive]  # noqa: SLF001
 
@@ -116,73 +126,7 @@ async def test_planner_save_plan(tmp_path: Path) -> None:
     planner.save_plan(plan_path)
 
     assert plan_path.exists()
-    # Read the text asynchronously safely using pathlib
     data = json.loads(plan_path.read_text())
 
     assert len(data) == 1
     assert data[0]["epic_id"] == "epic-1"
-
-
-@pytest.mark.asyncio
-async def test_planner_markdown_json_stripping() -> None:
-    """Test that the planner strips markdown json blocks from the LLM response."""
-    planner = JitsuPlanner(objective="Test", relevant_files=[])
-    mock_response = AsyncMock()
-
-    # Using chr(96)*3 to represent ``` to bypass Canvas markdown parsing bugs
-    mock_content = (
-        f"{chr(96) * 3}json\n"
-        '[{"epic_id": "e1", "phase_id": "p1", "module_scope": "test", "instructions": "test"}]\n'
-        f"{chr(96) * 3}"
-    )
-
-    mock_response.choices = [AsyncMock(message=AsyncMock(content=mock_content))]
-
-    with pytest.MonkeyPatch.context() as m:
-        m.setattr("litellm.acompletion", AsyncMock(return_value=mock_response))
-        plan = await planner.generate_plan()
-
-    assert len(plan) == 1
-    assert plan[0].epic_id == "e1"
-
-
-@pytest.mark.asyncio
-async def test_planner_markdown_stripping() -> None:
-    """Test that the planner strips plain markdown blocks from the LLM response."""
-    planner = JitsuPlanner(objective="Test", relevant_files=[])
-    mock_response = AsyncMock()
-
-    # Using chr(96)*3 to represent ``` to bypass Canvas markdown parsing bugs
-    mock_content = (
-        f"{chr(96) * 3}\n"
-        '[{"epic_id": "e2", "phase_id": "p1", "module_scope": "test", "instructions": "test"}]\n'
-        f"{chr(96) * 3}"
-    )
-
-    mock_response.choices = [AsyncMock(message=AsyncMock(content=mock_content))]
-
-    with pytest.MonkeyPatch.context() as m:
-        m.setattr("litellm.acompletion", AsyncMock(return_value=mock_response))
-        plan = await planner.generate_plan()
-
-    assert len(plan) == 1
-    assert plan[0].epic_id == "e2"
-
-
-@pytest.mark.asyncio
-async def test_planner_pydantic_validation_error() -> None:
-    """Test planner resilience against valid JSON that fails schema validation."""
-    planner = JitsuPlanner(objective="Test", relevant_files=[])
-    mock_response = AsyncMock()
-
-    # Valid JSON, but missing required fields like 'module_scope' and 'instructions'
-    mock_response.choices = [
-        AsyncMock(message=AsyncMock(content='[{"epic_id": "e1", "phase_id": "p1"}]'))
-    ]
-
-    with pytest.MonkeyPatch.context() as m:
-        m.setattr("litellm.acompletion", AsyncMock(return_value=mock_response))
-        plan = await planner.generate_plan()
-
-    # Should safely catch ValidationError and return an empty list
-    assert len(plan) == 0

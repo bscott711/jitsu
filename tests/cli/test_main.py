@@ -219,11 +219,14 @@ def test_cli_plan_success(mock_save: MagicMock, mock_generate: AsyncMock, tmp_pa
     ]
     out_file = tmp_path / "epic.json"
 
-    result = runner.invoke(app, ["plan", "Build a cool feature", "--out", str(out_file)])
+    result = runner.invoke(
+        app, ["plan", "Build a cool feature", "--out", str(out_file), "-m", "gpt-4o"]
+    )
 
     assert result.exit_code == 0
     assert "Plan successfully generated" in result.output
-    mock_generate.assert_awaited_once()
+    assert "Using model: gpt-4o" in result.output
+    mock_generate.assert_awaited_once_with(model="gpt-4o")
     mock_save.assert_called_once_with(out_file)
 
 
@@ -266,3 +269,17 @@ def test_cli_plan_with_files(
     assert "Using 1 context file" in result.output
     mock_generate.assert_awaited_once()
     mock_save.assert_called_once_with(out_file)
+
+
+@patch("jitsu.core.planner.JitsuPlanner.generate_plan")
+def test_cli_plan_runtime_error(mock_generate: AsyncMock, tmp_path: Path) -> None:
+    """Test plan generation handles RuntimeError (e.g., missing API key) via CLI."""
+    mock_generate.side_effect = RuntimeError("OPENROUTER_API_KEY environment variable is not set")
+    out_file = tmp_path / "epic.json"
+
+    result = runner.invoke(app, ["plan", "Build a cool feature", "--out", str(out_file)])
+
+    assert result.exit_code == 1
+    assert "Planner Error: OPENROUTER_API_KEY" in result.output
+    assert "Tip: Ensure OPENROUTER_API_KEY is set" in result.output
+    mock_generate.assert_awaited_once()
