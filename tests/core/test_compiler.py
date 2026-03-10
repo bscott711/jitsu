@@ -311,7 +311,7 @@ async def test_compile_with_verification_and_criteria() -> None:
         phase_id="phase-1",
         module_scope="test",
         instructions="do stuff",
-        verification_commands=["uv run pytest"],
+        verification_commands=["just verify"],
         completion_criteria=["All tests pass"],
     )
     res = await compiler.compile_directive(directive)
@@ -320,8 +320,7 @@ async def test_compile_with_verification_and_criteria() -> None:
     assert "- [ ] All tests pass" in res
     assert "### Verification" in res
     assert "You MUST run the following commands" in res
-    assert "```bash\nuv run pytest\n```" in res
-    assert "just verify-fast" not in res
+    assert "```bash\njust verify\n```" in res
 
 
 @pytest.mark.asyncio
