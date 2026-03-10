@@ -108,6 +108,38 @@ def serve(
         sys.exit(1)
 
 
+async def _send_payload(payload: bytes, port: int = 8765) -> None:
+    """Async helper to send the payload over TCP."""
+    try:
+        async with await anyio.connect_tcp("127.0.0.1", port) as client:
+            await client.send(payload)
+    except ConnectionRefusedError as e:
+        typer.secho(
+            "❌ Connection refused. Is the Jitsu server running?", fg=typer.colors.RED, err=True
+        )
+        raise typer.Exit(1) from e
+
+
+@app.command()
+def submit(
+    epic: Annotated[
+        Path, typer.Option("--epic", "-e", help="Path to the epic JSON file.", exists=True)
+    ],
+) -> None:
+    """Submit a new epic payload to a running Jitsu server."""
+    try:
+        payload = epic.read_bytes()
+        anyio.run(_send_payload, payload)
+        typer.secho(
+            f"✅ Successfully submitted {epic.name} to running server.",
+            fg=typer.colors.GREEN,
+            err=True,
+        )
+    except Exception as e:
+        typer.secho(f"❌ Failed to submit epic: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from e
+
+
 def main() -> None:
     """Entry point for the CLI application."""
     app()

@@ -3,12 +3,13 @@
 import json
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
-from jitsu.cli.main import app, main
+from jitsu.cli.main import _send_payload, app, main
 from jitsu.server.mcp_server import state_manager
 
 runner = CliRunner()
@@ -119,3 +120,51 @@ def test_cli_main() -> None:
         main()
 
     assert exc_info.value.code == 0
+
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_submit_success(mock_run: MagicMock, tmp_path: Path) -> None:
+    """Test successful epic submission via CLI."""
+    epic_file = tmp_path / "epic.json"
+    epic_file.write_text("[]", encoding="utf-8")
+
+    result = runner.invoke(app, ["submit", "--epic", str(epic_file)])
+
+    assert result.exit_code == 0
+    assert "Successfully submitted" in result.output
+    mock_run.assert_called_once()
+
+
+@patch("jitsu.cli.main.anyio.run", side_effect=Exception("Submit error"))
+def test_cli_submit_failure(mock_run: MagicMock, tmp_path: Path) -> None:
+    """Test epic submission failure handling."""
+    epic_file = tmp_path / "epic.json"
+    epic_file.write_text("[]", encoding="utf-8")
+
+    result = runner.invoke(app, ["submit", "--epic", str(epic_file)])
+
+    assert result.exit_code == 1
+    assert "Failed to submit epic: Submit error" in result.output
+    mock_run.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_send_payload_success() -> None:
+    """Test internal _send_payload helper on success."""
+    mock_client = AsyncMock()
+
+    with patch("jitsu.cli.main.anyio.connect_tcp", (mock_connect := AsyncMock())):
+        mock_connect.return_value.__aenter__.return_value = mock_client
+        await _send_payload(b"test", port=1234)
+
+        mock_connect.assert_called_once_with("127.0.0.1", 1234)
+        mock_client.send.assert_called_once_with(b"test")
+
+
+@pytest.mark.asyncio
+async def test_send_payload_connection_refused() -> None:
+    """Test _send_payload when the server connection is refused."""
+    with patch("jitsu.cli.main.anyio.connect_tcp", side_effect=ConnectionRefusedError()):
+        with pytest.raises(typer.Exit) as exc:
+            await _send_payload(b"test")
+        assert exc.value.exit_code == 1
