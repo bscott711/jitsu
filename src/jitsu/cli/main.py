@@ -42,7 +42,7 @@ def serve(
     if epic:
         typer.secho(
             f"📦 Loading Epic plan from {epic.name}...",
-            fg="cyan",
+            fg=typer.colors.CYAN,
             err=True,
         )
         try:
@@ -55,36 +55,36 @@ def serve(
 
             typer.secho(
                 f"✅ Successfully queued {len(directives)} phase(s).",
-                fg="green",
+                fg=typer.colors.GREEN,
                 bold=True,
                 err=True,
             )
         except ValidationError as e:
             typer.secho(
                 f"\n❌ Validation Error parsing {epic.name}:\n{e}",
-                fg="red",
+                fg=typer.colors.RED,
                 bold=True,
                 err=True,
             )
-            sys.exit(1)
-        except Exception as e:  # noqa: BLE001
+            raise typer.Exit(1) from e
+        except OSError as e:
             typer.secho(
-                f"\n❌ Failed to load {epic.name}: {e}",
-                fg="red",
+                f"\n❌ Failed to read {epic.name}: {e}",
+                fg=typer.colors.RED,
                 bold=True,
                 err=True,
             )
-            sys.exit(1)
+            raise typer.Exit(1) from e
 
     typer.secho(
         "⚡ Starting Jitsu MCP Server...",
-        fg="green",
+        fg=typer.colors.GREEN,
         bold=True,
         err=True,
     )
     typer.secho(
         "📡 Listening for IDE agent connections on stdio...",
-        fg="cyan",
+        fg=typer.colors.CYAN,
         err=True,
     )
 
@@ -93,15 +93,15 @@ def serve(
     except KeyboardInterrupt:
         typer.secho(
             "\n🛑 Shutting down Jitsu MCP Server...",
-            fg="yellow",
+            fg=typer.colors.YELLOW,
             bold=True,
             err=True,
         )
         sys.exit(0)
     except Exception as e:  # noqa: BLE001
         typer.secho(
-            f"\n❌ Fatal error: {e}",
-            fg="red",
+            f"\n❌ Fatal error during server execution: {e}",
+            fg=typer.colors.RED,
             bold=True,
             err=True,
         )
@@ -135,9 +135,63 @@ def submit(
             fg=typer.colors.GREEN,
             err=True,
         )
-    except Exception as e:
-        typer.secho(f"❌ Failed to submit epic: {e}", fg=typer.colors.RED, err=True)
+    except OSError as e:
+        typer.secho(f"❌ Failed to read epic file: {e}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from e
+
+
+async def _run_planner(objective: str, files: list[str], out: Path) -> None:
+    """Async helper to run the planner and save the output."""
+    from jitsu.core.planner import JitsuPlanner  # noqa: PLC0415
+
+    planner = JitsuPlanner(objective=objective, relevant_files=files)
+    directives = await planner.generate_plan()
+
+    if not directives:
+        typer.secho(
+            "❌ Planner failed to generate valid directives.", fg=typer.colors.RED, err=True
+        )
+        raise typer.Exit(1)
+
+    planner.save_plan(out)
+
+
+@app.command()
+def plan(
+    objective: Annotated[str, typer.Argument(help="The natural language objective for the epic.")],
+    files: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--file",
+            "-f",
+            help="Relevant files to provide as context (can be used multiple times).",
+            exists=True,
+        ),
+    ] = None,
+    out: Annotated[
+        Path, typer.Option("--out", "-o", help="Output path for the generated epic JSON.")
+    ] = Path("epic.json"),
+) -> None:
+    """Generate a Jitsu plan from a natural language objective."""
+    file_strings = [str(f) for f in files] if files else []
+
+    typer.secho(f"🧠 Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True)
+    if file_strings:
+        typer.secho(
+            f"📎 Using {len(file_strings)} context file(s).", fg=typer.colors.CYAN, err=True
+        )
+
+    with typer.progressbar(length=100, label="Pondering...") as progress:
+        # We run the planner. (Note: progress bar is just visual UX here since LLM calls are opaque in duration)
+        anyio.run(_run_planner, objective, file_strings, out)
+        progress.update(100)
+
+    typer.secho(
+        f"\n✅ Plan successfully generated and saved to {out}",
+        fg=typer.colors.GREEN,
+        bold=True,
+        err=True,
+    )
 
 
 def main() -> None:

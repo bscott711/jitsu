@@ -10,6 +10,7 @@ import typer
 from typer.testing import CliRunner
 
 from jitsu.cli.main import _send_payload, app, main
+from jitsu.models.core import AgentDirective
 from jitsu.server.mcp_server import state_manager
 
 runner = CliRunner()
@@ -55,7 +56,7 @@ def test_cli_serve_exception(mock_run: MagicMock) -> None:
         f"Command failed:\nOUTPUT: {result.output}\nEXC: {result.exception}"
     )
     mock_run.assert_called_once()
-    assert "Fatal error: Test mock error" in result.output
+    assert "Fatal error during server execution: Test mock error" in result.output
 
 
 @patch("jitsu.cli.main.anyio.run")
@@ -105,12 +106,12 @@ def test_cli_serve_with_unreadable_epic(mock_run: MagicMock, tmp_path: Path) -> 
     epic_file.touch()
 
     # Force a read error using our mock
-    with patch.object(Path, "read_text", side_effect=PermissionError("Access Denied")):
+    with patch.object(Path, "read_text", side_effect=OSError("Access Denied")):
         result = runner.invoke(app, ["serve", "--epic", str(epic_file)])
 
     assert result.exit_code == 1
     mock_run.assert_not_called()
-    assert "Failed to load" in result.output
+    assert "Failed to read" in result.output
     assert "Access Denied" in result.output
 
 
@@ -135,8 +136,8 @@ def test_cli_submit_success(mock_run: MagicMock, tmp_path: Path) -> None:
     mock_run.assert_called_once()
 
 
-@patch("jitsu.cli.main.anyio.run", side_effect=Exception("Submit error"))
-def test_cli_submit_failure(mock_run: MagicMock, tmp_path: Path) -> None:
+@patch.object(Path, "read_bytes", side_effect=OSError("Read error"))
+def test_cli_submit_failure(mock_read: MagicMock, tmp_path: Path) -> None:
     """Test epic submission failure handling."""
     epic_file = tmp_path / "epic.json"
     epic_file.write_text("[]", encoding="utf-8")
@@ -144,8 +145,8 @@ def test_cli_submit_failure(mock_run: MagicMock, tmp_path: Path) -> None:
     result = runner.invoke(app, ["submit", "--epic", str(epic_file)])
 
     assert result.exit_code == 1
-    assert "Failed to submit epic: Submit error" in result.output
-    mock_run.assert_called_once()
+    assert "Failed to read epic file: Read error" in result.output
+    mock_read.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -168,3 +169,66 @@ async def test_send_payload_connection_refused() -> None:
         with pytest.raises(typer.Exit) as exc:
             await _send_payload(b"test")
         assert exc.value.exit_code == 1
+
+
+@patch("jitsu.core.planner.JitsuPlanner.generate_plan")
+@patch("jitsu.core.planner.JitsuPlanner.save_plan")
+def test_cli_plan_success(mock_save: MagicMock, mock_generate: AsyncMock, tmp_path: Path) -> None:
+    """Test successful plan generation via CLI."""
+    mock_generate.return_value = [
+        AgentDirective(
+            epic_id="test-epic",
+            phase_id="p1",
+            module_scope="test",
+            instructions="test instructions",
+        )
+    ]
+    out_file = tmp_path / "epic.json"
+
+    result = runner.invoke(app, ["plan", "Build a cool feature", "--out", str(out_file)])
+
+    assert result.exit_code == 0
+    assert "Plan successfully generated" in result.output
+    mock_generate.assert_awaited_once()
+    mock_save.assert_called_once_with(out_file)
+
+
+@patch("jitsu.core.planner.JitsuPlanner.generate_plan")
+def test_cli_plan_failure(mock_generate: AsyncMock, tmp_path: Path) -> None:
+    """Test plan generation failure via CLI."""
+    mock_generate.return_value = []
+    out_file = tmp_path / "epic.json"
+
+    result = runner.invoke(app, ["plan", "Build a cool feature", "--out", str(out_file)])
+
+    assert result.exit_code == 1
+    assert "Planner failed to generate valid directives" in result.output
+    mock_generate.assert_awaited_once()
+
+
+@patch("jitsu.core.planner.JitsuPlanner.generate_plan")
+@patch("jitsu.core.planner.JitsuPlanner.save_plan")
+def test_cli_plan_with_files(
+    mock_save: MagicMock, mock_generate: AsyncMock, tmp_path: Path
+) -> None:
+    """Test plan generation with provided context files."""
+    mock_generate.return_value = [
+        AgentDirective(
+            epic_id="test-epic",
+            phase_id="p1",
+            module_scope="test",
+            instructions="test instructions",
+        )
+    ]
+    out_file = tmp_path / "epic.json"
+    ctx_file = tmp_path / "context_file.py"
+    ctx_file.touch()
+
+    result = runner.invoke(
+        app, ["plan", "Feature", "--file", str(ctx_file), "--out", str(out_file)]
+    )
+
+    assert result.exit_code == 0
+    assert "Using 1 context file" in result.output
+    mock_generate.assert_awaited_once()
+    mock_save.assert_called_once_with(out_file)
