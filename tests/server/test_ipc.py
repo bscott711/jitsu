@@ -35,48 +35,59 @@ async def test_handle_client_success(
         "instructions": "do something",
     }
     payload = json.dumps([directive_data]).encode("utf-8")
-    mock_client.receive.return_value = payload
+
+    # AsyncMock automatically converts a standard list into an async iterator
+    mock_client.__aiter__.return_value = [payload]
 
     await ipc_server.handle_client(mock_client)
 
     directive = state_manager.get_next_directive()
     assert directive is not None
     assert directive.epic_id == "test-epic"
-    mock_client.receive.assert_called_once()
+    mock_client.send.assert_called_once()
+    assert b"ACK: Queued 1 phase(s)." in mock_client.send.call_args[0][0]
 
 
 @pytest.mark.asyncio
 async def test_handle_client_json_error(ipc_server: IPCServer) -> None:
     """Test handling of invalid JSON data from a client."""
     mock_client = AsyncMock(spec=SocketStream)
-    mock_client.receive.return_value = b"invalid json"
+    mock_client.__aiter__.return_value = [b"invalid json"]
 
     with patch("jitsu.server.ipc.logger") as mock_logger:
         await ipc_server.handle_client(mock_client)
         mock_logger.exception.assert_called_with("IPC Error: Received invalid JSON payload.")
+        mock_client.send.assert_called_once()
+        assert b"ERR: Invalid JSON" in mock_client.send.call_args[0][0]
 
 
 @pytest.mark.asyncio
 async def test_handle_client_validation_error(ipc_server: IPCServer) -> None:
     """Test handling of data that fails Pydantic validation."""
     mock_client = AsyncMock(spec=SocketStream)
-    # Missing required fields like phase_id
-    mock_client.receive.return_value = json.dumps([{"epic_id": "test-epic"}]).encode("utf-8")
+    payload = json.dumps([{"epic_id": "test-epic"}]).encode("utf-8")
+    mock_client.__aiter__.return_value = [payload]
 
     with patch("jitsu.server.ipc.logger") as mock_logger:
         await ipc_server.handle_client(mock_client)
         mock_logger.exception.assert_called_with("IPC Error: Invalid epic schema")
+        mock_client.send.assert_called_once()
+        assert b"ERR: Invalid Schema" in mock_client.send.call_args[0][0]
 
 
 @pytest.mark.asyncio
 async def test_handle_client_unexpected_error(ipc_server: IPCServer) -> None:
     """Test handling of unexpected errors during client communication."""
     mock_client = AsyncMock(spec=SocketStream)
-    mock_client.receive.side_effect = Exception("Boom")
+
+    # Trigger an exception when the async for loop starts
+    mock_client.__aiter__.side_effect = Exception("Boom")
 
     with patch("jitsu.server.ipc.logger") as mock_logger:
         await ipc_server.handle_client(mock_client)
         mock_logger.exception.assert_called_with("IPC Error: Unexpected error handling payload")
+        mock_client.send.assert_called_once()
+        assert b"ERR: Unexpected Error - Boom" in mock_client.send.call_args[0][0]
 
 
 @pytest.mark.asyncio
@@ -92,3 +103,17 @@ async def test_ipc_serve(ipc_server: IPCServer) -> None:
 
         mock_listener.assert_called_once_with(local_host="127.0.0.1", local_port=ipc_server.port)
         mock_server.serve.assert_called_once_with(ipc_server.handle_client)
+
+
+@pytest.mark.asyncio
+async def test_handle_client_empty_payload(ipc_server: IPCServer) -> None:
+    """Test handling of an empty stream (client connects and immediately sends EOF)."""
+    mock_client = AsyncMock(spec=SocketStream)
+
+    # An empty list simulates an immediate EOF with no data chunks
+    mock_client.__aiter__.return_value = []
+
+    await ipc_server.handle_client(mock_client)
+
+    # Ensure it returns cleanly without crashing or attempting to send an ACK/ERR
+    mock_client.send.assert_not_called()

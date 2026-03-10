@@ -25,9 +25,11 @@ class IPCServer:
         """Handle incoming connections and parse the epic payload."""
         async with client:
             try:
-                data = await client.receive(1024 * 1024)
-                payload = data.decode("utf-8")
+                chunks: list[bytes] = [chunk async for chunk in client]
+                if not chunks:
+                    return
 
+                payload = b"".join(chunks).decode("utf-8")
                 epics_data = json.loads(payload)
                 count = 0
 
@@ -38,19 +40,20 @@ class IPCServer:
 
                 # G004 Fix: Lazy string interpolation
                 logger.info("IPC: Successfully received and queued %d phase(s).", count)
+                await client.send(f"ACK: Queued {count} phase(s).".encode())
 
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
                 logger.exception("IPC Error: Received invalid JSON payload.")
-            except ValidationError:
-                # TRY401 Fix: Dropped 'as e' and the %s formatting
+                await client.send(f"ERR: Invalid JSON - {e}".encode())
+            except ValidationError as e:
                 logger.exception("IPC Error: Invalid epic schema")
-            except Exception:
-                # TRY401 Fix: Dropped 'as e' and the %s formatting
+                await client.send(f"ERR: Invalid Schema - {e}".encode())
+            except Exception as e:
                 logger.exception("IPC Error: Unexpected error handling payload")
+                await client.send(f"ERR: Unexpected Error - {e}".encode())
 
     async def serve(self) -> None:
         """Start the background TCP listener."""
-        # G004 Fix: Lazy string interpolation
         logger.info("Starting IPC daemon on port %d...", self.port)
         listener = await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=self.port)
         await listener.serve(self.handle_client)

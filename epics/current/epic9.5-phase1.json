@@ -1,0 +1,23 @@
+[
+  {
+    "epic_id": "epic-9.5-ipc-diagnostics",
+    "phase_id": "phase-01-tcp-stream-fix",
+    "module_scope": "src/jitsu/server",
+    "instructions": "Fix the TCP fragmentation bug in `src/jitsu/server/ipc.py`. Update `handle_client` to read the FULL payload by iterating over the stream (`async for chunk in client: chunks.append(chunk)`), then join the bytes and decode. After queuing, use `await client.send(...)` to send `ACK: Queued {count} phases.`. If a JSON/Validation error occurs, send `ERR: <message>`.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/server/ipc.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [],
+    "completion_criteria": [
+      "IPC server handles fragmented TCP streams and sends an ACK back."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

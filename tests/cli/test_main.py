@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import anyio
 import pytest
 import typer
 from typer.testing import CliRunner
@@ -129,16 +130,33 @@ def test_cli_submit_success(mock_run: MagicMock, tmp_path: Path) -> None:
     epic_file = tmp_path / "epic.json"
     epic_file.write_text("[]", encoding="utf-8")
 
+    mock_run.return_value = "ACK: Queued 0 phase(s)."
+
     result = runner.invoke(app, ["submit", "--epic", str(epic_file)])
 
     assert result.exit_code == 0
-    assert "Successfully submitted" in result.output
+    assert "ACK: Queued 0 phase(s)." in result.output
+    mock_run.assert_called_once()
+
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_submit_server_error(mock_run: MagicMock, tmp_path: Path) -> None:
+    """Test epic submission handles ERR: responses correctly."""
+    epic_file = tmp_path / "epic.json"
+    epic_file.write_text("[]", encoding="utf-8")
+
+    mock_run.return_value = "ERR: Invalid Schema"
+
+    result = runner.invoke(app, ["submit", "--epic", str(epic_file)])
+
+    assert result.exit_code == 1
+    assert "ERR: Invalid Schema" in result.output
     mock_run.assert_called_once()
 
 
 @patch.object(Path, "read_bytes", side_effect=OSError("Read error"))
 def test_cli_submit_failure(mock_read: MagicMock, tmp_path: Path) -> None:
-    """Test epic submission failure handling."""
+    """Test epic submission file read failure handling."""
     epic_file = tmp_path / "epic.json"
     epic_file.write_text("[]", encoding="utf-8")
 
@@ -153,13 +171,29 @@ def test_cli_submit_failure(mock_read: MagicMock, tmp_path: Path) -> None:
 async def test_send_payload_success() -> None:
     """Test internal _send_payload helper on success."""
     mock_client = AsyncMock()
+    mock_client.receive.return_value = b"ACK: Queued 1 phase(s)."
 
     with patch("jitsu.cli.main.anyio.connect_tcp", (mock_connect := AsyncMock())):
         mock_connect.return_value.__aenter__.return_value = mock_client
-        await _send_payload(b"test", port=1234)
+        response = await _send_payload(b"test", port=1234)
 
         mock_connect.assert_called_once_with("127.0.0.1", 1234)
         mock_client.send.assert_called_once_with(b"test")
+        mock_client.send_eof.assert_called_once()
+        assert response == "ACK: Queued 1 phase(s)."
+
+
+@pytest.mark.asyncio
+async def test_send_payload_end_of_stream() -> None:
+    """Test internal _send_payload helper handles EOF cleanly."""
+    mock_client = AsyncMock()
+    mock_client.receive.side_effect = anyio.EndOfStream()
+
+    with patch("jitsu.cli.main.anyio.connect_tcp", (mock_connect := AsyncMock())):
+        mock_connect.return_value.__aenter__.return_value = mock_client
+        response = await _send_payload(b"test", port=1234)
+
+        assert response == "ERR: Server closed connection without responding."
 
 
 @pytest.mark.asyncio
