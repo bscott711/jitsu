@@ -42,20 +42,23 @@ def test_context_target_initialization() -> None:
 
 
 def test_context_target_strictness_and_frozen() -> None:
-    """Test that ContextTarget enforces strict typing and immutability."""
-    target = ContextTarget(provider_name="test", target_identifier="target")
+    """Test that ContextTarget is frozen and prevents mutation."""
+    target = ContextTarget(provider_name="file_state", target_identifier="src/main.py")
 
-    # Test frozen (immutability)
-    with pytest.raises(ValidationError):
-        target.provider_name = "new_provider"  # type: ignore
+    # Verify the model is frozen and rejects reassignment
+    with pytest.raises(ValidationError, match="Instance is frozen"):
+        target.provider_name = "new_provider"
 
-    # Test strict types (cannot pass string for boolean without failing)
-    with pytest.raises(ValidationError):
-        ContextTarget(
-            provider_name="test",
-            target_identifier="target",
-            is_required="true",  # type: ignore
-        )
+    # Verify the model correctly accepts and coerces valid strings to StrEnum
+    target_from_dict = ContextTarget.model_validate(
+        {
+            "provider_name": "file_state",
+            "target_identifier": "src/main.py",
+            "resolution_mode": "FULL_SOURCE",
+        }
+    )
+
+    assert target_from_dict.resolution_mode == TargetResolutionMode.FULL_SOURCE
 
 
 def test_agent_directive_defaults() -> None:

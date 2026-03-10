@@ -1,11 +1,11 @@
 """Core domain models for the Jitsu orchestration layer."""
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
 
-class PhaseStatus(str, Enum):
+class PhaseStatus(StrEnum):
     """The execution status of a specific Jitsu phase."""
 
     PENDING = "PENDING"
@@ -15,7 +15,7 @@ class PhaseStatus(str, Enum):
     STUCK = "STUCK"
 
 
-class TargetResolutionMode(str, Enum):
+class TargetResolutionMode(StrEnum):
     """The mode used to resolve JIT context for a target."""
 
     AUTO = "AUTO"
@@ -27,7 +27,7 @@ class TargetResolutionMode(str, Enum):
 class ContextTarget(BaseModel):
     """A specific target for JIT context resolution."""
 
-    model_config = ConfigDict(frozen=True, strict=True)
+    model_config = ConfigDict(frozen=True)
 
     provider_name: str
     target_identifier: str
