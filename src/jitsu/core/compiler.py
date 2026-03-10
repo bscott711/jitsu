@@ -6,12 +6,6 @@ from jitsu.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-EXECUTION_ENV_REMINDER = """
-## Execution Environment
-**STRICT PROTOCOL:** You MUST NEVER use system `python3` or global `pytest`.
-Use `uv run <command>` (e.g., `uv run pytest`) or `just <recipe>` (e.g., `just verify-fast`) for all execution, testing, and linting.
-"""
-
 
 class ContextCompiler:
     """Compiles AgentDirectives into highly-contextualized Markdown prompts."""
@@ -52,17 +46,14 @@ class ContextCompiler:
             )
 
         payload_parts.append("### Verification")
-        payload_parts.append("You MUST run the following commands to verify your work:")
 
-        # Mandatory injection of just verify-fast
-        v_cmds = list(directive.verification_commands)
-        if "just verify-fast" not in v_cmds:
-            v_cmds.insert(0, "just verify-fast")
-
-        payload_parts.extend([f"```bash\n{cmd}\n```" for cmd in v_cmds])
-
-        # Inject Execution Environment Reminder
-        payload_parts.append(EXECUTION_ENV_REMINDER)
+        if directive.verification_commands:
+            payload_parts.append("You MUST run the following commands to verify your work:")
+            payload_parts.extend(
+                [f"```bash\n{cmd}\n```" for cmd in directive.verification_commands]
+            )
+        else:
+            payload_parts.append("*No specific verification commands required for this phase.*")
 
         payload_parts.append("\n## JIT Context")
         manifest_lines: list[str] = []

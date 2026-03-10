@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from jitsu.core.compiler import ContextCompiler
 from jitsu.core.state import JitsuStateManager
 from jitsu.models.core import PhaseReport
+from jitsu.providers import ASTProvider, FileStateProvider, PydanticV2Provider
 from jitsu.server.ipc import IPCServer
 
 # Initialize the global state manager and compiler for the server
@@ -52,6 +53,25 @@ async def handle_list_tools() -> list[types.Tool]:
                 "required": ["phase_id", "status"],
             },
         ),
+        types.Tool(
+            name="jitsu_request_context",
+            description="On-demand JIT context request for a specific target and provider.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "target_identifier": {
+                        "type": "string",
+                        "description": "The target to resolve (e.g., file path or Pydantic class).",
+                    },
+                    "provider_name": {
+                        "type": "string",
+                        "description": "Provider to use (file_state, pydantic_v2, ast).",
+                        "default": "file_state",
+                    },
+                },
+                "required": ["target_identifier"],
+            },
+        ),
     ]
 
 
@@ -61,32 +81,61 @@ async def handle_call_tool(
 ) -> list[types.TextContent]:
     """Handle tool execution requests from the IDE agent."""
     if name == "jitsu_get_next_phase":
-        directive = state_manager.get_next_directive()
-        if not directive:
-            return [types.TextContent(type="text", text="No pending phases in the queue.")]
-
-        # CHANGE: We must now await the async compiler
-        compiled_markdown = await context_compiler.compile_directive(directive)
-        return [types.TextContent(type="text", text=compiled_markdown)]
-
+        return await _handle_get_next_phase()
     if name == "jitsu_report_status":
-        if not arguments:
-            return [types.TextContent(type="text", text="Error: Missing arguments.")]
-
-        try:
-            report = PhaseReport.model_validate(arguments)
-            state_manager.update_phase_status(report)
-
-            # CHANGE: Removed .value since report.status is already a string
-            msg = f"Successfully recorded status {report.status} for phase {report.phase_id}."
-            return [types.TextContent(type="text", text=msg)]
-
-        except ValidationError as e:
-            err_msg = f"Validation Error: {e!s}"
-            return [types.TextContent(type="text", text=err_msg)]
+        return _handle_report_status(arguments)
+    if name == "jitsu_request_context":
+        return await _handle_request_context(arguments)
 
     msg = f"Unknown tool: {name}"
     raise ValueError(msg)
+
+
+async def _handle_get_next_phase() -> list[types.TextContent]:
+    """Handle the 'get_next_phase' tool request."""
+    directive = state_manager.get_next_directive()
+    if not directive:
+        return [types.TextContent(type="text", text="No pending phases in the queue.")]
+
+    compiled_markdown = await context_compiler.compile_directive(directive)
+    return [types.TextContent(type="text", text=compiled_markdown)]
+
+
+def _handle_report_status(arguments: dict[str, object] | None) -> list[types.TextContent]:
+    """Handle the 'report_status' tool request."""
+    if not arguments:
+        return [types.TextContent(type="text", text="Error: Missing arguments.")]
+
+    try:
+        report = PhaseReport.model_validate(arguments)
+        state_manager.update_phase_status(report)
+        msg = f"Successfully recorded status {report.status} for phase {report.phase_id}."
+        return [types.TextContent(type="text", text=msg)]
+    except ValidationError as e:
+        return [types.TextContent(type="text", text=f"Validation Error: {e!s}")]
+
+
+async def _handle_request_context(arguments: dict[str, object] | None) -> list[types.TextContent]:
+    """Handle the 'request_context' tool request."""
+    if not arguments or "target_identifier" not in arguments:
+        return [types.TextContent(type="text", text="Error: Missing target_identifier.")]
+
+    target_id = str(arguments["target_identifier"])
+    provider_name = str(arguments.get("provider_name", "file_state"))
+
+    providers = {
+        "file_state": FileStateProvider,
+        "pydantic_v2": PydanticV2Provider,
+        "ast": ASTProvider,
+    }
+
+    provider_cls = providers.get(provider_name)
+    if not provider_cls:
+        return [types.TextContent(type="text", text=f"Error: Unknown provider '{provider_name}'.")]
+
+    provider = provider_cls()
+    context_data = await provider.resolve(target_id)
+    return [types.TextContent(type="text", text=context_data)]
 
 
 async def run_server() -> None:

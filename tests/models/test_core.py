@@ -14,6 +14,8 @@ from jitsu.models.core import (
 
 def test_phase_status_enum() -> None:
     """Test the PhaseStatus enum values."""
+    assert PhaseStatus.PENDING.value == "PENDING"
+    assert PhaseStatus.RUNNING.value == "RUNNING"
     assert PhaseStatus.SUCCESS.value == "SUCCESS"
     assert PhaseStatus.FAILED.value == "FAILED"
     assert PhaseStatus.STUCK.value == "STUCK"

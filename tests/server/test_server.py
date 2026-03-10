@@ -2,15 +2,15 @@
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from jitsu.server.mcp_server import handle_call_tool, handle_list_tools, run_server, state_manager
 from mcp.types import TextContent
 
 from jitsu.models.core import AgentDirective
+from jitsu.server.mcp_server import handle_call_tool, handle_list_tools, run_server, state_manager
 
-EXPECTED_TOOL_COUNT = 2
+EXPECTED_TOOL_COUNT = 3
 
 
 @pytest.mark.asyncio
@@ -21,6 +21,7 @@ async def test_list_tools() -> None:
     names = [tool.name for tool in tools]
     assert "jitsu_get_next_phase" in names
     assert "jitsu_report_status" in names
+    assert "jitsu_request_context" in names
 
 
 @pytest.mark.asyncio
@@ -84,6 +85,73 @@ async def test_unknown_tool() -> None:
     """Test calling an unknown tool throws a clean error."""
     with pytest.raises(ValueError, match="Unknown tool: unknown_tool"):
         await handle_call_tool("unknown_tool", {})
+
+
+@pytest.mark.asyncio
+async def test_request_context_success() -> None:
+    """Test successful JIT context request."""
+    # We'll use a real file to test the FileStateProvider
+    result = await handle_call_tool(
+        "jitsu_request_context",
+        {"target_identifier": "pyproject.toml", "provider_name": "file_state"},
+    )
+    assert isinstance(result[0], TextContent)
+    # FileStateProvider returns content or "not found"
+    assert "not found" in result[0].text or "[" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_request_context_missing_args() -> None:
+    """Test context request with missing arguments."""
+    result = await handle_call_tool("jitsu_request_context", {})
+    assert isinstance(result[0], TextContent)
+    assert "Error: Missing target_identifier" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_request_context_unknown_provider() -> None:
+    """Test context request with an unknown provider."""
+    result = await handle_call_tool(
+        "jitsu_request_context",
+        {"target_identifier": "test", "provider_name": "unknown"},
+    )
+    assert isinstance(result[0], TextContent)
+    assert "Error: Unknown provider 'unknown'" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_request_context_mocked_ast() -> None:
+    """Test correctly routing an AST request with mocked provider."""
+    # Patch the class in mcp_server so when it instantiates, we control it
+    with patch("jitsu.server.mcp_server.ASTProvider") as mock_cls:
+        mock_instance = mock_cls.return_value
+        mock_instance.resolve = AsyncMock(return_value="## AST OUTPUT")
+
+        result = await handle_call_tool(
+            "jitsu_request_context",
+            {"target_identifier": "src/main.py", "provider_name": "ast"},
+        )
+
+        assert isinstance(result[0], TextContent)
+        assert result[0].text == "## AST OUTPUT"
+        mock_instance.resolve.assert_called_once_with("src/main.py")
+
+
+@pytest.mark.asyncio
+async def test_request_context_mocked_pydantic() -> None:
+    """Test correctly routing a Pydantic request with mocked provider."""
+    with patch("jitsu.server.mcp_server.PydanticV2Provider") as mock_cls:
+        mock_instance = mock_cls.return_value
+        mock_instance.resolve = AsyncMock(return_value="## PYDANTIC OUTPUT")
+
+        result = await handle_call_tool(
+            "jitsu_request_context",
+            {"target_identifier": "User", "provider_name": "pydantic_v2"},
+        )
+
+        assert isinstance(result[0], TextContent)
+        assert result[0].text == "## PYDANTIC OUTPUT"
+        mock_instance.resolve.assert_called_once_with("User")
 
 
 @patch("jitsu.server.mcp_server.mcp.server.stdio.stdio_server")

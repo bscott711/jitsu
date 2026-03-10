@@ -302,23 +302,6 @@ async def test_unknown_resolution_mode_internal() -> None:
 
 
 @pytest.mark.asyncio
-async def test_compile_execution_environment_injection() -> None:
-    """Test that the execution environment reminder is injected."""
-    compiler = ContextCompiler()
-    directive = AgentDirective(
-        epic_id="epic-1",
-        phase_id="phase-1",
-        module_scope="test",
-        instructions="do stuff",
-    )
-    res = await compiler.compile_directive(directive)
-    assert "## Execution Environment" in res
-    assert "STRICT PROTOCOL" in res
-    assert "uv run" in res
-    assert "just" in res
-
-
-@pytest.mark.asyncio
 async def test_compile_with_verification_and_criteria() -> None:
     """Test compiling a directive with verification commands and completion criteria."""
     compiler = ContextCompiler()
@@ -336,13 +319,13 @@ async def test_compile_with_verification_and_criteria() -> None:
     assert "- [ ] All tests pass" in res
     assert "### Verification" in res
     assert "You MUST run the following commands" in res
-    assert "```bash\njust verify-fast\n```" in res
     assert "```bash\nuv run pytest\n```" in res
+    assert "just verify-fast" not in res
 
 
 @pytest.mark.asyncio
-async def test_compile_mandatory_verification_injection() -> None:
-    """Test that just verify-fast is always injected."""
+async def test_compile_no_verification_commands() -> None:
+    """Test that empty verification commands show a generic fallback message."""
     compiler = ContextCompiler()
     directive = AgentDirective(
         epic_id="epic-1",
@@ -353,4 +336,5 @@ async def test_compile_mandatory_verification_injection() -> None:
     res = await compiler.compile_directive(directive)
     assert "## Definition of Done" in res
     assert "### Verification" in res
-    assert "```bash\njust verify-fast\n```" in res
+    assert "*No specific verification commands required for this phase.*" in res
+    assert "just verify-fast" not in res
