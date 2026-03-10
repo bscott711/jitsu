@@ -80,3 +80,52 @@ def test_phase_report_defaults() -> None:
     # The default_factory lambdas should be triggered here
     assert report.artifacts_generated == []
     assert report.agent_notes == ""
+    assert report.verification_output == ""
+
+
+def test_agent_directive_new_fields() -> None:
+    """Test the new verification_commands and completion_criteria fields."""
+    directive = AgentDirective(
+        epic_id="epic-001",
+        phase_id="phase-001",
+        module_scope="src/auth",
+        instructions="Build the auth module.",
+        verification_commands=["uv run pytest"],
+        completion_criteria=["All tests pass"],
+    )
+    assert directive.verification_commands == ["uv run pytest"]
+    assert directive.completion_criteria == ["All tests pass"]
+
+
+def test_phase_report_new_fields() -> None:
+    """Test the new verification_output field."""
+    report = PhaseReport(
+        phase_id="phase-001",
+        status=PhaseStatus.SUCCESS,
+        verification_output="Test passed successfully",
+    )
+    assert report.verification_output == "Test passed successfully"
+
+
+def test_agent_directive_strictness_and_frozen() -> None:
+    """Test that AgentDirective enforces strict typing and immutability."""
+    directive = AgentDirective(
+        epic_id="epic-001",
+        phase_id="phase-001",
+        module_scope="src/auth",
+        instructions="Build the auth module.",
+    )
+    # Test frozen
+    with pytest.raises(ValidationError):
+        directive.epic_id = "epic-002"  # type: ignore
+
+
+def test_phase_report_strictness_and_frozen() -> None:
+    """Test that PhaseReport enforces strict typing and immutability."""
+    report = PhaseReport(
+        phase_id="phase-001",
+        status=PhaseStatus.SUCCESS,
+    )
+    # Test frozen
+    with pytest.raises(ValidationError):
+        report.status = PhaseStatus.FAILED  # type: ignore

@@ -316,3 +316,41 @@ async def test_compile_execution_environment_injection() -> None:
     assert "STRICT PROTOCOL" in res
     assert "uv run" in res
     assert "just" in res
+
+
+@pytest.mark.asyncio
+async def test_compile_with_verification_and_criteria() -> None:
+    """Test compiling a directive with verification commands and completion criteria."""
+    compiler = ContextCompiler()
+    directive = AgentDirective(
+        epic_id="epic-1",
+        phase_id="phase-1",
+        module_scope="test",
+        instructions="do stuff",
+        verification_commands=["uv run pytest"],
+        completion_criteria=["All tests pass"],
+    )
+    res = await compiler.compile_directive(directive)
+    assert "## Definition of Done" in res
+    assert "### Completion Criteria" in res
+    assert "- [ ] All tests pass" in res
+    assert "### Verification" in res
+    assert "You MUST run the following commands" in res
+    assert "```bash\njust verify-fast\n```" in res
+    assert "```bash\nuv run pytest\n```" in res
+
+
+@pytest.mark.asyncio
+async def test_compile_mandatory_verification_injection() -> None:
+    """Test that just verify-fast is always injected."""
+    compiler = ContextCompiler()
+    directive = AgentDirective(
+        epic_id="epic-1",
+        phase_id="phase-1",
+        module_scope="test",
+        instructions="do stuff",
+    )
+    res = await compiler.compile_directive(directive)
+    assert "## Definition of Done" in res
+    assert "### Verification" in res
+    assert "```bash\njust verify-fast\n```" in res

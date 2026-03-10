@@ -1,0 +1,22 @@
+[
+  {
+    "epic_id": "epic-5-patch",
+    "phase_id": "phase-01-agnostic-compiler",
+    "module_scope": "src/jitsu/core",
+    "instructions": "Audit `ContextCompiler` in `src/jitsu/core/compiler.py`. Ensure that it DOES NOT hardcode `just verify-fast` or any other specific build commands. The 'Definition of Done' and 'Verification Commands' sections must be populated STRICTLY from the `directive.verification_commands` and `directive.completion_criteria` lists. If those lists are empty, the compiler should output a generic 'No specific verification commands required' message.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not hardcode repository-specific commands (like `just`, `uv`, or `pytest`) directly into the Python compiler logic."
+    ],
+    "verification_commands": [
+      "just verify-fast"
+    ]
+  }
+]

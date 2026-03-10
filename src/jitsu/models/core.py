@@ -38,21 +38,26 @@ class ContextTarget(BaseModel):
 class AgentDirective(BaseModel):
     """A task directive sent to an AI agent via MCP."""
 
+    model_config = ConfigDict(frozen=True)
+
     epic_id: str
     phase_id: str
     module_scope: str
     instructions: str
     context_targets: list[ContextTarget] = []
     anti_patterns: list[str] = []
+    verification_commands: list[str] = []
+    completion_criteria: list[str] = []
 
 
 class PhaseReport(BaseModel):
     """A report submitted by an agent upon phase completion."""
 
     # Allow passing strings that match Enum names/values
-    model_config = ConfigDict(use_enum_values=True)
+    model_config = ConfigDict(use_enum_values=True, frozen=True)
 
     phase_id: str
     status: PhaseStatus
     artifacts_generated: list[str] = []
     agent_notes: str = ""
+    verification_output: str = ""

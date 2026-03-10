@@ -42,6 +42,25 @@ class ContextCompiler:
             payload_parts.append("\n## Anti-Patterns (STRICTLY FORBIDDEN)")
             payload_parts.extend([f"- {pattern}" for pattern in directive.anti_patterns])
 
+        # Inject Definition of Done (DoD)
+        payload_parts.append("\n## Definition of Done")
+
+        if directive.completion_criteria:
+            payload_parts.append("### Completion Criteria")
+            payload_parts.extend(
+                [f"- [ ] {criterion}" for criterion in directive.completion_criteria]
+            )
+
+        payload_parts.append("### Verification")
+        payload_parts.append("You MUST run the following commands to verify your work:")
+
+        # Mandatory injection of just verify-fast
+        v_cmds = list(directive.verification_commands)
+        if "just verify-fast" not in v_cmds:
+            v_cmds.insert(0, "just verify-fast")
+
+        payload_parts.extend([f"```bash\n{cmd}\n```" for cmd in v_cmds])
+
         # Inject Execution Environment Reminder
         payload_parts.append(EXECUTION_ENV_REMINDER)
 

@@ -1,0 +1,66 @@
+[
+  {
+    "epic_id": "epic-5-definition-of-done",
+    "phase_id": "phase-01-extend-directive-models",
+    "module_scope": "src/jitsu/models",
+    "instructions": "Extend the `AgentDirective` model to include `verification_commands: list[str] = []` and `completion_criteria: list[str] = []`. Extend the `PhaseReport` model to include `verification_output: str = \"\"` so the agent can prove it ran the commands. Maintain `ConfigDict(frozen=True, strict=True)` and Pydantic V2 compatibility.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not remove or alter existing fields in `AgentDirective` or `PhaseReport`.",
+      "Do not import dependencies outside of the standard library and Pydantic."
+    ]
+  },
+  {
+    "epic_id": "epic-5-definition-of-done",
+    "phase_id": "phase-02-compiler-dod-injection",
+    "module_scope": "src/jitsu/core",
+    "instructions": "Update the `ContextCompiler` to generate a new 'Definition of Done' section in the Markdown payload. This section must list the `completion_criteria` and explicitly instruct the agent to run the `verification_commands`. The compiler must automatically inject `just verify-fast` as a mandatory verification command even if the directive does not explicitly request it.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "AUTO"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "SCHEMA_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not break the existing Execution Environment injection built in Epic 4.5."
+    ]
+  },
+  {
+    "epic_id": "epic-5-definition-of-done",
+    "phase_id": "phase-03-dod-verification-tests",
+    "module_scope": "tests",
+    "instructions": "Write comprehensive tests in `tests/models/test_core.py` and `tests/core/test_compiler.py` to cover the new fields and the compiler's auto-injection of `just verify-fast`. Run `just verify-fast` to ensure 100% coverage and strict type adherence before reporting success.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/core/test_compiler.py",
+        "is_required": true,
+        "resolution_mode": "AUTO"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/models/test_core.py",
+        "is_required": true,
+        "resolution_mode": "AUTO"
+      }
+    ],
+    "anti_patterns": [
+      "Do not report SUCCESS if code coverage drops below 100% or if Pyright throws any strict-mode errors."
+    ]
+  }
+]

@@ -1,0 +1,48 @@
+[
+  {
+    "epic_id": "epic-6-progressive-disclosure",
+    "phase_id": "phase-01-mcp-tool-definition",
+    "module_scope": "src/jitsu/server",
+    "instructions": "Add a new MCP tool named `jitsu_request_context` to `mcp_server.py`. It should accept `target_identifier` (str) and `provider_name` (str, defaulting to 'file_state'). Inside the tool, instantiate the requested provider (from `jitsu.providers`), call `.resolve(target_identifier)`, and return the resulting markdown text to the client.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/providers/base.py",
+        "is_required": true,
+        "resolution_mode": "SCHEMA_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not duplicate file-reading logic in the server layer; you MUST use the existing Layer 2 Providers (`FileStateProvider`, etc.) to resolve the text."
+    ],
+    "verification_commands": [
+      "uv run pytest tests/server"
+    ]
+  },
+  {
+    "epic_id": "epic-6-progressive-disclosure",
+    "phase_id": "phase-02-progressive-disclosure-tests",
+    "module_scope": "tests/server",
+    "instructions": "Write comprehensive unit tests for the new `jitsu_request_context` MCP tool. Mock the providers to ensure the server correctly routes the request and returns the provider's output. Run the full verification suite to maintain 100% coverage.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/server/test_mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "AUTO"
+      }
+    ],
+    "anti_patterns": [
+      "Do not use `Any` types in the tests; maintain Pyright strict mode."
+    ],
+    "verification_commands": [
+      "just verify-fast"
+    ]
+  }
+]

@@ -47,6 +47,7 @@ async def handle_list_tools() -> list[types.Tool]:
                         "items": {"type": "string"},
                     },
                     "agent_notes": {"type": "string"},
+                    "verification_output": {"type": "string"},
                 },
                 "required": ["phase_id", "status"],
             },
