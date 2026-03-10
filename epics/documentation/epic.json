@@ -1,0 +1,67 @@
+[
+  {
+    "epic_id": "documentation-sync",
+    "phase_id": "phase-01-architecture-docs",
+    "module_scope": "docs",
+    "instructions": "Rewrite `docs/Jitsu Architecture Overview.md` to accurately reflect the current system architecture. You must document the pipeline: Layer 1 (Domain Models with `TargetResolutionMode`), Layer 1.5 (ContextCompiler with AST-First/AUTO fallback and Context Manifests), Layer 2 (Providers), and Layer 3 (MCP Server with `jitsu_request_context` for progressive disclosure). The code is the source of truth; ensure the document perfectly describes how the system saves tokens and shifts preparation to Python.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "docs/Jitsu Architecture Overview.md",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not hallucinate features that are not present in the code context.",
+      "Do not delete historical context from older docs if it explains the 'why', but ensure the 'how' reflects the current codebase."
+    ],
+    "completion_criteria": [
+      "The Architecture Overview accurately explains AST-first handoff, AUTO mode, and Progressive Disclosure."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "documentation-sync",
+    "phase_id": "phase-02-readme-revamp",
+    "module_scope": "Project Root",
+    "instructions": "Rewrite the `README.md` to serve as a modern, accurate front-page for the Jitsu project. Highlight its core value proposition: an AST-first, strictly-typed AI orchestrator that uses Definition of Done enforcement and Progressive Disclosure to prevent 'Context Drift' in LLM agents. Mention the 100% agnostic context compiler and the rock-solid two-way IPC handshake. Provide clear instructions on how to use `uv run jitsu submit` to feed it epics.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "README.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "docs/Jitsu Architecture Overview.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not make the README overly verbose; keep it punchy, developer-focused, and easy to read."
+    ],
+    "completion_criteria": [
+      "The README explains what Jitsu is, why it exists (Context Drift prevention), and how to run it."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]
