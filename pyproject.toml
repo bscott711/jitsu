@@ -16,6 +16,7 @@ dependencies = [
     "mcp",
     "anyio",
     "typer>=0.24.1",
+    "litellm>=1.82.0",
 ]
 
 [project.scripts]

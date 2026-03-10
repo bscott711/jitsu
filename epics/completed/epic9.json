@@ -1,0 +1,55 @@
+[
+  {
+    "epic_id": "epic-9-native-planner",
+    "phase_id": "phase-01-planner-core",
+    "module_scope": "src/jitsu/core",
+    "instructions": "Create `src/jitsu/core/planner.py`. Implement a `JitsuPlanner` class that takes a natural language objective, a list of relevant files, and an LLM client (use `litellm` or just standard `openai` library for now). It must prompt the LLM to output a JSON array that strictly conforms to the `AgentDirective` Pydantic model. Add a method to save this output to disk as an `epic.json` file.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "SCHEMA_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not hardcode API keys; load them from environment variables (e.g., OPENAI_API_KEY).",
+      "Do not parse stringified JSON manually; use Pydantic's built-in validation to ensure the LLM output matches the directive schema."
+    ],
+    "completion_criteria": [
+      "The planner successfully takes a string objective and outputs a validated list of AgentDirectives."
+    ],
+    "verification_commands": [
+      "just verify-fast"
+    ]
+  },
+  {
+    "epic_id": "epic-9-native-planner",
+    "phase_id": "phase-02-cli-integration",
+    "module_scope": "src/jitsu/cli",
+    "instructions": "Update `src/jitsu/cli/main.py` to add a new command: `jitsu plan`. It should accept `--objective` (string) and an optional `--output` file path. It should instantiate the `JitsuPlanner`, generate the epic, and save it to the specified output path (or `epics/current/generated_epic.json` by default).",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Ensure the CLI gracefully handles missing API keys by printing a helpful error message."
+    ],
+    "completion_criteria": [
+      "Running `uv run jitsu plan --objective 'Test'` generates a valid JSON file."
+    ],
+    "verification_commands": [
+      "just verify-fast"
+    ]
+  }
+]
