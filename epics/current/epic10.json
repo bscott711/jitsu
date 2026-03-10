@@ -1,0 +1,91 @@
+[
+  {
+    "epic_id": "epic-10-agnostic-compiler-and-dod",
+    "phase_id": "phase-01-unify-justfile-and-rules",
+    "module_scope": "Project Root",
+    "instructions": "In `JustFile`, delete the `verify-fast` and `verify-full` recipes. Create a single new recipe called `verify` that runs all checks: `format lint check-types check-deps contracts test-unit`. Change the `default` recipe at the top of the file to point to `verify`. Then, in `.jitsurules`, update the execution environment rules to explicitly mandate `just verify` for execution, completely removing any references to `verify-fast`.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "JustFile",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": ".jitsurules",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not leave any dangling references to verify-fast or verify-full in the JustFile.",
+      "Strictly follow Ruff style guidelines when preparing python code.",
+      "There are no 'here's how you might do X' or similar boilerplate suggestions. Provide fully functioning code in code blocks.",
+      "If the edit requires only a single line (or two) change provide the context around it with the change clearly denoted so it is easy to drop in place."
+    ],
+    "completion_criteria": [
+      "JustFile contains only a single `verify` pipeline.",
+      ".jitsurules explicitly instructs the agent to use `just verify`."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-10-agnostic-compiler-and-dod",
+    "phase_id": "phase-02-purge-compiler-assumptions",
+    "module_scope": "src/jitsu/core",
+    "instructions": "Audit `ContextCompiler` in `src/jitsu/core/compiler.py` and completely remove the 'Execution Environment' section injection that was added back in Epic 4.5. The compiler MUST NOT inject any hardcoded strings mentioning `uv run`, `just`, or `pytest`. It should strictly render the `instructions`, `anti_patterns`, `completion_criteria`, `verification_commands`, and the JIT Context. Update `tests/core/test_compiler.py` to remove any assertions expecting these hardcoded environment strings.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/core/test_compiler.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not hardcode ANY repository-specific execution commands in the Python compiler.",
+      "Strictly follow Ruff style guidelines when preparing python code.",
+      "There are no 'here's how you might do X' or similar boilerplate suggestions. Provide fully functioning code in code blocks.",
+      "If the edit requires only a single line (or two) change provide the context around it with the change clearly denoted so it is easy to drop in place."
+    ],
+    "completion_criteria": [
+      "The ContextCompiler is 100% agnostic to the underlying project's build tools.",
+      "All unit tests pass with the hardcoded strings removed."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-10-agnostic-compiler-and-dod",
+    "phase_id": "phase-03-planner-prompt-sync",
+    "module_scope": "docs",
+    "instructions": "Update `docs/jitsu_orchestrator_prompt.md`. Ensure the prompt instructs the LLM that when drafting epics for THIS repository, the standard verification command to inject into the `verification_commands` array is `just verify`. Remove any lingering examples of `verify-fast` or pure `pytest`.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "docs/jitsu_orchestrator_prompt.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not alter the JSON schema definition in the orchestrator prompt."
+    ],
+    "completion_criteria": [
+      "The orchestrator prompt correctly instructs the LLM to use `just verify` for repository-specific verification."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

@@ -1,0 +1,83 @@
+[
+  {
+    "epic_id": "epic-9.5-ipc-diagnostics",
+    "phase_id": "phase-01-server-ack",
+    "module_scope": "src/jitsu/server",
+    "instructions": "Upgrade the IPC protocol server-side to support a two-way handshake. In `src/jitsu/server/ipc.py`, update the `handle_client` method. After successfully parsing and queuing the directives, use `await client.send(...)` to send a UTF-8 encoded string back to the client: `ACK: Queued {count} phases.`. If a `ValidationError` or `JSONDecodeError` occurs, send back `ERR: Invalid Schema` or `ERR: Invalid JSON` respectively.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/server/ipc.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not break the existing error logging to stderr."
+    ],
+    "completion_criteria": [
+      "The IPC server explicitly sends an ACK or ERR byte string back over the socket before closing."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-9.5-ipc-diagnostics",
+    "phase_id": "phase-02-cli-receive",
+    "module_scope": "src/jitsu/cli",
+    "instructions": "Upgrade the CLI to listen for the server's handshake. In `src/jitsu/cli/main.py`, update `_send_payload` to await `client.receive(1024)` after sending the payload, decode the response, and return it as a string. Then, update the `submit` command to print the exact response received from the server using `typer.secho(..., err=True)` instead of the generic 'Successfully submitted' message. If the response starts with 'ERR:', exit with code 1.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/server/ipc.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not swallow errors; ensure the CLI exits with code 1 on an ERR response."
+    ],
+    "completion_criteria": [
+      "The `submit` command explicitly prints the server's acknowledgment or error response."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-9.5-ipc-diagnostics",
+    "phase_id": "phase-03-handshake-tests",
+    "module_scope": "tests",
+    "instructions": "Update `tests/server/test_ipc.py` and `tests/cli/test_main.py` to cover the new two-way handshake logic. In the IPC tests, mock the `client.send` method and assert it is called with the correct ACK/ERR bytes. In the CLI tests, mock the `client.receive` method to return an ACK string and assert the CLI prints it and exits with the correct status codes.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/server/test_ipc.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not let code coverage drop below 100%."
+    ],
+    "completion_criteria": [
+      "Test coverage remains at 100% across the server and cli packages."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

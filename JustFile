@@ -1,7 +1,7 @@
 set shell := ["bash", "-c"]
 
 # Default command for the fast loop
-default: verify-fast
+default: verify
 
 # ==========================================
 # 1. THE AGENT'S TOOLKIT (Self-Correction)
@@ -43,11 +43,8 @@ install-hooks:
 # 2. THE VERIFICATION LOOPS (Agent Checkpoints)
 # ==========================================
 
-# THE FAST LOOP: Used by workers during iteration.
-verify-fast: format lint check-types test-unit
-
 # THE FULL GATE: Used by the Orchestrator/Pre-Commit. Runs EVERYTHING.
-verify-full: format lint check-types check-deps contracts test-unit
+verify: format lint check-types check-deps contracts test-unit
 
 # Run tests with strict 100% coverage limit (configured in pyproject.toml)
 test-unit:

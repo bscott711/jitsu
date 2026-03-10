@@ -41,3 +41,11 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      
+      - id: pytest-strict
+        name: Pytest (100% Coverage Gate)
+        entry: uv run pytest
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
