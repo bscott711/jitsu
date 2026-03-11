@@ -5,6 +5,7 @@ from jitsu.providers import (
     ASTProvider,
     BaseProvider,
     DirectoryTreeProvider,
+    EnvVarProvider,
     FileStateProvider,
     GitDiffProvider,
     PydanticProvider,
@@ -24,6 +25,7 @@ class ContextCompiler:
         ast_provider = ASTProvider()
         tree_provider = DirectoryTreeProvider()
         git_provider = GitDiffProvider()
+        env_provider = EnvVarProvider()
 
         self._providers: dict[str, BaseProvider] = {
             file_provider.name: file_provider,
@@ -31,6 +33,7 @@ class ContextCompiler:
             ast_provider.name: ast_provider,
             tree_provider.name: tree_provider,
             git_provider.name: git_provider,
+            env_provider.name: env_provider,
         }
 
     async def compile_directive(self, directive: AgentDirective) -> str:
@@ -183,4 +186,5 @@ class ContextCompiler:
             "file": "Full Source",
             "tree": "Visual Tree Structure",
             "git_diff": "Git Repository Diff",
+            "env_var": "Environment Variable",
         }.get(provider_name, "Included")

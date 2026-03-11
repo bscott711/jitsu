@@ -30,9 +30,9 @@ class ContextTarget(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    provider_name: Literal["file", "ast", "tree", "pydantic"] = Field(
+    provider_name: Literal["file", "ast", "tree", "pydantic", "env_var", "git_diff"] = Field(
         ...,
-        description="The exact name of the provider. MUST be one of: 'file', 'ast', 'tree', 'pydantic'.",
+        description="The exact name of the provider. MUST be one of: 'file', 'ast', 'tree', 'pydantic', 'env_var', 'git_diff'.",
     )
     target_identifier: str = Field(
         ...,
