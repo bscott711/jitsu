@@ -351,7 +351,7 @@ def test_cli_plan_api_fallback_success(
 
     assert result.exit_code == 0
     assert "API limit hit for primary-model" in result.output
-    assert "Falling back to meta-llama/llama-3.3-70b-instruct:free" in result.output
+    assert "Falling back to openai/gpt-oss-120b:free" in result.output
     mock_save.assert_called_once_with(out_file)
     expected_calls = 2
     assert mock_generate.call_count == expected_calls

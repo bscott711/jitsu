@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class JitsuExecutor:
     """Executes AgentDirectives autonomously using an LLM."""
 
-    def __init__(self, model: str = "google/gemini-2.0-flash-lite-001") -> None:
+    def __init__(self, model: str = "openai/gpt-oss-120b:free") -> None:
         """Initialize the executor with a model name."""
         self.model = model
         dotenv.load_dotenv()

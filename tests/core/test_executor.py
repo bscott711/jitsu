@@ -34,7 +34,7 @@ def test_executor_initialization() -> None:
         patch("jitsu.core.executor.instructor.from_openai"),
     ):
         executor = JitsuExecutor()
-        assert executor.model == "google/gemini-2.0-flash-lite-001"
+        assert executor.model == "openai/gpt-oss-120b:free"
 
 
 def test_executor_missing_api_key() -> None:

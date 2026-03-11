@@ -3,8 +3,6 @@
 from jitsu.providers.base import BaseProvider
 from jitsu.utils import root
 
-PROVIDER_NAME = "markdown_ast"
-
 
 class MarkdownASTProvider(BaseProvider):
     """
@@ -17,7 +15,7 @@ class MarkdownASTProvider(BaseProvider):
     @property
     def name(self) -> str:
         """The unique name of this provider."""
-        return PROVIDER_NAME
+        return "markdown_ast"
 
     def read(self, target: str) -> list[str]:
         """

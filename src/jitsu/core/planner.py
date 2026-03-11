@@ -30,7 +30,7 @@ class JitsuPlanner:
 
     async def generate_plan(
         self,
-        model: str = "google/gemini-2.0-flash-001",
+        model: str = "openai/gpt-oss-120b:free",
         on_progress: Callable[[str], None] | None = None,
         *,
         verbose: bool = False,

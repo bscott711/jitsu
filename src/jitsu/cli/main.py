@@ -330,7 +330,7 @@ async def _run_planner(
         except openai.APIStatusError as e:
             # 403 = OpenRouter Monthly Limit, 429 = Rate Limit
             if e.status_code in (403, 429):
-                backup_model = "meta-llama/llama-3.3-70b-instruct:free"
+                backup_model = "openai/gpt-oss-120b:free"
                 typer.secho(
                     f"\n⚠️ API limit hit for {model}. Falling back to {backup_model}...",
                     fg=typer.colors.YELLOW,
