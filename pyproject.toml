@@ -63,6 +63,7 @@ ignore = [
     "TC003",   # Move standard library import into a type-checking block
     "COM812",  # Conflicts with the Ruff formatter
     "ISC001",  # Conflicts with the Ruff formatter
+    "S603",    # check for execution of untrusted input (we use shell=False and safe paths)
 ]
 
 [tool.ruff.lint.per-file-ignores]

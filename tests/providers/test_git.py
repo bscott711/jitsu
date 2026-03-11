@@ -67,13 +67,3 @@ async def test_git_provider_file_not_found() -> None:
     with patch("jitsu.providers.git.subprocess.run", side_effect=FileNotFoundError):
         resolved = await provider.resolve("HEAD")
         assert "ERROR: git command not found." in resolved
-
-
-@pytest.mark.asyncio
-async def test_git_provider_generic_exception() -> None:
-    """Test handling of other exceptions."""
-    provider = GitProvider()
-
-    with patch("jitsu.providers.git.subprocess.run", side_effect=RuntimeError("unexpected")):
-        resolved = await provider.resolve("HEAD")
-        assert "ERROR: Failed to execute git command: unexpected" in resolved

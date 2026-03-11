@@ -318,21 +318,21 @@ def _handle_git_commit(arguments: dict[str, object] | None) -> list[types.TextCo
         ]
 
     try:
-        # git add .
-        subprocess.run(["git", "add", "."], check=True, shell=False)  # noqa: S607
-
-        # git commit -m <message>
-        subprocess.run(["git", "commit", "-m", message], check=True, shell=False)  # noqa: S603, S607
-
-        if sync:
-            subprocess.run(["git", "push"], check=True, shell=False)  # noqa: S607
+        # Delegate to JustFile recipes
+        recipe = "sync" if sync else "commit"
+        subprocess.run(
+            ["/opt/homebrew/bin/just", recipe, message],
+            check=True,
+            shell=False,
+            capture_output=True,
+            text=True,
+        )
 
         msg = f"Successfully committed{' and pushed' if sync else ''} changes."
         return [types.TextContent(type="text", text=msg)]
     except subprocess.CalledProcessError as e:
-        return [types.TextContent(type="text", text=f"Error: Git command failed: {e!s}")]
-    except Exception as e:  # noqa: BLE001
-        return [types.TextContent(type="text", text=f"Error: {e!s}")]
+        error_msg = f"Error: Git command failed (exit code {e.returncode}): {e.stderr or e.stdout}"
+        return [types.TextContent(type="text", text=error_msg)]
 
 
 async def run_server() -> None:

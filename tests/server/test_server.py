@@ -334,7 +334,7 @@ async def test_git_commit_success() -> None:
         )
         assert isinstance(result[0], TextContent)
         assert "Successfully committed and pushed" in result[0].text
-        assert mock_run.call_count == 3  # noqa: PLR2004
+        assert mock_run.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -355,15 +355,9 @@ async def test_git_commit_missing_message() -> None:
 @pytest.mark.asyncio
 async def test_git_commit_error() -> None:
     """Test jitsu_git_commit with git error."""
-    error = subprocess.CalledProcessError(returncode=1, cmd="git add .")
+    error = subprocess.CalledProcessError(returncode=1, cmd="just commit")
+    error.stderr = "git error"
     with patch("jitsu.server.mcp_server.subprocess.run", side_effect=error):
         result = await handle_call_tool("jitsu_git_commit", {"message": "feat: test"})
         assert "Error: Git command failed" in result[0].text
-
-
-@pytest.mark.asyncio
-async def test_git_commit_generic_error() -> None:
-    """Test jitsu_git_commit with generic error."""
-    with patch("jitsu.server.mcp_server.subprocess.run", side_effect=Exception("BOOM")):
-        result = await handle_call_tool("jitsu_git_commit", {"message": "feat: test"})
-        assert "Error: BOOM" in result[0].text
+        assert "git error" in result[0].text

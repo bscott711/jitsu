@@ -39,6 +39,16 @@ install-hooks:
 	@echo "🪝 Installing git hooks..."
 	uv run pre-commit install
 
+# Hardened Git Lifecycle
+commit message:
+	git add .
+	git commit -m "{{message}}"
+
+sync message:
+	git add .
+	git commit -m "{{message}}"
+	git push
+
 # ==========================================
 # 2. THE VERIFICATION LOOPS (Agent Checkpoints)
 # ==========================================

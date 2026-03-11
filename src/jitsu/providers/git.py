@@ -25,8 +25,8 @@ class GitProvider(BaseProvider):
 
         """
         try:
-            result = subprocess.run(  # noqa: S603
-                ["git", *args],  # noqa: S607
+            result = subprocess.run(
+                ["/usr/bin/git", *args],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -37,8 +37,6 @@ class GitProvider(BaseProvider):
             return f"ERROR: Git command failed with exit code {e.returncode}: {e.stderr}"
         except FileNotFoundError:
             return "ERROR: git command not found."
-        except Exception as e:  # noqa: BLE001
-            return f"ERROR: Failed to execute git command: {e}"
 
     async def resolve(self, target: str) -> str:
         """
