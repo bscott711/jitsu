@@ -17,6 +17,7 @@ from jitsu.core.state import JitsuStateManager
 from jitsu.models.core import AgentDirective, PhaseReport, PhaseStatus
 from jitsu.providers import DirectoryTreeProvider, GitProvider, ProviderRegistry
 from jitsu.server.ipc import IPCServer
+from jitsu.server.registry import ToolRegistry
 
 # Initialize the global state manager and compiler for the server
 state_manager = JitsuStateManager()
@@ -29,120 +30,7 @@ app = Server("jitsu")
 @app.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
     """List available Jitsu tools."""
-    return [
-        types.Tool(
-            name="jitsu_get_next_phase",
-            description="Get the next Jitsu phase directive to execute.",
-            inputSchema={
-                "type": "object",
-                "properties": {},
-            },
-        ),
-        types.Tool(
-            name="jitsu_report_status",
-            description="Report the status of a completed phase.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "phase_id": {"type": "string"},
-                    "status": {
-                        "type": "string",
-                        "enum": ["SUCCESS", "FAILED", "STUCK"],
-                    },
-                    "artifacts_generated": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },
-                    "agent_notes": {"type": "string"},
-                    "verification_output": {"type": "string"},
-                },
-                "required": ["phase_id", "status"],
-            },
-        ),
-        types.Tool(
-            name="jitsu_request_context",
-            description="On-demand JIT context request for a specific target and provider.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "target_identifier": {
-                        "type": "string",
-                        "description": "The target to resolve (e.g., file path or Pydantic class).",
-                    },
-                    "provider_name": {
-                        "type": "string",
-                        "description": "Provider to use (file, pydantic, ast, tree).",
-                        "default": "file",
-                    },
-                },
-                "required": ["target_identifier"],
-            },
-        ),
-        types.Tool(
-            name="jitsu_get_planning_context",
-            description="Get the repository skeleton and .jitsurules to help plan an epic.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "relevant_files": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Optional list of files relevant to the planning task.",
-                    }
-                },
-            },
-        ),
-        types.Tool(
-            name="jitsu_submit_epic",
-            description="Submit an array of phase directives to the Jitsu queue.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "directives": {
-                        "type": "array",
-                        "items": {"type": "object"},
-                        "description": "An array of validated AgentDirective objects.",
-                    }
-                },
-                "required": ["directives"],
-            },
-        ),
-        types.Tool(
-            name="jitsu_inspect_queue",
-            description="Inspect the current queue of pending phases.",
-            inputSchema={
-                "type": "object",
-                "properties": {},
-            },
-        ),
-        types.Tool(
-            name="jitsu_git_status",
-            description="Returns the output of 'git status --short'.",
-            inputSchema={
-                "type": "object",
-                "properties": {},
-            },
-        ),
-        types.Tool(
-            name="jitsu_git_commit",
-            description="Stages all changes and commits them. Optionally pushes.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "message": {
-                        "type": "string",
-                        "description": "The commit message (MUST follow Conventional Commits).",
-                    },
-                    "sync": {
-                        "type": "boolean",
-                        "description": "Whether to run 'git push' after committing.",
-                        "default": False,
-                    },
-                },
-                "required": ["message"],
-            },
-        ),
-    ]
+    return tool_registry.get_tools()
 
 
 @app.call_tool()
@@ -150,27 +38,7 @@ async def handle_call_tool(
     name: str, arguments: dict[str, object] | None
 ) -> list[types.TextContent]:
     """Handle tool execution requests from the IDE agent."""
-    if name == "jitsu_get_next_phase":
-        res = await _handle_get_next_phase()
-    elif name == "jitsu_report_status":
-        res = _handle_report_status(arguments)
-    elif name == "jitsu_request_context":
-        res = await _handle_request_context(arguments)
-    elif name == "jitsu_inspect_queue":
-        res = _handle_inspect_queue()
-    elif name == "jitsu_get_planning_context":
-        res = await _handle_get_planning_context(arguments)
-    elif name == "jitsu_submit_epic":
-        res = _handle_submit_epic(arguments)
-    elif name == "jitsu_git_status":
-        res = await _handle_git_status()
-    elif name == "jitsu_git_commit":
-        res = _handle_git_commit(arguments)
-    else:
-        msg = f"Unknown tool: {name}"
-        raise ValueError(msg)
-
-    return res
+    return await tool_registry.execute(name, arguments)
 
 
 async def _handle_get_next_phase() -> list[types.TextContent]:
@@ -315,6 +183,154 @@ def _handle_git_commit(arguments: dict[str, object] | None) -> list[types.TextCo
     except subprocess.CalledProcessError as e:
         error_msg = f"Error: Git command failed (exit code {e.returncode}): {e.stderr or e.stdout}"
         return [types.TextContent(type="text", text=error_msg)]
+
+
+tool_registry = ToolRegistry()
+
+# Register Jitsu tools in the registry
+tool_registry.register(
+    types.Tool(
+        name="jitsu_get_next_phase",
+        description="Get the next Jitsu phase directive to execute.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
+    _handle_get_next_phase,
+)
+
+tool_registry.register(
+    types.Tool(
+        name="jitsu_report_status",
+        description="Report the status of a completed phase.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "phase_id": {"type": "string"},
+                "status": {
+                    "type": "string",
+                    "enum": ["SUCCESS", "FAILED", "STUCK"],
+                },
+                "artifacts_generated": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "agent_notes": {"type": "string"},
+                "verification_output": {"type": "string"},
+            },
+            "required": ["phase_id", "status"],
+        },
+    ),
+    _handle_report_status,
+)
+
+tool_registry.register(
+    types.Tool(
+        name="jitsu_request_context",
+        description="On-demand JIT context request for a specific target and provider.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "target_identifier": {
+                    "type": "string",
+                    "description": "The target to resolve (e.g., file path or Pydantic class).",
+                },
+                "provider_name": {
+                    "type": "string",
+                    "description": "Provider to use (file, pydantic, ast, tree).",
+                    "default": "file",
+                },
+            },
+            "required": ["target_identifier"],
+        },
+    ),
+    _handle_request_context,
+)
+
+tool_registry.register(
+    types.Tool(
+        name="jitsu_get_planning_context",
+        description="Get the repository skeleton and .jitsurules to help plan an epic.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "relevant_files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional list of files relevant to the planning task.",
+                }
+            },
+        },
+    ),
+    _handle_get_planning_context,
+)
+
+tool_registry.register(
+    types.Tool(
+        name="jitsu_submit_epic",
+        description="Submit an array of phase directives to the Jitsu queue.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "directives": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "An array of validated AgentDirective objects.",
+                }
+            },
+            "required": ["directives"],
+        },
+    ),
+    _handle_submit_epic,
+)
+
+tool_registry.register(
+    types.Tool(
+        name="jitsu_inspect_queue",
+        description="Inspect the current queue of pending phases.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
+    _handle_inspect_queue,
+)
+
+tool_registry.register(
+    types.Tool(
+        name="jitsu_git_status",
+        description="Returns the output of 'git status --short'.",
+        inputSchema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
+    _handle_git_status,
+)
+
+tool_registry.register(
+    types.Tool(
+        name="jitsu_git_commit",
+        description="Stages all changes and commits them. Optionally pushes.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": "The commit message (MUST follow Conventional Commits).",
+                },
+                "sync": {
+                    "type": "boolean",
+                    "description": "Whether to run 'git push' after committing.",
+                    "default": False,
+                },
+            },
+            "required": ["message"],
+        },
+    ),
+    _handle_git_commit,
+)
 
 
 async def run_server() -> None:

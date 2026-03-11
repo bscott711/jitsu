@@ -27,8 +27,8 @@ async def test_tool_registry_register_and_get() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_registry_execute_sync() -> None:
-    """Test executing a synchronous handler."""
+async def test_tool_registry_execute_sync_no_args() -> None:
+    """Test executing a synchronous handler with no arguments."""
     registry = ToolRegistry()
     tool = types.Tool(
         name="test_tool",
@@ -47,8 +47,29 @@ async def test_tool_registry_execute_sync() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_registry_execute_async() -> None:
-    """Test executing an asynchronous handler."""
+async def test_tool_registry_execute_sync_with_args() -> None:
+    """Test executing a synchronous handler with arguments."""
+    registry = ToolRegistry()
+    tool = types.Tool(
+        name="test_tool",
+        description="A test tool",
+        inputSchema={"type": "object", "properties": {"val": {"type": "string"}}},
+    )
+
+    def handler(arguments: dict[str, object] | None) -> list[types.TextContent]:
+        val = str(arguments["val"]) if arguments else "missing"
+        return [types.TextContent(type="text", text=val)]
+
+    registry.register(tool, handler)
+    result = await registry.execute("test_tool", {"val": "hello"})
+
+    assert len(result) == 1
+    assert result[0].text == "hello"
+
+
+@pytest.mark.asyncio
+async def test_tool_registry_execute_async_no_args() -> None:
+    """Test executing an asynchronous handler with no arguments."""
     registry = ToolRegistry()
     tool = types.Tool(
         name="test_tool",
@@ -67,8 +88,8 @@ async def test_tool_registry_execute_async() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_registry_execute_with_args() -> None:
-    """Test executing a handler with arguments."""
+async def test_tool_registry_execute_async_with_args() -> None:
+    """Test executing an asynchronous handler with arguments."""
     registry = ToolRegistry()
     tool = types.Tool(
         name="test_tool",
@@ -76,7 +97,8 @@ async def test_tool_registry_execute_with_args() -> None:
         inputSchema={"type": "object", "properties": {"val": {"type": "string"}}},
     )
 
-    def handler(val: str) -> list[types.TextContent]:
+    async def handler(arguments: dict[str, object] | None) -> list[types.TextContent]:
+        val = str(arguments["val"]) if arguments else "missing"
         return [types.TextContent(type="text", text=val)]
 
     registry.register(tool, handler)
