@@ -498,3 +498,89 @@ def test_cli_run_os_error(
 
     assert result.exit_code == 1
     assert "Failed to read or move epic file: Read error" in result.output
+
+
+def test_cli_init_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test successful initialization of a new project."""
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["init"])
+
+    assert result.exit_code == 0
+    assert "Created epics/current/ and epics/completed/." in result.output
+    assert "Created .jitsurules with default protocol." in result.output
+    assert "Created justfile with verify recipe." in result.output
+    assert "Jitsu project initialized successfully!" in result.output
+
+    assert (tmp_path / "epics" / "current").is_dir()
+    assert (tmp_path / "epics" / "completed").is_dir()
+    assert (tmp_path / ".jitsurules").is_file()
+    assert (tmp_path / "justfile").is_file()
+
+
+def test_cli_init_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that init does not overwrite existing files."""
+    monkeypatch.chdir(tmp_path)
+
+    # Pre-create files
+    rules = tmp_path / ".jitsurules"
+    rules.write_text("existing rules", encoding="utf-8")
+
+    justfile = tmp_path / "justfile"
+    justfile.write_text("existing justfile", encoding="utf-8")
+
+    result = runner.invoke(app, ["init"])
+
+    assert result.exit_code == 0
+    assert ".jitsurules already exists, skipping." in result.output
+    assert "justfile already exists, skipping." in result.output
+
+    assert rules.read_text(encoding="utf-8") == "existing rules"
+    assert justfile.read_text(encoding="utf-8") == "existing justfile"
+
+
+def test_cli_init_skips_justfile_capital(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that init skips justfile creation if 'Justfile' exists."""
+    monkeypatch.chdir(tmp_path)
+    content = "existing Justfile"
+    (tmp_path / "Justfile").write_text(content, encoding="utf-8")
+
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0
+    assert "justfile already exists, skipping." in result.output
+    # Check that we didn't overwrite it or create a lowercase one if possible
+    assert (tmp_path / "Justfile").read_text(encoding="utf-8") == content
+
+
+def test_cli_init_os_error_mkdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test handling of directory creation failure."""
+    monkeypatch.chdir(tmp_path)
+
+    with patch("jitsu.cli.main.Path.mkdir", side_effect=OSError("Permission denied")):
+        result = runner.invoke(app, ["init"])
+
+    assert result.exit_code == 1
+    assert "Failed to create directories: Permission denied" in result.output
+
+
+def test_cli_init_os_error_write_rules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test handling of .jitsurules write failure."""
+    monkeypatch.chdir(tmp_path)
+
+    with patch("jitsu.cli.main.Path.write_text", side_effect=OSError("Write error")):
+        result = runner.invoke(app, ["init"])
+
+    assert result.exit_code == 1
+    assert "Failed to create .jitsurules: Write error" in result.output
+
+
+def test_cli_init_os_error_write_justfile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test handling of justfile write failure."""
+    monkeypatch.chdir(tmp_path)
+
+    # First call (.jitsurules) succeeds, second call (justfile) fails
+    with patch("jitsu.cli.main.Path.write_text", side_effect=[100, OSError("Write error")]):
+        result = runner.invoke(app, ["init"])
+
+    assert result.exit_code == 1
+    assert "Failed to create justfile: Write error" in result.output

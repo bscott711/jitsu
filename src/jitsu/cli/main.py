@@ -114,6 +114,84 @@ def serve(
         sys.exit(1)
 
 
+JITSU_RULES_TEMPLATE = """# **Jitsu Workflow Protocol**
+
+You are operating under Jitsu (実) orchestration.
+
+1. **Initialization:** At the start of every session or task, you MUST call the jitsu_get_next_phase tool.
+2. **Strict Context:** Read the compiled Markdown context provided by Jitsu. This is your "Ground Truth." Do not rely on stale file states or previous conversation memory if it conflicts with the JIT context.
+3. **Execution:** Execute the instructions within the specified module_scope.
+4. **Reporting:** Once the task is complete, you MUST call jitsu_report_status with your artifacts and notes.
+5. **Errors:** If you encounter a validation error or become stuck, report the status as STUCK to trigger the meta-feedback loop.
+6. **Protocol Safety (stdio):** Never use `print()` or standard `logging`. The MCP server communicates via JSON-RPC over stdout. Any rogue text on stdout will crash the protocol. All logs, exceptions, and CLI outputs MUST be explicitly routed to `sys.stderr` (e.g., `sys.stderr.write`, `typer.secho(..., err=True)`).
+7. **Execution Environment:** You MUST ALWAYS use `just verify` for all repository-level execution, testing, and linting. Do not use system `python3`, global `pytest`, or manual `uv run` commands for full verification. Do not manually activate virtual environments or reference `./.venv/bin/python` directly.
+"""
+
+JUSTFILE_TEMPLATE = """# Jitsu Justfile
+default: verify
+
+verify:
+	@echo "🧹 Verifying project..."
+	ruff check .
+	ruff format --check .
+	pyright .
+	pytest
+"""
+
+
+@app.command()
+def init() -> None:
+    """Scaffold a new Jitsu project in the current working directory."""
+    cwd = Path.cwd()
+
+    # 1. Create directories
+    epics_dir = cwd / "epics"
+    current_dir = epics_dir / "current"
+    completed_dir = epics_dir / "completed"
+
+    try:
+        current_dir.mkdir(parents=True, exist_ok=True)
+        completed_dir.mkdir(parents=True, exist_ok=True)
+        typer.secho(
+            "✅ Created epics/current/ and epics/completed/.", fg=typer.colors.GREEN, err=True
+        )
+    except OSError as e:
+        typer.secho(f"❌ Failed to create directories: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from e
+
+    # 2. Create .jitsurules
+    rules_path = cwd / ".jitsurules"
+    if rules_path.exists():
+        typer.secho("⏩ .jitsurules already exists, skipping.", fg=typer.colors.YELLOW, err=True)
+    else:
+        try:
+            rules_path.write_text(JITSU_RULES_TEMPLATE, encoding="utf-8")
+            typer.secho(
+                "✅ Created .jitsurules with default protocol.", fg=typer.colors.GREEN, err=True
+            )
+        except OSError as e:
+            typer.secho(f"❌ Failed to create .jitsurules: {e}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from e
+
+    # 3. Create justfile (check for Justfile or justfile)
+    justfile_path = cwd / "justfile"
+    justfile_alt_path = cwd / "Justfile"
+
+    if justfile_path.exists() or justfile_alt_path.exists():
+        typer.secho("⏩ justfile already exists, skipping.", fg=typer.colors.YELLOW, err=True)
+    else:
+        try:
+            justfile_path.write_text(JUSTFILE_TEMPLATE, encoding="utf-8")
+            typer.secho("✅ Created justfile with verify recipe.", fg=typer.colors.GREEN, err=True)
+        except OSError as e:
+            typer.secho(f"❌ Failed to create justfile: {e}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from e
+
+    typer.secho(
+        "\n✨ Jitsu project initialized successfully!", fg=typer.colors.GREEN, bold=True, err=True
+    )
+
+
 async def _send_payload(payload: bytes, port: int = 8765) -> str:
     """Async helper to send the payload over TCP and await response."""
     try:
