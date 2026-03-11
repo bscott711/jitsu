@@ -1,0 +1,81 @@
+[
+  {
+    "epic_id": "epic-20-integrity-and-docs",
+    "phase_id": "phase-01-template-refactor",
+    "module_scope": "src/jitsu/cli",
+    "instructions": "Externalize CLI templates. 1) Create `src/jitsu/templates/` with `__init__.py`. 2) Move `JITSU_RULES_TEMPLATE` to `rules.md` and `JUSTFILE_TEMPLATE` to `justfile.tmpl` within that directory. 3) Update the templates: include the new Git tools (`jitsu_git_status`, `jitsu_git_commit`) and the self-orchestration flow in the rules. 4) Update `src/jitsu/cli/main.py` to read these files from the package resources instead of hardcoded strings. Ensure `jitsu init` still works perfectly.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not break the `jitsu init` command's ability to scaffold files in the current working directory.",
+      "Do not use hardcoded absolute paths for loading templates; use `importlib.resources` or relative package paths."
+    ],
+    "completion_criteria": [
+      "Templates are moved to `src/jitsu/templates/`.",
+      "CLI reads templates from disk/package.",
+      "`jitsu init` successfully creates the updated `.jitsurules` and `justfile`."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-20-integrity-and-docs",
+    "phase_id": "phase-02-architecture-docs",
+    "module_scope": "docs",
+    "instructions": "Rewrite `docs/Jitsu Architecture Overview.md` to reflect the 1.0 architecture. Document the layers: Layer 1 (Strict Pydantic Models), Layer 2 (AST-First Providers), Layer 3 (ContextCompiler with AUTO fallback), and Layer 4 (Self-Orchestrating MCP Server). Detail how `jitsu_get_planning_context` and `jitsu_submit_epic` enable the autonomous loop. Ensure the 'Just-based Git Lifecycle' is explained as the primary security boundary.",
+    "context_targets": [
+      {
+        "provider_name": "ast",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "ast",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not hallucinate features; only document what is verified by the code context.",
+      "Keep the 'why' (Context Drift prevention) while updating the 'how'."
+    ],
+    "completion_criteria": [
+      "The Architecture Overview accurately explains the full autonomous loop and the new Git tools."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-20-integrity-and-docs",
+    "phase_id": "phase-03-readme-revamp",
+    "module_scope": "root",
+    "instructions": "Update `README.md` to be the 1.0 front-page. Highlight the AST-first approach and the transition from a CLI-driven tool to a self-orchestrating IDE agent. Provide clear examples of the 'Pull' workflow (`jitsu_get_next_phase`). Update the installation section to recommend `uv tool install` for global access.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "README.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Avoid fluff; focus on the developer experience and the technical efficiency of the protocol."
+    ],
+    "completion_criteria": [
+      "README is punchy, accurate, and reflects the v1.0 self-orchestration features."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

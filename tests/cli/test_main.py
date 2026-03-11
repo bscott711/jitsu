@@ -517,6 +517,12 @@ def test_cli_init_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     assert (tmp_path / ".jitsurules").is_file()
     assert (tmp_path / "justfile").is_file()
 
+    # Verify content includes new protocol elements
+    rules_content = (tmp_path / ".jitsurules").read_text(encoding="utf-8")
+    assert "jitsu_git_status" in rules_content
+    assert "jitsu_git_commit" in rules_content
+    assert "self-orchestration" in rules_content.lower()
+
 
 def test_cli_init_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that init does not overwrite existing files."""
@@ -584,3 +590,14 @@ def test_cli_init_os_error_write_justfile(tmp_path: Path, monkeypatch: pytest.Mo
 
     assert result.exit_code == 1
     assert "Failed to create justfile: Write error" in result.output
+
+
+def test_cli_init_resource_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test handling of template loading failure."""
+    monkeypatch.chdir(tmp_path)
+
+    with patch("jitsu.cli.main.importlib.resources.files", side_effect=Exception("Resource error")):
+        result = runner.invoke(app, ["init"])
+
+    assert result.exit_code == 1
+    assert "Failed to load templates from resources: Resource error" in result.output

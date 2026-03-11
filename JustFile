@@ -48,6 +48,7 @@ sync message:
 	git add .
 	git commit -m "{{message}}"
 	git push
+	git sync
 
 # ==========================================
 # 2. THE VERIFICATION LOOPS (Agent Checkpoints)
