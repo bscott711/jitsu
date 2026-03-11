@@ -21,7 +21,7 @@ async def test_planner_initialization() -> None:
 @pytest.mark.asyncio
 async def test_planner_plan_generation_success() -> None:
     """Test that the planner successfully generates a plan using instructor."""
-    planner = JitsuPlanner(objective="Test", relevant_files=[])
+    planner = JitsuPlanner(objective="Test", relevant_files=["src/main.py"])
 
     directive = AgentDirective(
         epic_id="e1",
@@ -36,13 +36,13 @@ async def test_planner_plan_generation_success() -> None:
     mock_client.chat.completions.create.return_value = [directive]
 
     with (
-        patch("instructor.from_openai", return_value=mock_client),
-        patch("openai.OpenAI"),
-        patch("dotenv.load_dotenv"),
-        patch("os.getenv", return_value="fake-key"),
-        patch("anyio.Path.exists", return_value=True),
-        patch("anyio.Path.read_text", return_value="system prompt"),
-        patch("jitsu.providers.tree.DirectoryTreeProvider.resolve", return_value="tree"),
+        patch("jitsu.core.planner.instructor.from_openai", return_value=mock_client),
+        patch("jitsu.core.planner.OpenAI"),
+        patch("jitsu.core.planner.dotenv.load_dotenv"),
+        patch("jitsu.core.planner.os.environ.get", return_value="fake-key"),
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=True),
+        patch("jitsu.core.planner.anyio.Path.read_text", return_value="system prompt"),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
     ):
         plan = await planner.generate_plan()
 
@@ -57,8 +57,8 @@ async def test_planner_missing_api_key() -> None:
     planner = JitsuPlanner(objective="Test", relevant_files=[])
 
     with (
-        patch("dotenv.load_dotenv"),
-        patch("os.getenv", return_value=None),
+        patch("jitsu.core.planner.dotenv.load_dotenv"),
+        patch("jitsu.core.planner.os.environ.get", return_value=None),
         pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"),
     ):
         await planner.generate_plan()
@@ -73,13 +73,13 @@ async def test_planner_generation_failure() -> None:
     mock_client.chat.completions.create.side_effect = Exception("API error")
 
     with (
-        patch("instructor.from_openai", return_value=mock_client),
-        patch("openai.OpenAI"),
-        patch("dotenv.load_dotenv"),
-        patch("os.getenv", return_value="fake-key"),
-        patch("anyio.Path.exists", return_value=True),
-        patch("anyio.Path.read_text", return_value="system prompt"),
-        patch("jitsu.providers.tree.DirectoryTreeProvider.resolve", return_value="tree"),
+        patch("jitsu.core.planner.instructor.from_openai", return_value=mock_client),
+        patch("jitsu.core.planner.OpenAI"),
+        patch("jitsu.core.planner.dotenv.load_dotenv"),
+        patch("jitsu.core.planner.os.environ.get", return_value="fake-key"),
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=True),
+        patch("jitsu.core.planner.anyio.Path.read_text", return_value="system prompt"),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
     ):
         plan = await planner.generate_plan()
 
@@ -95,16 +95,16 @@ async def test_planner_generation_fallback_prompt() -> None:
     mock_client.chat.completions.create.return_value = []
 
     with (
-        patch("instructor.from_openai", return_value=mock_client),
-        patch("openai.OpenAI"),
-        patch("dotenv.load_dotenv"),
-        patch("os.getenv", return_value="fake-key"),
-        patch("anyio.Path.exists", return_value=False),
-        patch("jitsu.providers.tree.DirectoryTreeProvider.resolve", return_value="tree"),
+        patch("jitsu.core.planner.instructor.from_openai", return_value=mock_client),
+        patch("jitsu.core.planner.OpenAI"),
+        patch("jitsu.core.planner.dotenv.load_dotenv"),
+        patch("jitsu.core.planner.os.environ.get", return_value="fake-key"),
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
     ):
         await planner.generate_plan()
 
-    # Verify it called create (the actual prompt check is internal but this covers the line)
+    # Verify it called create
     mock_client.chat.completions.create.assert_called_once()
 
 
@@ -122,7 +122,7 @@ async def test_planner_save_plan(tmp_path: Path) -> None:
     )
     planner._directives = [directive]  # noqa: SLF001
 
-    plan_path = tmp_path / "epic.json"
+    plan_path = tmp_path / "subdir" / "epic.json"
     planner.save_plan(plan_path)
 
     assert plan_path.exists()

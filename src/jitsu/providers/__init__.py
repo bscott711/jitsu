@@ -8,6 +8,7 @@ for resolving JIT context targets into LLM-optimized strings.
 from jitsu.providers.ast import ASTProvider
 from jitsu.providers.base import BaseProvider
 from jitsu.providers.file import FileStateProvider
+from jitsu.providers.git import GitDiffProvider
 from jitsu.providers.pydantic import PydanticV2Provider
 from jitsu.providers.tree import DirectoryTreeProvider
 
@@ -16,5 +17,6 @@ __all__ = [
     "BaseProvider",
     "DirectoryTreeProvider",
     "FileStateProvider",
+    "GitDiffProvider",
     "PydanticV2Provider",
 ]

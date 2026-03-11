@@ -1,0 +1,100 @@
+[
+  {
+    "epic_id": "epic-12-git-diff",
+    "phase_id": "phase-01-git-provider",
+    "module_scope": "src/jitsu/providers",
+    "instructions": "Create a new class `GitDiffProvider` in `src/jitsu/providers/git.py` that inherits from `BaseProvider`. Implement the `fetch_content` method to execute `git diff HEAD` using `subprocess.check_output(..., text=True)` and return the output as a string. Ensure error handling is included for `subprocess.CalledProcessError`.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/providers/git.py",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/providers/base.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Using external libraries other than subprocess.",
+      "Hardcoding the `git diff HEAD` command in a non-configurable way.",
+      "Ignoring potential errors during subprocess execution."
+    ],
+    "completion_criteria": [
+      "A `GitDiffProvider` class exists in `src/jitsu/providers/git.py`.",
+      "The `fetch_content` method executes `git diff HEAD`.",
+      "The `fetch_content` method returns the output of the command as a string.",
+      "Error handling is present in the `fetch_content` method."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-12-git-diff",
+    "phase_id": "phase-02-compiler-registration",
+    "module_scope": "src/jitsu/core/compiler.py",
+    "instructions": "Register the `GitDiffProvider` with the `ContextCompiler`. This involves adding the 'git_diff' key to the `_provider_map` dictionary within the `ContextCompiler` class, mapping it to the `GitDiffProvider` class.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/providers/git.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Incorrectly mapping the provider in the `_provider_map`.",
+      "Modifying other parts of `ContextCompiler` unnecessarily."
+    ],
+    "completion_criteria": [
+      "The `GitDiffProvider` is registered in the `ContextCompiler`.",
+      "The provider can be targeted using the 'git_diff' key."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-12-git-diff",
+    "phase_id": "phase-03-provider-tests",
+    "module_scope": "tests/providers",
+    "instructions": "Write comprehensive unit tests for the `GitDiffProvider` in `tests/providers/test_git.py`. Include tests for successful execution of the `git diff HEAD` command, error handling scenarios (e.g., git not installed), and validation of the returned output. Aim for 100% statement coverage. You MUST mock `subprocess.check_output`.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/providers/test_git.py",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/providers/git.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Writing insufficient tests.",
+      "Failing to cover error handling scenarios.",
+      "Allowing the tests to actually execute shell commands. You must use `unittest.mock.patch`."
+    ],
+    "completion_criteria": [
+      "Unit tests exist for the `GitDiffProvider` in `tests/providers/test_git.py`.",
+      "Tests cover successful execution and error handling scenarios.",
+      "100% statement coverage is achieved for the `GitDiffProvider`."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

@@ -6,8 +6,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import anyio
+import httpx
+import openai
 import pytest
 import typer
+from instructor.core.exceptions import InstructorRetryException
 from typer.testing import CliRunner
 
 from jitsu.cli.main import _send_payload, app, main
@@ -283,3 +286,74 @@ def test_cli_plan_runtime_error(mock_generate: AsyncMock, tmp_path: Path) -> Non
     assert "Planner Error: OPENROUTER_API_KEY" in result.output
     assert "Tip: Ensure OPENROUTER_API_KEY is set" in result.output
     mock_generate.assert_awaited_once()
+
+
+@patch("jitsu.core.planner.JitsuPlanner.generate_plan")
+@patch("jitsu.core.planner.JitsuPlanner.save_plan")
+def test_cli_plan_api_fallback_success(
+    mock_save: MagicMock, mock_generate: AsyncMock, tmp_path: Path
+) -> None:
+    """Test that the planner successfully falls back to the backup model on a 429 error."""
+    # Mock a 429 Rate Limit Response
+    error_response = httpx.Response(429, request=httpx.Request("POST", "https://openrouter.ai"))
+    mock_error = openai.APIStatusError("Rate limit exceeded", response=error_response, body=None)
+
+    # First call raises the 429 error, second call returns the valid directives
+    mock_generate.side_effect = [
+        mock_error,
+        [AgentDirective(epic_id="test", phase_id="p1", module_scope="test", instructions="test")],
+    ]
+    out_file = tmp_path / "epic.json"
+
+    result = runner.invoke(
+        app, ["plan", "test feature", "--out", str(out_file), "-m", "primary-model"]
+    )
+
+    assert result.exit_code == 0
+    assert "API limit hit for primary-model" in result.output
+    assert "Falling back to meta-llama/llama-3.3-70b-instruct:free" in result.output
+    mock_save.assert_called_once_with(out_file)
+    expected_calls = 2
+    assert mock_generate.call_count == expected_calls
+
+
+@patch("jitsu.core.planner.JitsuPlanner.generate_plan")
+def test_cli_plan_api_status_error_fatal(mock_generate: AsyncMock, tmp_path: Path) -> None:
+    """Test plan generation handles a fatal APIStatusError (e.g., a 500 Server Error)."""
+    error_response = httpx.Response(500, request=httpx.Request("POST", "https://openrouter.ai"))
+    mock_error = openai.APIStatusError("Internal Server Error", response=error_response, body=None)
+    mock_generate.side_effect = mock_error
+    out_file = tmp_path / "epic.json"
+
+    result = runner.invoke(app, ["plan", "test feature", "--out", str(out_file)])
+
+    assert result.exit_code == 1
+    assert "OpenRouter API Error [500]: Internal Server Error" in result.output
+
+
+@patch("jitsu.core.planner.JitsuPlanner.generate_plan")
+def test_cli_plan_instructor_retry_error(mock_generate: AsyncMock, tmp_path: Path) -> None:
+    """Test plan generation cleanly handles Instructor JSON validation failures."""
+    # Pass a simple string to ensure the exception instantiates safely
+    mock_generate.side_effect = InstructorRetryException(
+        "mock_failure", n_attempts=3, total_usage=0
+    )
+    out_file = tmp_path / "epic.json"
+
+    result = runner.invoke(app, ["plan", "test feature", "--out", str(out_file)])
+
+    assert result.exit_code == 1
+    assert "model failed to generate valid JSON matching the Jitsu schema" in result.output
+
+
+@patch("jitsu.core.planner.JitsuPlanner.generate_plan")
+def test_cli_plan_unexpected_exception(mock_generate: AsyncMock, tmp_path: Path) -> None:
+    """Test plan generation safely catches unexpected blind exceptions."""
+    # Use ValueError instead of a raw Exception so Pytest/AnyIO propagates it perfectly
+    mock_generate.side_effect = ValueError("A wild cosmic ray flipped a bit.")
+    out_file = tmp_path / "epic.json"
+
+    result = runner.invoke(app, ["plan", "test feature", "--out", str(out_file)])
+
+    assert result.exit_code == 1
+    assert "Unexpected Error:" in result.output

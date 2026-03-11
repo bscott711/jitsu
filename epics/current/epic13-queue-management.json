@@ -1,0 +1,79 @@
+[
+  {
+    "epic_id": "epic-13-queue-management",
+    "phase_id": "phase-01-mcp-tools",
+    "module_scope": "src/jitsu/server",
+    "instructions": "Update `src/jitsu/server/mcp_server.py`. 1) Modify `jitsu_report_status` so that when a phase is reported as 'DONE', it calculates the remaining phases in the queue for that specific epic and returns a string acknowledging completion and stating the number of phases remaining (e.g., 'ACK. 2 phases remaining.'). 2) Add a new MCP tool `jitsu_inspect_queue` that returns a list of pending phase IDs and their associated epic IDs.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not break existing tool signatures.",
+      "Do not crash the server if the queue is empty."
+    ],
+    "completion_criteria": [
+      "`jitsu_report_status` returns dynamic remaining phase counts.",
+      "`jitsu_inspect_queue` tool is registered and returns the pending queue."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-13-queue-management",
+    "phase_id": "phase-02-tcp-commands",
+    "module_scope": "src/jitsu/server",
+    "instructions": "Update the TCP listener in `src/jitsu/server/mcp_server.py` to handle two new string payloads: `QUEUE_LS` and `QUEUE_CLEAR`. If `QUEUE_LS` is received, return a formatted string of the current queue. If `QUEUE_CLEAR` is received, clear the `state_manager` queue and return 'ACK. Queue cleared.'",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not break the existing JSON payload handling for new epic submissions."
+    ],
+    "completion_criteria": [
+      "TCP listener handles QUEUE_LS and QUEUE_CLEAR gracefully without dropping connections."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-13-queue-management",
+    "phase_id": "phase-03-cli-integration",
+    "module_scope": "src/jitsu/cli",
+    "instructions": "Update `src/jitsu/cli/main.py` to add a new Typer command group called `queue`. Add two commands to it: `ls` (sends 'QUEUE_LS' via TCP to the server and prints the result) and `clear` (sends 'QUEUE_CLEAR' via TCP to the server and prints the result). Ensure tests in `tests/cli/test_main.py` are updated to mock the TCP client and achieve 100% coverage on these new commands.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not leave the CLI without 100% test coverage."
+    ],
+    "completion_criteria": [
+      "`uv run jitsu queue ls` and `uv run jitsu queue clear` commands work and have 100% test coverage."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

@@ -6,6 +6,7 @@ from jitsu.providers import (
     BaseProvider,
     DirectoryTreeProvider,
     FileStateProvider,
+    GitDiffProvider,
     PydanticV2Provider,
 )
 from jitsu.utils.logger import get_logger
@@ -22,12 +23,14 @@ class ContextCompiler:
         pydantic_provider = PydanticV2Provider()
         ast_provider = ASTProvider()
         tree_provider = DirectoryTreeProvider()
+        git_provider = GitDiffProvider()
 
         self._providers: dict[str, BaseProvider] = {
             file_provider.name: file_provider,
             pydantic_provider.name: pydantic_provider,
             ast_provider.name: ast_provider,
             tree_provider.name: tree_provider,
+            git_provider.name: git_provider,
         }
 
     async def compile_directive(self, directive: AgentDirective) -> str:
@@ -179,4 +182,5 @@ class ContextCompiler:
             "pydantic_v2": "Condensed (JSON Schema)",
             "file_state": "Full Source",
             "tree": "Visual Tree Structure",
+            "git_diff": "Git Repository Diff",
         }.get(provider_name, "Included")

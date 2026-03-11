@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import Annotated
 
 import anyio
+import openai
 import typer
+from instructor.core.exceptions import InstructorRetryException
 from pydantic import TypeAdapter, ValidationError
 
 from jitsu.models.core import AgentDirective
@@ -154,17 +156,28 @@ async def _run_planner(objective: str, files: list[str], out: Path, model: str) 
     """Async helper to run the planner and save the output."""
     from jitsu.core.planner import JitsuPlanner  # noqa: PLC0415
 
+    directives = None
+    planner = None
+
     try:
         planner = JitsuPlanner(objective=objective, relevant_files=files)
-        directives = await planner.generate_plan(model=model)
 
-        if not directives:
-            typer.secho(
-                "❌ Planner failed to generate valid directives.", fg=typer.colors.RED, err=True
-            )
-            raise typer.Exit(1)
+        try:
+            directives = await planner.generate_plan(model=model)
+        except openai.APIStatusError as e:
+            # 403 = OpenRouter Monthly Limit, 429 = Rate Limit
+            if e.status_code in (403, 429):
+                backup_model = "meta-llama/llama-3.3-70b-instruct:free"
+                typer.secho(
+                    f"\n⚠️ API limit hit for {model}. Falling back to {backup_model}...",
+                    fg=typer.colors.YELLOW,
+                    bold=True,
+                    err=True,
+                )
+                directives = await planner.generate_plan(model=backup_model)
+            else:
+                raise
 
-        planner.save_plan(out)
     except RuntimeError as e:
         typer.secho(f"\n❌ Planner Error: {e}", fg=typer.colors.RED, bold=True, err=True)
         if "OPENROUTER_API_KEY" in str(e):
@@ -173,7 +186,34 @@ async def _run_planner(objective: str, files: list[str], out: Path, model: str) 
                 fg=typer.colors.YELLOW,
                 err=True,
             )
-        raise typer.Exit(1) from e
+        raise typer.Exit(1) from None
+    except openai.APIStatusError as e:
+        typer.secho(
+            f"\n❌ OpenRouter API Error [{e.status_code}]: {e.message}",
+            fg=typer.colors.RED,
+            bold=True,
+            err=True,
+        )
+        raise typer.Exit(1) from None
+    except InstructorRetryException:
+        typer.secho(
+            "\n❌ Planner Error: The model failed to generate valid JSON matching the Jitsu schema after multiple retries. Try a larger model.",
+            fg=typer.colors.RED,
+            bold=True,
+            err=True,
+        )
+        raise typer.Exit(1) from None
+    except Exception as e:  # noqa: BLE001
+        typer.secho(f"\n❌ Unexpected Error: {e}", fg=typer.colors.RED, bold=True, err=True)
+        raise typer.Exit(1) from None
+
+    if not directives or not planner:
+        typer.secho(
+            "❌ Planner failed to generate valid directives.", fg=typer.colors.RED, err=True
+        )
+        raise typer.Exit(1)
+
+    planner.save_plan(out)
 
 
 @app.command()
@@ -198,7 +238,7 @@ def plan(
             "-m",
             help="The LLM model to use via OpenRouter.",
         ),
-    ] = "google/gemini-2.0-flash-001",
+    ] = "meta-llama/llama-3.3-70b-instruct:free",
 ) -> None:
     """Generate a Jitsu plan from a natural language objective."""
     file_strings = [str(f) for f in files] if files else []
