@@ -8,6 +8,7 @@ import pytest
 
 from jitsu.core.planner import JitsuPlanner
 from jitsu.models.core import AgentDirective, EpicBlueprint, PhaseBlueprint
+from jitsu.prompts import PLANNER_MACRO_PROMPT, VERIFICATION_RULE
 
 
 @pytest.mark.asyncio
@@ -61,6 +62,17 @@ async def test_planner_plan_generation_success() -> None:
     assert on_progress_mock.call_count == 2  # noqa: PLR2004
     on_progress_mock.assert_any_call("Drafting Epic Blueprint...")
     on_progress_mock.assert_any_call("Elaborating Phase 1 of 1...")
+
+    # Verify prompts
+    macro_call = mock_client.chat.completions.create.call_args_list[0][1]
+    micro_call = mock_client.chat.completions.create.call_args_list[1][1]
+
+    macro_system = macro_call["messages"][0]["content"]
+    assert PLANNER_MACRO_PROMPT in macro_system
+
+    micro_system = micro_call["messages"][0]["content"]
+    assert "You are elaborating a specific Phase for the Epic" in micro_system
+    assert VERIFICATION_RULE in micro_system
 
 
 @pytest.mark.asyncio

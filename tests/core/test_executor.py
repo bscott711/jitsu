@@ -10,6 +10,7 @@ from instructor.core.exceptions import InstructorRetryException
 from jitsu.core.executor import JitsuExecutor
 from jitsu.models.core import AgentDirective
 from jitsu.models.execution import ExecutionResult, FileEdit
+from jitsu.prompts import EXECUTOR_SYSTEM_PROMPT
 
 
 @pytest.fixture
@@ -72,6 +73,17 @@ def test_executor_execute_success(mock_directive: AgentDirective, tmp_path: Path
     assert (tmp_path / "test.py").read_text() == "print('hello')"
     assert mock_client.chat.completions.create.call_count == 1
     assert mock_run.call_count == 1
+
+    # Verify the system prompt uses the EXECUTOR_SYSTEM_PROMPT constant
+    call_args = mock_client.chat.completions.create.call_args[1]
+    system_msg = call_args["messages"][0]["content"]
+    assert (
+        EXECUTOR_SYSTEM_PROMPT.format(
+            module_scope=mock_directive.module_scope,
+            anti_patterns=", ".join(mock_directive.anti_patterns),
+        )
+        in system_msg
+    )
 
 
 def test_executor_execute_retry_success(mock_directive: AgentDirective, tmp_path: Path) -> None:

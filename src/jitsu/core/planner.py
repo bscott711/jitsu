@@ -14,7 +14,12 @@ import typer
 from openai import OpenAI
 
 from jitsu.models.core import AgentDirective, ContextTarget, EpicBlueprint
-from jitsu.prompts import PLANNER_BASE_PROMPT, PLANNER_MACRO_PROMPT, PLANNER_MICRO_PROMPT
+from jitsu.prompts import (
+    PLANNER_BASE_PROMPT,
+    PLANNER_MACRO_PROMPT,
+    PLANNER_MICRO_PROMPT,
+    VERIFICATION_RULE,
+)
 from jitsu.providers.tree import DirectoryTreeProvider
 
 logger = logging.getLogger(__name__)
@@ -108,11 +113,15 @@ class JitsuPlanner:
             if on_progress:
                 on_progress(f"Elaborating Phase {i + 1} of {len(blueprint.phases)}...")
 
-            phase_system_prompt = base_system_prompt + PLANNER_MICRO_PROMPT.format(
-                epic_id=blueprint.epic_id,
-                phase_id=phase.phase_id,
-                phase_description=phase.description,
-                allowed_providers=allowed_providers,
+            phase_system_prompt = (
+                base_system_prompt
+                + PLANNER_MICRO_PROMPT.format(
+                    epic_id=blueprint.epic_id,
+                    phase_id=phase.phase_id,
+                    phase_description=phase.description,
+                    allowed_providers=allowed_providers,
+                )
+                + f"\n{VERIFICATION_RULE}\n"
             )
 
             directive = client.chat.completions.create(
