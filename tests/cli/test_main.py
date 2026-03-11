@@ -3,6 +3,7 @@
 import json
 import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import anyio
@@ -406,3 +407,94 @@ def test_cli_queue_clear_error(mock_run: MagicMock) -> None:
     result = runner.invoke(app, ["queue", "clear"])
     assert result.exit_code == 1
     assert "Server Error: ERR: Server down" in result.output
+
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_run_success(
+    mock_run: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test the 'jitsu run' command on success."""
+    monkeypatch.chdir(tmp_path)
+
+    def run_side_effect(func: Any, *args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
+        if func.__name__ == "_run_planner":
+            out_path = args[2]
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text("[]", encoding="utf-8")
+            return None
+        if func.__name__ == "_send_payload":
+            return "ACK: Queued 1 phase(s)."
+        return None
+
+    mock_run.side_effect = run_side_effect
+
+    result = runner.invoke(app, ["run", "Build something"])
+
+    assert result.exit_code == 0
+    assert "Starting automated Jitsu pipeline" in result.output
+    assert "Plan successfully generated" in result.output
+    assert "Submitting plan to server" in result.output
+    assert "ACK: Queued 1 phase(s)." in result.output
+    assert "Pipeline complete. Epic archived" in result.output
+
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_run_planner_failure(
+    mock_run: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test the 'jitsu run' command when the planner fails."""
+    monkeypatch.chdir(tmp_path)
+    mock_run.side_effect = typer.Exit(1)
+
+    result = runner.invoke(app, ["run", "Build something"])
+    assert result.exit_code == 1
+
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_run_submit_failure(
+    mock_run: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test the 'jitsu run' command when the server returns an error."""
+    monkeypatch.chdir(tmp_path)
+
+    def run_side_effect(func: Any, *args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
+        if func.__name__ == "_run_planner":
+            out_path = args[2]
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text("[]", encoding="utf-8")
+            return None
+        if func.__name__ == "_send_payload":
+            return "ERR: Server down"
+        return None
+
+    mock_run.side_effect = run_side_effect
+
+    result = runner.invoke(app, ["run", "Build something"])
+
+    assert result.exit_code == 1
+    assert "Server Error: ERR: Server down" in result.output
+
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_run_os_error(
+    mock_run: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test the 'jitsu run' command handles OS errors (e.g., read failure)."""
+    monkeypatch.chdir(tmp_path)
+
+    def run_side_effect(func: Any, *args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
+        if func.__name__ == "_run_planner":
+            out_path = args[2]
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text("[]", encoding="utf-8")
+            return None
+        return None
+
+    mock_run.side_effect = run_side_effect
+
+    # We patch Path.read_bytes to raise OSError
+    with patch.object(Path, "read_bytes", side_effect=OSError("Read error")):
+        result = runner.invoke(app, ["run", "Build something"])
+
+    assert result.exit_code == 1
+    assert "Failed to read or move epic file: Read error" in result.output

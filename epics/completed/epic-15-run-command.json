@@ -1,0 +1,58 @@
+[
+  {
+    "epic_id": "epic-15-run-command",
+    "phase_id": "phase-01-cli-run",
+    "module_scope": "src/jitsu/cli",
+    "instructions": "Add a new `@app.command()` named `run` to `src/jitsu/cli/main.py`. This command should take an `objective` (string) and optional `files` (list of Paths), just like the `plan` command. Inside the command: 1) Generate a dynamic output path like `epics/current/epic_{timestamp}.json` (using datetime or time). 2) Execute the planning phase using the existing `anyio.run(_run_planner, ...)` logic. 3) If successful, read the newly generated file and submit it to the server using the existing `anyio.run(_send_payload, ...)` logic. 4) Use Typer echo statements to show the pipeline progress.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not duplicate the internal logic of `_run_planner` or `_send_payload`. Reuse the existing async helper functions.",
+      "Do not hardcode the model; allow it to be passed as an option like in `plan`, defaulting to the same fallback model."
+    ],
+    "completion_criteria": [
+      "The `run` command is registered in Typer.",
+      "It generates a plan, saves it to a timestamped file, and immediately submits it to the server."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-15-run-command",
+    "phase_id": "phase-02-run-tests",
+    "module_scope": "tests/cli",
+    "instructions": "Update `tests/cli/test_main.py` to add comprehensive tests for the new `run` command. Mock `_run_planner` and `_send_payload` to test the happy path (successful plan and submit) as well as error states (e.g., planner fails, or server rejects submission). Ensure statement coverage for `src/jitsu/cli/main.py` remains at a strict 100%.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not allow coverage to drop below 100%.",
+      "Do not make actual network calls in the tests; mock the async helpers."
+    ],
+    "completion_criteria": [
+      "Unit tests exist for `test_cli_run_success`, `test_cli_run_planner_failure`, and `test_cli_run_submit_failure`.",
+      "Coverage remains at 100%."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

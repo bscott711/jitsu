@@ -1,6 +1,7 @@
 """Command Line Interface main entry point for Jitsu."""
 
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
@@ -293,6 +294,77 @@ def plan(
         bold=True,
         err=True,
     )
+
+
+@app.command()
+def run(
+    objective: Annotated[str, typer.Argument(help="The natural language objective for the epic.")],
+    files: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--file",
+            "-f",
+            help="Relevant files to provide as context (can be used multiple times).",
+            exists=True,
+        ),
+    ] = None,
+    model: Annotated[
+        str,
+        typer.Option(
+            "--model",
+            "-m",
+            help="The LLM model to use via OpenRouter.",
+        ),
+    ] = "meta-llama/llama-3.3-70b-instruct:free",
+) -> None:
+    """Generate a Jitsu plan and immediately submit it to the server."""
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    epics_dir = Path.cwd() / "epics" / "current"
+    epics_dir.mkdir(parents=True, exist_ok=True)
+    out = epics_dir / f"epic_{timestamp}.json"
+
+    file_strings = [str(f) for f in files] if files else []
+
+    typer.secho(
+        "🚀 Starting automated Jitsu pipeline...", fg=typer.colors.MAGENTA, bold=True, err=True
+    )
+    typer.secho(f"🧠 Step 1: Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True)
+
+    with typer.progressbar(length=100, label="Pondering...") as progress:
+        anyio.run(_run_planner, objective, file_strings, out, model)
+        progress.update(100)
+
+    typer.secho(
+        f"✅ Plan successfully generated and saved to {out.relative_to(Path.cwd())}",
+        fg=typer.colors.GREEN,
+        err=True,
+    )
+
+    typer.secho("📡 Step 2: Submitting plan to server...", fg=typer.colors.CYAN, err=True)
+    try:
+        payload = out.read_bytes()
+        response = anyio.run(_send_payload, payload)
+
+        if response.startswith("ACK"):
+            typer.secho(f"✅ {response}", fg=typer.colors.GREEN, bold=True, err=True)
+
+            # Auto-archive the epic file
+            completed_dir = Path.cwd() / "epics" / "completed"
+            completed_dir.mkdir(parents=True, exist_ok=True)
+            out.rename(completed_dir / out.name)
+
+            typer.secho(
+                f"📂 Pipeline complete. Epic archived to {completed_dir.relative_to(Path.cwd())}/{out.name}",
+                fg=typer.colors.CYAN,
+                err=True,
+            )
+        else:
+            typer.secho(f"❌ Server Error: {response}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+
+    except OSError as e:
+        typer.secho(f"❌ Failed to read or move epic file: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from e
 
 
 def main() -> None:
