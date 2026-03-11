@@ -44,13 +44,18 @@ class JitsuPlanner:
             )
         )
 
-        # Read the system prompt
-
+        # Read the core orchestrator prompt
         prompt_path = anyio.Path("docs/jitsu_orchestrator_prompt.md")
         if await prompt_path.exists():
             system_prompt = await prompt_path.read_text()
         else:
             system_prompt = "You are a helpful assistant."
+
+        # Dynamically inject the project-specific rules
+        rules_path = anyio.Path(".jitsurules")
+        if await rules_path.exists():
+            rules_text = await rules_path.read_text()
+            system_prompt += f"\n\nPROJECT RULES (.jitsurules):\n{rules_text}"
 
         # Get repository skeleton
         tree_provider = DirectoryTreeProvider()
@@ -64,20 +69,17 @@ class JitsuPlanner:
             f"Relevant Files:\n{files_str}"
         )
 
-        try:
-            self._directives = client.chat.completions.create(
-                model=model,
-                response_model=list[AgentDirective],
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-            )
-        except Exception:
-            logger.exception("Failed to generate plan via instructor")
-            return []
-        else:
-            return self._directives
+        # We remove the try/except so the CLI fallback logic can catch API/Validation errors
+        self._directives = client.chat.completions.create(
+            model=model,
+            response_model=list[AgentDirective],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+        )
+
+        return self._directives
 
     def save_plan(self, path: str | Path) -> None:
         """Save the generated plan to disk as a JSON file."""

@@ -66,7 +66,7 @@ async def test_planner_missing_api_key() -> None:
 
 @pytest.mark.asyncio
 async def test_planner_generation_failure() -> None:
-    """Test that the planner returns an empty list if generation fails."""
+    """Test that the planner allows generation exceptions to bubble up."""
     planner = JitsuPlanner(objective="Test", relevant_files=[])
 
     mock_client = MagicMock()
@@ -80,10 +80,9 @@ async def test_planner_generation_failure() -> None:
         patch("jitsu.core.planner.anyio.Path.exists", return_value=True),
         patch("jitsu.core.planner.anyio.Path.read_text", return_value="system prompt"),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+        pytest.raises(Exception, match="API error"),
     ):
-        plan = await planner.generate_plan()
-
-    assert len(plan) == 0
+        await planner.generate_plan()
 
 
 @pytest.mark.asyncio

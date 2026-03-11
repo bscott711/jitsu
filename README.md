@@ -64,6 +64,15 @@ In your AI agent's chat, the following tools are now available via the MCP serve
 
 ---
 
+## **Documentation**
+
+Explore the detailed documentation for Jitsu's core tools:
+
+- [**`jitsu_get_next_phase`**](docs/tool_jitsu_get_next_phase.md): The entry point for pulling instruction-rich JIT context.
+- [**Jitsu Architecture Overview**](docs/Jitsu%20Architecture%20Overview.md): Deep dive into the multi-layered design.
+
+---
+
 ## **Development**
 
 Fully verified with 100% test coverage:

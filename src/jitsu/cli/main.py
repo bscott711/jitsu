@@ -271,7 +271,7 @@ def plan(
             "-m",
             help="The LLM model to use via OpenRouter.",
         ),
-    ] = "meta-llama/llama-3.3-70b-instruct:free",
+    ] = "qwen/qwen-3-coder-480b-instruct:free",
 ) -> None:
     """Generate a Jitsu plan from a natural language objective."""
     file_strings = [str(f) for f in files] if files else []
