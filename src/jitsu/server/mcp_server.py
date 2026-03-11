@@ -3,6 +3,7 @@
 import re
 import subprocess
 import typing
+from pathlib import Path
 
 import anyio
 import mcp.server.stdio
@@ -21,7 +22,6 @@ from jitsu.providers import (
     PydanticProvider,
 )
 from jitsu.server.ipc import IPCServer
-from jitsu.utils import root
 
 # Initialize the global state manager and compiler for the server
 state_manager = JitsuStateManager()
@@ -254,7 +254,7 @@ async def _handle_get_planning_context(
     skeleton = await tree_provider.resolve(".")
 
     # 2. Read .jitsurules
-    rules_path = anyio.Path(root()) / ".jitsurules"
+    rules_path = anyio.Path(Path.cwd()) / ".jitsurules"
     if await rules_path.exists():
         rules_content = await rules_path.read_text()
         rules_msg = f"### .jitsurules\n```text\n{rules_content}\n```"

@@ -4,12 +4,13 @@ import logging
 
 import pytest
 
-from jitsu.utils.logger import get_logger
+from jitsu.utils.logger import LogManager
 
 
 def test_logger_routes_to_stderr_only(capsys: pytest.CaptureFixture[str]) -> None:
     """Ensure the logger writes exclusively to stderr."""
-    logger = get_logger("test_stderr_logger")
+    manager = LogManager()
+    logger = manager.get_logger("test_stderr_logger")
 
     logger.setLevel(logging.INFO)
     test_message = "Protocol safety check"
@@ -25,10 +26,11 @@ def test_logger_routes_to_stderr_only(capsys: pytest.CaptureFixture[str]) -> Non
 
 def test_logger_singleton_handler() -> None:
     """Ensure we don't attach duplicate handlers on multiple calls."""
-    logger1 = get_logger("test_singleton")
+    manager = LogManager()
+    logger1 = manager.get_logger("test_singleton")
     initial_handler_count = len(logger1.handlers)
 
-    logger2 = get_logger("test_singleton_other")
+    logger2 = manager.get_logger("test_singleton_other")
 
     assert len(logger1.handlers) == initial_handler_count
     assert logger1.propagate is False

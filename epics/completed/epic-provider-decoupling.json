@@ -1,0 +1,122 @@
+[
+  {
+    "epic_id": "epic-provider-decoupling",
+    "phase_id": "phase-encapsulate-utils-state",
+    "module_scope": "src/jitsu/utils/",
+    "instructions": "Refactor `src/jitsu/utils/logger.py` to encapsulate the global `_configured_loggers` set into a strictly typed `LogManager` class. Then, in `src/jitsu/utils/path.py`, completely remove the `root()` function that dynamically scans upwards using `__file__`. Update `tests/utils/test_path.py` and `tests/utils/test_logger.py` to reflect these encapsulations.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/utils/logger.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/utils/path.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/utils/test_logger.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/utils/test_path.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT leave any module-level mutable collections (like sets or lists) in `logger.py`.",
+      "Do NOT use `__file__` to resolve paths anywhere in the utils module moving forward."
+    ],
+    "completion_criteria": [
+      "The `root()` function is entirely removed from `jitsu.utils`.",
+      "The logger state is safely encapsulated in a `LogManager` class.",
+      "All utility tests pass."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-provider-decoupling",
+    "phase_id": "phase-inject-workspace-root",
+    "module_scope": "src/jitsu/providers/base.py",
+    "instructions": "Update `BaseProvider` in `src/jitsu/providers/base.py` to accept a `workspace_root: Path` in its constructor. Update `FileStateProvider` in `src/jitsu/providers/file.py` to use `self.workspace_root` instead of importing the now-deleted `root()`. Remove `# noqa: BLE001` in `file.py` and catch explicit exceptions like `OSError` or `UnicodeDecodeError`. Finally, update `ContextCompiler.__init__` in `src/jitsu/core/compiler.py` to accept `workspace_root` and pass it to instantiated providers.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/providers/base.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/providers/file.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT attempt to import `root` from `jitsu.utils`.",
+      "Do NOT use `# noqa: BLE001` or `except Exception:` without re-raising or explicit handling."
+    ],
+    "completion_criteria": [
+      "`BaseProvider` strictly requires `workspace_root` via Dependency Injection.",
+      "`ContextCompiler` accepts `workspace_root` and correctly hydrates `FileStateProvider`.",
+      "Blind exception catching is removed from `file.py`."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-provider-decoupling",
+    "phase_id": "phase-refactor-remaining-providers",
+    "module_scope": "src/jitsu/providers/",
+    "instructions": "Update `MarkdownASTProvider` (`markdown.py`) and `TreeProvider` (`tree.py`) to utilize the inherited `self.workspace_root` and remove any blind exception catching (`# noqa: BLE001`), replacing it with explicit `OSError` or parsing exception blocks. In `src/jitsu/providers/git.py`, remove the hardcoded `\"/usr/bin/git\"` and replace it with `shutil.which(\"git\")` to ensure cross-platform compatibility.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/providers/markdown.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/providers/tree.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/providers/git.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT use hardcoded absolute system paths for the git binary.",
+      "Do NOT leave any `BLE001` markers in the provider layer."
+    ],
+    "completion_criteria": [
+      "All remaining providers strictly use the injected `workspace_root`.",
+      "`git.py` dynamically resolves the git binary path using `shutil`.",
+      "All `# noqa: BLE001` violations are eliminated from Layer 2."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

@@ -1,7 +1,8 @@
 """File state context provider for Jitsu."""
 
+from pathlib import Path
+
 from jitsu.providers.base import BaseProvider
-from jitsu.utils import root
 
 
 class FileStateProvider(BaseProvider):
@@ -14,7 +15,7 @@ class FileStateProvider(BaseProvider):
 
     async def resolve(self, target: str) -> str:
         """Resolve the file path and return its contents."""
-        target_path = root() / target
+        target_path = Path.cwd() / target
 
         if not target_path.exists():
             return f"ERROR: File '{target}' does not exist in the current workspace."

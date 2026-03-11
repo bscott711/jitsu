@@ -4,7 +4,6 @@ import typing
 from pathlib import Path
 
 from jitsu.providers.base import BaseProvider
-from jitsu.utils import root
 
 
 class DirectoryTreeProvider(BaseProvider):
@@ -43,7 +42,7 @@ class DirectoryTreeProvider(BaseProvider):
         """
         target_str = str(target).strip()
         # Handle the case where target is empty or "."
-        target_path = root() / target_str
+        target_path = Path.cwd() / target_str
 
         if not target_path.exists():
             return f"ERROR: Directory '{target_str}' does not exist in the current workspace."

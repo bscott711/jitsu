@@ -1,7 +1,8 @@
 """Markdown AST context provider for Jitsu."""
 
+from pathlib import Path
+
 from jitsu.providers.base import BaseProvider
-from jitsu.utils import root
 
 
 class MarkdownASTProvider(BaseProvider):
@@ -28,7 +29,7 @@ class MarkdownASTProvider(BaseProvider):
             list[str]: The collected lines.
 
         """
-        target_path = root() / target
+        target_path = Path.cwd() / target
         if not target_path.exists() or not target_path.is_file():
             return []
 
@@ -66,7 +67,7 @@ class MarkdownASTProvider(BaseProvider):
         ast_lines = self.read(target)
 
         if not ast_lines:
-            target_path = root() / target
+            target_path = Path.cwd() / target
             if not target_path.exists():
                 return f"### [FAILED] {target}\nFile not found."
             return f"### {target} (Markdown AST)\n*No headings or code blocks found.*"
