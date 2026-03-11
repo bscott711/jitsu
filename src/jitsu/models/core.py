@@ -1,7 +1,6 @@
 """Core domain models for the Jitsu orchestration layer."""
 
 from enum import StrEnum
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -48,11 +47,9 @@ class ContextTarget(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    provider_name: Literal["file", "ast", "tree", "pydantic", "env_var", "git", "markdown_ast"] = (
-        Field(
-            ...,
-            description="The exact name of the provider. MUST be one of: 'file', 'ast', 'tree', 'pydantic', 'env_var', 'git', 'markdown_ast'.",
-        )
+    provider_name: str = Field(
+        ...,
+        description="The exact name of the provider (e.g., 'file', 'ast', 'pydantic', etc.).",
     )
     target_identifier: str = Field(
         ...,

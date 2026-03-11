@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from pydantic import ValidationError
 
 from jitsu.core.compiler import ContextCompiler
 from jitsu.models.core import AgentDirective, ContextTarget, TargetResolutionMode
@@ -39,28 +38,6 @@ async def test_compile_with_anti_patterns() -> None:
     res = await compiler.compile_directive(directive)
     assert "## Anti-Patterns" in res
     assert "- Do not use MD5" in res
-
-
-@pytest.mark.asyncio
-async def test_compile_unknown_provider_required() -> None:
-    """Test that unknown providers are rejected at instantiation time."""
-    with pytest.raises(ValidationError):
-        ContextTarget(
-            provider_name="fake_provider",  # type: ignore
-            target_identifier="test_target",
-            is_required=True,
-        )
-
-
-@pytest.mark.asyncio
-async def test_compile_unknown_provider_optional() -> None:
-    """Test that unknown preferred providers are rejected at instantiation time."""
-    with pytest.raises(ValidationError):
-        ContextTarget(
-            provider_name="fake_provider",  # type: ignore
-            target_identifier="test_target",
-            is_required=False,
-        )
 
 
 @pytest.mark.asyncio
