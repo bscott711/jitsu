@@ -1,6 +1,8 @@
 """Command Line Interface main entry point for Jitsu."""
 
 import importlib.resources
+import shutil
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +14,8 @@ import typer
 from instructor.core.exceptions import InstructorRetryException
 from pydantic import TypeAdapter, ValidationError
 
+from jitsu.core.compiler import ContextCompiler
+from jitsu.core.executor import JitsuExecutor
 from jitsu.models.core import AgentDirective
 from jitsu.server.mcp_server import run_server, state_manager
 
@@ -306,7 +310,7 @@ async def _run_planner(
     out: Path,
     model: str,
     verbose: bool = False,  # noqa: FBT001, FBT002
-) -> None:
+) -> list[AgentDirective]:
     """Async helper to run the planner and save the output."""
     from jitsu.core.planner import JitsuPlanner  # noqa: PLC0415
 
@@ -349,6 +353,7 @@ async def _run_planner(
         raise typer.Exit(1)
 
     planner.save_plan(out)
+    return directives
 
 
 @app.command()
@@ -475,6 +480,123 @@ def run(
     except OSError as e:
         typer.secho(f"❌ Failed to read or move epic file: {e}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from e
+
+
+@app.command()
+def auto(
+    objective: Annotated[str, typer.Argument(help="The natural language objective for the epic.")],
+    *,
+    files: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--file",
+            "-f",
+            help="Relevant files to provide as context (can be used multiple times).",
+            exists=True,
+        ),
+    ] = None,
+    model: Annotated[
+        str,
+        typer.Option(
+            "--model",
+            "-m",
+            help="The LLM model to use via OpenRouter.",
+        ),
+    ] = "meta-llama/llama-3.3-70b-instruct:free",
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Enable verbose debug output.")
+    ] = False,
+) -> None:
+    """Generate a Jitsu plan and execute it autonomously step-by-step."""
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    epics_dir = Path.cwd() / "epics" / "current"
+    epics_dir.mkdir(parents=True, exist_ok=True)
+    out = epics_dir / f"epic_{timestamp}.json"
+
+    file_strings = [str(f) for f in files] if files else []
+
+    typer.secho(
+        "🤖 Starting Autonomous Jitsu Execution...", fg=typer.colors.MAGENTA, bold=True, err=True
+    )
+
+    # 1. Plan
+    typer.secho(f"🧠 Step 1: Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True)
+    directives: list[AgentDirective] = anyio.run(
+        _run_planner, objective, file_strings, out, model, verbose
+    )
+
+    # 2. Execute loop
+    compiler = ContextCompiler()
+    executor = JitsuExecutor()
+
+    typer.secho(
+        f"🏃 Step 2: Executing {len(directives)} phase(s) autonomously...",
+        fg=typer.colors.CYAN,
+        err=True,
+    )
+
+    for i, directive in enumerate(directives):
+        typer.secho(
+            f"\n▶️ Phase {i + 1}/{len(directives)}: {directive.phase_id}",
+            fg=typer.colors.BLUE,
+            bold=True,
+            err=True,
+        )
+
+        with typer.progressbar(length=100, label="Compiling Context...") as progress:
+            # compile_directive returns the full prompt including instructions
+            prompt = anyio.run(compiler.compile_directive, directive)
+            progress.update(100)
+
+        with typer.progressbar(length=100, label="Executing...") as progress:
+            success = executor.execute_directive(directive, prompt)
+            progress.update(100)
+
+        if not success:
+            typer.secho(
+                f"❌ Phase {directive.phase_id} failed to execute or verify. Stopping.",
+                fg=typer.colors.RED,
+                bold=True,
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        typer.secho(f"✅ Phase {directive.phase_id} completed.", fg=typer.colors.GREEN, err=True)
+
+        # 3. Commit Loop
+        typer.secho("💾 Committing changes...", fg=typer.colors.CYAN, err=True)
+        commit_msg = f"jitsu(auto): {directive.phase_id} - {directive.instructions[:50]}..."
+
+        just_path = shutil.which("just")
+        if not just_path:
+            typer.secho("❌ 'just' executable not found in PATH.", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+
+        res = subprocess.run(
+            [just_path, "commit", commit_msg],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if res.returncode != 0:
+            typer.secho(f"⚠️ Commit failed: {res.stderr}", fg=typer.colors.YELLOW, err=True)
+            # We don't necessarily stop here if the code is correct, but the instruction says:
+            # "Stop and exit with Typer error if any directive fails to execute/verify."
+            # Commit failure is not necessarily execute/verify failure, but it might be.
+            # I'll exit if commit fails too to be safe.
+            raise typer.Exit(1)
+
+    # 4. Finalize
+    completed_dir = Path.cwd() / "epics" / "completed"
+    completed_dir.mkdir(parents=True, exist_ok=True)
+    out.rename(completed_dir / out.name)
+
+    typer.secho(
+        f"\n✨ Autonomous execution complete! Epic archived to {completed_dir.relative_to(Path.cwd())}/{out.name}",
+        fg=typer.colors.GREEN,
+        bold=True,
+        err=True,
+    )
 
 
 def main() -> None:

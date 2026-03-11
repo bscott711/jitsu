@@ -1,0 +1,50 @@
+[
+  {
+    "epic_id": "epic-23-autonomous-execution",
+    "phase_id": "phase-01-execution-models",
+    "module_scope": "src/jitsu/models",
+    "instructions": "Create `src/jitsu/models/execution.py`. Define two Pydantic models: `FileEdit` (fields: `filepath: str`, `content: str`) and `ExecutionResult` (fields: `thoughts: str`, `edits: list[FileEdit]`). These will be used by Instructor to enforce structured output for the autonomous agent's code modifications.",
+    "context_targets": [
+      {"provider_name": "file", "target_identifier": "src/jitsu/models/core.py", "is_required": true, "resolution_mode": "FULL_SOURCE"}
+    ],
+    "anti_patterns": ["Do not add these to core.py, keep execution models separate."],
+    "completion_criteria": ["execution.py exists with FileEdit and ExecutionResult models."],
+    "verification_commands": ["just verify"]
+  },
+  {
+    "epic_id": "epic-23-autonomous-execution",
+    "phase_id": "phase-02-executor-engine",
+    "module_scope": "src/jitsu/core",
+    "instructions": "Create `src/jitsu/core/executor.py`. Implement a `JitsuExecutor` class. It should have a method `execute_directive(self, directive: AgentDirective, compiler_output: str) -> bool`. This method should: 1) Call Instructor with `gpt-oss-120b:free` using `Mode.JSON` to get an `ExecutionResult`. 2) Write the `content` of each `FileEdit` to its respective `filepath`. 3) Run the directive's `verification_commands` using `subprocess.run` (e.g., `subprocess.run(['just', 'verify'], capture_output=True, text=True)`). 4) If verification fails, retry the LLM call up to 3 times, appending the stderr to the LLM prompt. Return True if verification passes, False otherwise.",
+    "context_targets": [
+      {"provider_name": "file", "target_identifier": "src/jitsu/core/planner.py", "is_required": true, "resolution_mode": "FULL_SOURCE"}
+    ],
+    "anti_patterns": ["Do not allow infinite retry loops (cap at max_retries=3)."],
+    "completion_criteria": ["JitsuExecutor can generate code, write files to disk, and run verification loops via the justfile."],
+    "verification_commands": ["just verify"]
+  },
+  {
+    "epic_id": "epic-23-autonomous-execution",
+    "phase_id": "phase-03-cli-auto",
+    "module_scope": "src/jitsu/cli",
+    "instructions": "Update `src/jitsu/cli/main.py` to add an `auto` command (`@app.command() def auto(objective: str, ...)`). It should: 1) Call `_run_planner` to get `AgentDirective`s. 2) Instantiate `ContextCompiler` and `JitsuExecutor`. 3) Loop through each directive, compile its context, and call `executor.execute_directive()`. 4) CRITICAL GIT LOOP: If `execute_directive()` returns True, use `subprocess.run` to execute the justfile commit target: `subprocess.run(['just', 'commit', f'jitsu(auto): {phase_id} - {description}'])`. 5) Stop and exit with Typer error if any directive fails to execute/verify.",
+    "context_targets": [
+      {"provider_name": "file", "target_identifier": "src/jitsu/cli/main.py", "is_required": true, "resolution_mode": "FULL_SOURCE"}
+    ],
+    "anti_patterns": ["Do not use raw git commands. Strictly use the `just commit` target.", "Do not break the existing plan or run commands."],
+    "completion_criteria": ["The `jitsu auto \"...\"` command successfully wires planning, execution, and the `just commit` loop together."],
+    "verification_commands": ["just verify"]
+  },
+  {
+    "epic_id": "epic-23-autonomous-execution",
+    "phase_id": "phase-04-executor-tests",
+    "module_scope": "tests",
+    "instructions": "Add comprehensive tests for `execution.py`, `executor.py`, and the new `auto` command in `main.py` to maintain 100% line coverage. Use `unittest.mock` to mock `subprocess.run` (to simulate passing/failing `just verify` and the `just commit` loop) and the Instructor client to simulate a successful execution loop.",
+    "context_targets": [
+      {"provider_name": "file", "target_identifier": "tests/cli/test_main.py", "is_required": true, "resolution_mode": "FULL_SOURCE"}
+    ],
+    "anti_patterns": ["Do not allow tests to make real API calls to OpenRouter.", "Do not let tests actually write files to disk or trigger real justfile commands; use strict mocks."],
+    "completion_criteria": ["100% test coverage is maintained and `just verify` passes."],
+    "verification_commands": ["just verify"]
+  }
+]
