@@ -2,15 +2,15 @@
 
 import importlib.resources
 import shutil
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import anyio
 import openai
 import typer
+from anyio.to_thread import run_sync
 from instructor.core.exceptions import InstructorRetryException
 from pydantic import TypeAdapter, ValidationError
 
@@ -482,59 +482,10 @@ def run(
         raise typer.Exit(1) from e
 
 
-@app.command()
-def auto(
-    objective: Annotated[str, typer.Argument(help="The natural language objective for the epic.")],
-    *,
-    files: Annotated[
-        list[Path] | None,
-        typer.Option(
-            "--file",
-            "-f",
-            help="Relevant files to provide as context (can be used multiple times).",
-            exists=True,
-        ),
-    ] = None,
-    model: Annotated[
-        str,
-        typer.Option(
-            "--model",
-            "-m",
-            help="The LLM model to use via OpenRouter.",
-        ),
-    ] = "openai/gpt-oss-120b:free",
-    verbose: Annotated[
-        bool, typer.Option("--verbose", "-v", help="Enable verbose debug output.")
-    ] = False,
+async def _execute_phases(
+    directives: list[AgentDirective], compiler: ContextCompiler, executor: JitsuExecutor
 ) -> None:
-    """Generate a Jitsu plan and execute it autonomously step-by-step."""
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    epics_dir = Path.cwd() / "epics" / "current"
-    epics_dir.mkdir(parents=True, exist_ok=True)
-    out = epics_dir / f"epic_{timestamp}.json"
-
-    file_strings = [str(f) for f in files] if files else []
-
-    typer.secho(
-        "🤖 Starting Autonomous Jitsu Execution...", fg=typer.colors.MAGENTA, bold=True, err=True
-    )
-
-    # 1. Plan
-    typer.secho(f"🧠 Step 1: Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True)
-    directives: list[AgentDirective] = anyio.run(
-        _run_planner, objective, file_strings, out, model, verbose
-    )
-
-    # 2. Execute loop
-    compiler = ContextCompiler()
-    executor = JitsuExecutor()
-
-    typer.secho(
-        f"🏃 Step 2: Executing {len(directives)} phase(s) autonomously...",
-        fg=typer.colors.CYAN,
-        err=True,
-    )
-
+    """Execute each phase directive in the list."""
     for i, directive in enumerate(directives):
         typer.secho(
             f"\n▶️ Phase {i + 1}/{len(directives)}: {directive.phase_id}",
@@ -544,8 +495,7 @@ def auto(
         )
 
         with typer.progressbar(length=100, label="Compiling Context...") as progress:
-            # compile_directive returns the full prompt including instructions
-            prompt = anyio.run(compiler.compile_directive, directive)
+            prompt = await compiler.compile_directive(directive)
             progress.update(100)
 
         with typer.progressbar(length=100, label="Executing...") as progress:
@@ -572,24 +522,23 @@ def auto(
             typer.secho("❌ 'just' executable not found in PATH.", fg=typer.colors.RED, err=True)
             raise typer.Exit(1)
 
-        res = subprocess.run(
-            [just_path, "commit", commit_msg],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        # Use anyio.run_process to avoid ASYNC221
+        res = await anyio.run_process([just_path, "commit", commit_msg], check=False)
         if res.returncode != 0:
-            typer.secho(f"⚠️ Commit failed: {res.stderr}", fg=typer.colors.YELLOW, err=True)
-            # We don't necessarily stop here if the code is correct, but the instruction says:
-            # "Stop and exit with Typer error if any directive fails to execute/verify."
-            # Commit failure is not necessarily execute/verify failure, but it might be.
-            # I'll exit if commit fails too to be safe.
+            typer.secho(
+                f"⚠️ Commit failed: {res.stderr.decode('utf-8', errors='replace')}",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
             raise typer.Exit(1)
 
-    # 4. Finalize
+
+async def _finalize_epic(out: Path) -> None:
+    """Archive the epic file to the completed directory."""
     completed_dir = Path.cwd() / "epics" / "completed"
-    completed_dir.mkdir(parents=True, exist_ok=True)
-    out.rename(completed_dir / out.name)
+    # mkdir is relatively fast, but for strictness:
+    await run_sync(lambda: completed_dir.mkdir(parents=True, exist_ok=True))
+    await run_sync(out.rename, completed_dir / out.name)
 
     typer.secho(
         f"\n✨ Autonomous execution complete! Epic archived to {completed_dir.relative_to(Path.cwd())}/{out.name}",
@@ -597,6 +546,124 @@ def auto(
         bold=True,
         err=True,
     )
+
+
+async def _run_autonomous_loop(directives: list[AgentDirective], out: Path) -> None:
+    """Run the execution and commit loop for autonomous mode."""
+    compiler = ContextCompiler()
+    executor = JitsuExecutor()
+
+    typer.secho(
+        f"🏃 Step 2: Executing {len(directives)} phase(s) autonomously...",
+        fg=typer.colors.CYAN,
+        err=True,
+    )
+
+    await _execute_phases(directives, compiler, executor)
+    await _finalize_epic(out)
+
+
+@app.command()
+def auto(
+    objective: Annotated[
+        str | None, typer.Argument(help="The natural language objective for the epic.")
+    ] = None,
+    *,
+    file: Annotated[
+        Path | None,
+        typer.Option(
+            "--file",
+            "-f",
+            help="Load an existing Epic JSON file to resume execution.",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            resolve_path=True,
+        ),
+    ] = None,
+    context: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--context",
+            "-c",
+            help="Relevant files to provide as context (can be used multiple times).",
+            exists=True,
+        ),
+    ] = None,
+    model: Annotated[
+        str,
+        typer.Option(
+            "--model",
+            "-m",
+            help="The LLM model to use via OpenRouter.",
+        ),
+    ] = "openai/gpt-oss-120b:free",
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Enable verbose debug output.")
+    ] = False,
+) -> None:
+    """Generate a Jitsu plan and execute it autonomously step-by-step."""
+    if not objective and not file:
+        typer.secho(
+            "❌ Either an objective or a --file must be provided.",
+            fg=typer.colors.RED,
+            bold=True,
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    directives: list[AgentDirective]
+    out: Path
+
+    typer.secho(
+        "🤖 Starting Autonomous Jitsu Execution...", fg=typer.colors.MAGENTA, bold=True, err=True
+    )
+
+    if file:
+        typer.secho(
+            f"📦 Loading existing Epic plan from {file.name}...",
+            fg=typer.colors.CYAN,
+            err=True,
+        )
+        try:
+            content = file.read_text(encoding="utf-8")
+            adapter = TypeAdapter(list[AgentDirective])
+            directives = adapter.validate_json(content)
+            out = file
+        except ValidationError as e:
+            typer.secho(
+                f"\n❌ Validation Error parsing {file.name}:\n{e}",
+                fg=typer.colors.RED,
+                bold=True,
+                err=True,
+            )
+            raise typer.Exit(1) from e
+        except OSError as e:
+            typer.secho(
+                f"\n❌ Failed to read {file.name}: {e}",
+                fg=typer.colors.RED,
+                bold=True,
+                err=True,
+            )
+            raise typer.Exit(1) from e
+    else:
+        # objective is guaranteed to be set if file is not
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        epics_dir = Path.cwd() / "epics" / "current"
+        epics_dir.mkdir(parents=True, exist_ok=True)
+        out = epics_dir / f"epic_{timestamp}.json"
+
+        file_strings = [str(f) for f in context] if context else []
+
+        # 1. Plan
+        typer.secho(
+            f"🧠 Step 1: Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True
+        )
+        objective = cast("str", objective)
+        directives = anyio.run(_run_planner, objective, file_strings, out, model, verbose)
+
+    # 2. Execution Loop
+    anyio.run(_run_autonomous_loop, directives, out)
 
 
 def main() -> None:

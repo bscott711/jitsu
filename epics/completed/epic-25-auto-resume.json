@@ -1,0 +1,64 @@
+[
+  {
+    "epic_id": "epic-25-auto-resume",
+    "phase_id": "phase-01-cli-resume-flag",
+    "module_scope": "src/jitsu/cli",
+    "instructions": "Update the `auto` command in `src/jitsu/cli/main.py`. 1) Make the `objective` argument optional (`Annotated[str | None, typer.Argument(...)] = None`). 2) Add a new option: `file: Annotated[Path | None, typer.Option('--file', '-f', help='Load an existing Epic JSON file to resume execution.')] = None`. 3) If `file` is provided, verify it exists (exit with typer error if not), read its JSON contents, and parse it into a list of `AgentDirective` objects using `AgentDirective.model_validate(d)`. 4) If `file` is not provided, ensure `objective` is not None (exit with typer error if it is), and run the `_run_planner` helper as usual to get the directives. 5) Proceed to the existing execution loop with the resulting directives.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not break the existing execution logic or Git commit loop inside the auto command.",
+      "Do not allow the command to proceed if both `objective` and `file` are missing."
+    ],
+    "completion_criteria": [
+      "The `auto` command can seamlessly load AgentDirectives from a JSON file on disk or fall back to the planner.",
+      "CLI exits gracefully with a clear error message if the file is missing or invalid."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-25-auto-resume",
+    "phase_id": "phase-02-test-cli-resume",
+    "module_scope": "tests/cli",
+    "instructions": "Update `tests/cli/test_main.py` to cover the new `--file` logic in the `auto` command. Add tests for: 1) Successfully loading a mock valid JSON epic file and executing it. 2) Failing gracefully when the `--file` path does not exist. 3) Failing gracefully when neither `objective` nor `--file` is provided. Use `tmp_path` or `patch` to simulate the file system. Ensure the execution loop (`JitsuExecutor`) is mocked so no real files are modified or API calls made.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "ast",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not make real LLM API calls in the tests.",
+      "Do not leave test coverage below 100% for `src/jitsu/cli/main.py`."
+    ],
+    "completion_criteria": [
+      "All new execution paths in the `auto` command are fully covered by tests.",
+      "The project maintains 100% test coverage and passes `just verify`."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

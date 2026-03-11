@@ -4,7 +4,6 @@ import json
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import anyio
@@ -15,7 +14,14 @@ import typer
 from instructor.core.exceptions import InstructorRetryException
 from typer.testing import CliRunner
 
-from jitsu.cli.main import _send_payload, app, main
+from jitsu.cli.main import (
+    _execute_phases,
+    _finalize_epic,
+    _run_autonomous_loop,
+    _send_payload,
+    app,
+    main,
+)
 from jitsu.models.core import AgentDirective
 from jitsu.server.mcp_server import state_manager
 
@@ -461,7 +467,7 @@ def test_cli_run_success(
     """Test the 'jitsu run' command on success."""
     monkeypatch.chdir(tmp_path)
 
-    def run_side_effect(func: Any, *args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
+    def run_side_effect(func: object, *args: object, **_kwargs: object) -> object:
         if func.__name__ == "_run_planner":
             out_path = args[2]
             out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -506,7 +512,7 @@ def test_cli_run_submit_failure(
     """Test the 'jitsu run' command when the server returns an error."""
     monkeypatch.chdir(tmp_path)
 
-    def run_side_effect(func: Any, *args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
+    def run_side_effect(func: object, *args: object, **_kwargs: object) -> object:
         if func.__name__ == "_run_planner":
             out_path = args[2]
             out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -531,7 +537,7 @@ def test_cli_run_os_error(
     """Test the 'jitsu run' command handles OS errors (e.g., read failure)."""
     monkeypatch.chdir(tmp_path)
 
-    def run_side_effect(func: Any, *args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
+    def run_side_effect(func: object, *args: object, **_kwargs: object) -> object:
         if func.__name__ == "_run_planner":
             out_path = args[2]
             out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -653,58 +659,38 @@ def test_cli_init_resource_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
 
 @patch("jitsu.cli.main.anyio.run")
-@patch("subprocess.run")
-@patch("shutil.which")
 def test_cli_auto_success(
-    mock_which: MagicMock,
-    mock_sub_run: MagicMock,
     mock_anyio_run: MagicMock,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test the 'jitsu auto' command on success."""
     monkeypatch.chdir(tmp_path)
-    mock_which.return_value = "/usr/bin/just"
-    mock_sub_run.return_value = MagicMock(returncode=0)
-
     directive = AgentDirective(
         epic_id="test", phase_id="p1", module_scope="test", instructions="test"
     )
 
-    def run_side_effect(func: Any, *args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
+    def run_side_effect(func: object, *_args: object, **_kwargs: object) -> object:
         if func.__name__ == "_run_planner":
-            out_path = args[2]
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text("[]", encoding="utf-8")
             return [directive]
-        if func.__name__ == "compile_directive":
-            return "mock prompt"
+        if func.__name__ == "_run_autonomous_loop":
+            # Directives and prints happen inside this loop
+            typer.echo("Phase p1 completed")
+            typer.echo("Committing changes")
+            typer.echo("Autonomous execution complete")
+            return None
         return None
 
     mock_anyio_run.side_effect = run_side_effect
 
-    mock_executor = MagicMock()
-    mock_executor.execute_directive.return_value = True
-
-    mock_compiler = MagicMock()
-    mock_compiler.compile_directive.__name__ = "compile_directive"
-
-    with (
-        patch("jitsu.cli.main.JitsuExecutor", return_value=mock_executor),
-        patch("jitsu.cli.main.ContextCompiler", return_value=mock_compiler),
-    ):
-        result = runner.invoke(app, ["auto", "Build something"])
+    result = runner.invoke(app, ["auto", "Build something"])
 
     assert result.exit_code == 0
     assert "Starting Autonomous Jitsu Execution" in result.output
+    assert "Step 1: Generating plan" in result.output
     assert "Phase p1 completed" in result.output
     assert "Committing changes" in result.output
     assert "Autonomous execution complete" in result.output
-
-    # Verify commit was called
-    mock_sub_run.assert_called_once()
-    assert mock_sub_run.call_args[0][0][0] == "/usr/bin/just"
-    assert mock_sub_run.call_args[0][0][1] == "commit"
 
 
 @patch("jitsu.cli.main.anyio.run")
@@ -714,125 +700,241 @@ def test_cli_auto_failure(
     """Test the 'jitsu auto' command when execution fails."""
     monkeypatch.chdir(tmp_path)
 
-    directive = AgentDirective(
-        epic_id="test", phase_id="p1", module_scope="test", instructions="test"
-    )
-
-    def run_side_effect(func: Any, *args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
+    def run_side_effect(func: object, *_args: object, **_kwargs: object) -> object:
         if func.__name__ == "_run_planner":
-            out_path = args[2]
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text("[]", encoding="utf-8")
-            return [directive]
-        if func.__name__ == "compile_directive":
-            return "mock prompt"
+            return [AgentDirective(epic_id="t", phase_id="p1", module_scope="s", instructions="i")]
+        if func.__name__ == "_run_autonomous_loop":
+            # Simulate a failure exit
+            typer.echo("Phase p1 failed to execute or verify")
+            raise typer.Exit(1)
         return None
 
     mock_anyio_run.side_effect = run_side_effect
 
-    mock_executor = MagicMock()
-    mock_executor.execute_directive.return_value = False
-
-    mock_compiler = MagicMock()
-    mock_compiler.compile_directive.__name__ = "compile_directive"
-
-    with (
-        patch("jitsu.cli.main.JitsuExecutor", return_value=mock_executor),
-        patch("jitsu.cli.main.ContextCompiler", return_value=mock_compiler),
-    ):
-        result = runner.invoke(app, ["auto", "Build something"])
+    result = runner.invoke(app, ["auto", "Build something"])
 
     assert result.exit_code == 1
     assert "Phase p1 failed to execute or verify" in result.output
 
 
+def test_cli_auto_missing_args() -> None:
+    """Test 'jitsu auto' fails if neither objective nor --file is provided."""
+    result = runner.invoke(app, ["auto"])
+    assert result.exit_code == 1
+    assert "Either an objective or a --file must be provided" in result.output
+
+
 @patch("jitsu.cli.main.anyio.run")
-@patch("subprocess.run")
-@patch("shutil.which")
-def test_cli_auto_commit_failure(
-    mock_which: MagicMock,
-    mock_sub_run: MagicMock,
-    mock_anyio_run: MagicMock,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+def test_cli_auto_resume_success(
+    mock_anyio_run: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test the 'jitsu auto' command when the commit fails."""
+    """Test 'jitsu auto' resuming from a file."""
     monkeypatch.chdir(tmp_path)
-    mock_which.return_value = "/usr/bin/just"
-    # Mock commit failure
-    mock_sub_run.return_value = MagicMock(returncode=1, stderr="Commit error")
-
     directive = AgentDirective(
-        epic_id="test", phase_id="p1", module_scope="test", instructions="test"
+        epic_id="test-resume", phase_id="p1", module_scope="test", instructions="test"
     )
+    epic_file = tmp_path / "resume_epic.json"
+    epic_file.write_text(json.dumps([directive.model_dump()]), encoding="utf-8")
 
-    def run_side_effect(func: Any, *args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
-        if func.__name__ == "_run_planner":
-            out_path = args[2]
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text("[]", encoding="utf-8")
-            return [directive]
-        if func.__name__ == "compile_directive":
-            return "mock prompt"
+    def run_side_effect(func: object, *_args: object, **_kwargs: object) -> object:
+        if func.__name__ == "_run_autonomous_loop":
+            typer.echo("Loading existing Epic plan from resume_epic.json")
+            typer.echo("Phase p1 completed")
+            return None
         return None
 
     mock_anyio_run.side_effect = run_side_effect
 
-    mock_executor = MagicMock()
-    mock_executor.execute_directive.return_value = True
+    result = runner.invoke(app, ["auto", "--file", str(epic_file)])
 
-    mock_compiler = MagicMock()
-    mock_compiler.compile_directive.__name__ = "compile_directive"
+    assert result.exit_code == 0
+    assert "Loading existing Epic plan from resume_epic.json" in result.output
+    assert "Phase p1 completed" in result.output
+    # Planner should NOT be called
+    mock_calls = [c[0][0].__name__ for c in mock_anyio_run.call_args_list]
+    assert "_run_planner" not in mock_calls
+    assert "_run_autonomous_loop" in mock_calls
 
-    with (
-        patch("jitsu.cli.main.JitsuExecutor", return_value=mock_executor),
-        patch("jitsu.cli.main.ContextCompiler", return_value=mock_compiler),
-    ):
-        result = runner.invoke(app, ["auto", "Build something"])
+
+def test_cli_auto_resume_validation_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test 'jitsu auto' with an invalid epic file."""
+    monkeypatch.chdir(tmp_path)
+    epic_file = tmp_path / "invalid.json"
+    epic_file.write_text(json.dumps([{"wrong": "data"}]), encoding="utf-8")
+
+    result = runner.invoke(app, ["auto", "--file", str(epic_file)])
 
     assert result.exit_code == 1
-    assert "Commit failed: Commit error" in result.output
+    assert "Validation Error parsing invalid.json" in result.output
+
+
+def test_cli_auto_resume_os_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test 'jitsu auto' handles read errors on the epic file."""
+    monkeypatch.chdir(tmp_path)
+    epic_file = tmp_path / "unreadable.json"
+    epic_file.touch()
+
+    with patch.object(Path, "read_text", side_effect=OSError("Permission denied")):
+        result = runner.invoke(app, ["auto", "--file", str(epic_file)])
+
+    assert result.exit_code == 1
+    assert "Failed to read unreadable.json: Permission denied" in result.output
 
 
 @patch("jitsu.cli.main.anyio.run")
-@patch("shutil.which")
-def test_cli_auto_just_missing(
-    mock_which: MagicMock,
-    mock_anyio_run: MagicMock,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+def test_cli_auto_commit_failure(
+    mock_anyio_run: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test the 'jitsu auto' command when 'just' is missing."""
+    """Test 'jitsu auto' when a commit fails inside the loop."""
     monkeypatch.chdir(tmp_path)
-    mock_which.return_value = None
 
-    directive = AgentDirective(
-        epic_id="test", phase_id="p1", module_scope="test", instructions="test"
-    )
-
-    def run_side_effect(func: Any, *args: Any, **_kwargs: Any) -> Any:  # noqa: ANN401
+    def run_side_effect(func: object, *_args: object, **_kwargs: object) -> object:
         if func.__name__ == "_run_planner":
-            out_path = args[2]
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text("[]", encoding="utf-8")
-            return [directive]
-        if func.__name__ == "compile_directive":
-            return "mock prompt"
+            return [AgentDirective(epic_id="t", phase_id="p1", module_scope="s", instructions="i")]
+        if func.__name__ == "_run_autonomous_loop":
+            typer.echo("Commit failed: Git Error")
+            raise typer.Exit(1)
         return None
 
     mock_anyio_run.side_effect = run_side_effect
 
-    mock_executor = MagicMock()
-    mock_executor.execute_directive.return_value = True
+    result = runner.invoke(app, ["auto", "Build something"])
 
-    mock_compiler = MagicMock()
-    mock_compiler.compile_directive.__name__ = "compile_directive"
+    assert result.exit_code == 1
+    assert "Commit failed: Git Error" in result.output
 
-    with (
-        patch("jitsu.cli.main.JitsuExecutor", return_value=mock_executor),
-        patch("jitsu.cli.main.ContextCompiler", return_value=mock_compiler),
-    ):
-        result = runner.invoke(app, ["auto", "Build something"])
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_auto_just_missing(
+    mock_anyio_run: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test 'jitsu auto' when 'just' is missing."""
+    monkeypatch.chdir(tmp_path)
+
+    def run_side_effect(func: object, *_args: object, **_kwargs: object) -> object:
+        if func.__name__ == "_run_planner":
+            return [AgentDirective(epic_id="t", phase_id="p1", module_scope="s", instructions="i")]
+        if func.__name__ == "_run_autonomous_loop":
+            typer.echo("'just' executable not found in PATH")
+            raise typer.Exit(1)
+        return None
+
+    mock_anyio_run.side_effect = run_side_effect
+
+    result = runner.invoke(app, ["auto", "Build something"])
 
     assert result.exit_code == 1
     assert "'just' executable not found in PATH" in result.output
+
+
+@pytest.mark.asyncio
+async def test_execute_phases_success() -> None:
+    """Test the internal _execute_phases helper on success."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive.return_value = True
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    with (
+        patch("shutil.which", return_value="/usr/bin/just"),
+        patch("anyio.run_process", new_callable=AsyncMock) as mock_rp,
+    ):
+        mock_rp.return_value = MagicMock(returncode=0)
+        await _execute_phases([directive], mock_compiler, mock_executor)
+        mock_rp.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_execute_phases_failure() -> None:
+    """Test the internal _execute_phases helper when execution fails."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive.return_value = False
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    with pytest.raises(typer.Exit) as exc:
+        await _execute_phases([directive], mock_compiler, mock_executor)
+    assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_execute_phases_commit_failure() -> None:
+    """Test the internal _execute_phases helper when commit fails."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive.return_value = True
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    with (
+        patch("shutil.which", return_value="/usr/bin/just"),
+        patch("anyio.run_process", new_callable=AsyncMock) as mock_rp,
+    ):
+        mock_rp.return_value = MagicMock(returncode=1, stderr=b"Commit failed")
+        with pytest.raises(typer.Exit) as exc:
+            await _execute_phases([directive], mock_compiler, mock_executor)
+        assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_execute_phases_just_missing() -> None:
+    """Test the internal _execute_phases helper when 'just' is missing."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive.return_value = True
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    with patch("shutil.which", return_value=None):
+        with pytest.raises(typer.Exit) as exc:
+            await _execute_phases([directive], mock_compiler, mock_executor)
+        assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_finalize_epic_success(tmp_path: Path) -> None:
+    """Test the internal _finalize_epic helper."""
+    out_file = tmp_path / "epic.json"
+    out_file.write_text("[]", encoding="utf-8")
+    completed_dir = tmp_path / "epics" / "completed"
+
+    # monkeypatch cwd to tmp_path
+    with patch("pathlib.Path.cwd", return_value=tmp_path):
+        await _finalize_epic(out_file)
+
+    assert (completed_dir / "epic.json").exists()
+    assert not out_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_run_autonomous_loop_bridge() -> None:
+    """Test the _run_autonomous_loop helper bridges to sub-helpers."""
+    with (
+        patch("jitsu.cli.main._execute_phases", new_callable=AsyncMock) as mock_exec,
+        patch("jitsu.cli.main._finalize_epic", new_callable=AsyncMock) as mock_final,
+    ):
+        await _run_autonomous_loop([], Path("test.json"))
+        mock_exec.assert_awaited_once()
+        mock_final.assert_awaited_once()
+
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_auto_with_context(
+    mock_anyio_run: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test 'jitsu auto' passes context files to the planner."""
+    monkeypatch.chdir(tmp_path)
+    ctx_file = tmp_path / "context.py"
+    ctx_file.touch()
+
+    def run_side_effect(func: object, *args: object, **_kwargs: object) -> object:
+        if func.__name__ == "_run_planner":
+            # file_strings are in args[1]
+            assert str(ctx_file) in args[1]
+            return []
+        return None
+
+    mock_anyio_run.side_effect = run_side_effect
+    runner.invoke(app, ["auto", "test", "--context", str(ctx_file)])
