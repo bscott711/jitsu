@@ -1,24 +1,24 @@
 [
   {
-    "epic_id": "documentation-sync",
-    "phase_id": "phase-01-architecture-docs",
+    "epic_id": "documentation-refresh-v1",
+    "phase_id": "phase-01-architecture-overview",
     "module_scope": "docs",
-    "instructions": "Rewrite `docs/Jitsu Architecture Overview.md` to accurately reflect the current system architecture. You must document the pipeline: Layer 1 (Domain Models with `TargetResolutionMode`), Layer 1.5 (ContextCompiler with AST-First/AUTO fallback and Context Manifests), Layer 2 (Providers), and Layer 3 (MCP Server with `jitsu_request_context` for progressive disclosure). The code is the source of truth; ensure the document perfectly describes how the system saves tokens and shifts preparation to Python.",
+    "instructions": "Rewrite `docs/Jitsu Architecture Overview.md` to accurately reflect the current system architecture. You must document the pipeline: Layer 1 (Domain Models with `TargetResolutionMode`), Layer 1.5 (ContextCompiler with AST-First/AUTO fallback and Context Manifests), Layer 2 (Providers), and Layer 3 (MCP Server and CLI). The code is the source of truth; ensure the document perfectly describes how the system saves tokens and shifts preparation to Python.",
     "context_targets": [
       {
-        "provider_name": "file_state",
+        "provider_name": "file",
         "target_identifier": "src/jitsu/core/compiler.py",
         "is_required": true,
         "resolution_mode": "STRUCTURE_ONLY"
       },
       {
-        "provider_name": "file_state",
+        "provider_name": "file",
         "target_identifier": "src/jitsu/server/mcp_server.py",
         "is_required": true,
         "resolution_mode": "STRUCTURE_ONLY"
       },
       {
-        "provider_name": "file_state",
+        "provider_name": "file",
         "target_identifier": "docs/Jitsu Architecture Overview.md",
         "is_required": false,
         "resolution_mode": "FULL_SOURCE"
@@ -36,19 +36,19 @@
     ]
   },
   {
-    "epic_id": "documentation-sync",
+    "epic_id": "documentation-refresh-v1",
     "phase_id": "phase-02-readme-revamp",
     "module_scope": "Project Root",
     "instructions": "Rewrite the `README.md` to serve as a modern, accurate front-page for the Jitsu project. Highlight its core value proposition: an AST-first, strictly-typed AI orchestrator that uses Definition of Done enforcement and Progressive Disclosure to prevent 'Context Drift' in LLM agents. Mention the 100% agnostic context compiler and the rock-solid two-way IPC handshake. Provide clear instructions on how to use `uv run jitsu submit` to feed it epics.",
     "context_targets": [
       {
-        "provider_name": "file_state",
+        "provider_name": "file",
         "target_identifier": "README.md",
         "is_required": true,
         "resolution_mode": "FULL_SOURCE"
       },
       {
-        "provider_name": "file_state",
+        "provider_name": "file",
         "target_identifier": "docs/Jitsu Architecture Overview.md",
         "is_required": true,
         "resolution_mode": "FULL_SOURCE"
@@ -59,6 +59,35 @@
     ],
     "completion_criteria": [
       "The README explains what Jitsu is, why it exists (Context Drift prevention), and how to run it."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "documentation-refresh-v1",
+    "phase_id": "phase-03-reference-docs",
+    "module_scope": "docs",
+    "instructions": "Create `docs/CLI Reference.md` and `docs/MCP Tools Reference.md`. Document the Typer CLI commands (`serve`, `submit`, `plan`, `run`, `queue ls`) and the MCP capabilities (`jitsu_get_next_phase`, `jitsu_report_status`, `jitsu_request_context`, `jitsu_get_planning_context`, `jitsu_submit_epic`, `jitsu_git_commit`).",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not write pseudo-code; ensure all commands and tools documented map 1:1 to the real codebase capabilities."
+    ],
+    "completion_criteria": [
+      "New Reference markdown files are created and cover all available commands and exported server tools."
     ],
     "verification_commands": [
       "just verify"

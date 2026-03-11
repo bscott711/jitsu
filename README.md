@@ -46,23 +46,31 @@ uv pip install -e .
 
 ## **The Jitsu Workflow**
 
-1. **Plan**: Use `uv run jitsu plan "Objective"` to generate a multi-phase epic, or let the agent use `jitsu_get_planning_context` to plan its own session.
-2. **Serve**: Start the MCP server:
+1. **Serve**: Start the MCP server securely in the background (or hook into your IDE config):
 
    ```bash
    uv run jitsu serve
    ```
 
-3. **Pull**: The agent calls `jitsu_get_next_phase()` to receive its first atomic directive.
-4. **Execute & Verify**: The agent implements changes and runs `just verify` to ensure quality.
-5. **Commit**: The agent uses `jitsu_git_commit` to stage and commit the verified work.
-6. **Report**: The agent calls `jitsu_report_status()` to mark the phase as complete and move to the next.
+2. **Plan**: Draft an `epic.json` file detailing your phases, module scopes, and validation logic.
+3. **Submit**: Push the epic seamlessly to the active server over IPC:
+
+   ```bash
+   uv run jitsu submit path/to/epic.json
+   ```
+
+4. **Pull**: The agent calls `jitsu_get_next_phase()` to receive its first atomic directive.
+5. **Execute & Verify**: The agent implements changes and requests Progressive Disclosure via `jitsu_request_context` when needed. It then runs `just verify` to ensure quality.
+6. **Commit**: The agent uses `jitsu_git_commit` to stage and commit the verified work.
+7. **Report**: The agent calls `jitsu_report_status()` to mark the phase as complete and move to the next.
 
 ---
 
 ## **Documentation**
 
 - [**Jitsu Architecture Overview**](docs/Jitsu%20Architecture%20Overview.md): Deep dive into the 1.0 multi-layered design and the autonomous loop.
+- [**CLI Command Reference**](docs/CLI%20Reference.md): Explore the Typer CLI `init`, `serve`, `submit`, and `queue` commands.
+- [**MCP Tools Reference**](docs/MCP%20Tools%20Reference.md): Reference for the 8 default tools shipped with the Jitsu orchestrator.
 
 ---
 

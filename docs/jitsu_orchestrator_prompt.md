@@ -21,7 +21,7 @@ Output ONLY a JSON array matching this schema:
     "instructions": "string",
     "context_targets": [
       {
-        "provider_name": "file_state | pydantic_v2",
+        "provider_name": "file | pydantic | ast | tree | directory_tree | env_var | git | markdown_ast",
         "target_identifier": "string",
         "is_required": boolean,
         "resolution_mode": "AUTO | STRUCTURE_ONLY | SCHEMA_ONLY | FULL_SOURCE"

@@ -1,0 +1,42 @@
+[
+{
+"epic_id": "epic-26-architectural-audit",
+"phase_id": "phase-01-codebase-recon",
+"module_scope": "src/jitsu",
+"instructions": "Perform a comprehensive audit of the Jitsu codebase to identify architectural violations of DRY (Don't Repeat Yourself) and SoC (Separation of Concerns). Specifically: 1) Identify every instance of hardcoded system prompts in cli/main.py and core/executor.py. 2) Map the duplication of LLM client initialization and environment loading across all modules. 3) Locate logic in cli/main.py that violates the Separation of Concerns (e.g., orchestrating planning loops or managing file I/O for epics). 4) Scan for any remaining # noqa or # pragma markers that were not caught in previous cleanups. Output a detailed report in docs/audit_report_v1.md listing specific line numbers, the nature of the violation, and recommended structural fixes.",
+"context_targets": [
+{
+"provider_name": "file",
+"target_identifier": "src/jitsu/cli/main.py",
+"is_required": true,
+"resolution_mode": "FULL_SOURCE"
+},
+{
+"provider_name": "file",
+"target_identifier": "src/jitsu/core/executor.py",
+"is_required": true,
+"resolution_mode": "FULL_SOURCE"
+},
+{
+"provider_name": "file",
+"target_identifier": "src/jitsu/core/planner.py",
+"is_required": true,
+"resolution_mode": "FULL_SOURCE"
+}
+],
+"anti_patterns": [
+"Do not modify any source code in this phase.",
+"Do not suggest 'band-aid' fixes; focus on root-cause architectural violations.",
+"Do not ignore violations that are currently covered by tests."
+],
+"completion_criteria": [
+"A comprehensive audit report exists in docs/audit_report_v1.md.",
+"The report identifies all hardcoded prompts and client duplications.",
+"The report outlines a clear separation strategy for the CLI and Core logic.",
+"Repository verification succeeds with just verify."
+],
+"verification_commands": [
+"just verify"
+]
+}
+]

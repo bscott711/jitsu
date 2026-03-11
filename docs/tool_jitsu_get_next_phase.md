@@ -30,10 +30,13 @@ The server maintains an in-memory queue of pending work. `jitsu_get_next_phase` 
 
 The retrieved `AgentDirective` contains a list of `context_targets`. The compiler iterates through these, using **Specialized Providers** to fetch the data:
 
-- **ASTProvider**: Strips implementation details for Python files (saves ~80% tokens).
-- **PydanticV2Provider**: Extracts JSON schemas from live Python classes.
-- **DirectoryTreeProvider**: Generates visual file system maps.
-- **FileStateProvider**: Reads raw file content.
+- **`ASTProvider` (`ast`)**: Strips implementation details for Python files (saves ~80% tokens).
+- **`PydanticProvider` (`pydantic`)**: Extracts JSON schemas from live Python classes.
+- **`DirectoryTreeProvider` (`tree`)**: Generates visual file system maps.
+- **`FileStateProvider` (`file`)**: Reads raw file content.
+- **`GitProvider` (`git`)**: Reads git status and diffs.
+- **`EnvVarProvider` (`env_var`)**: Safely provides environment state.
+- **`MarkdownASTProvider` (`markdown_ast`)**: Extracts headings and code blocks.
 
 ### 3. Progressive Disclosure
 

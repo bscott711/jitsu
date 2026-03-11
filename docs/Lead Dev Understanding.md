@@ -15,9 +15,9 @@ Layer 1 - The Directive Engine (jitsu.models): Pure, strict Pydantic V2 schemas 
 
 Layer 1.5 - Core & State (jitsu.core): The ContextCompiler and JitsuStateManager. This orchestrates the queue and weaves the directives together with the provider data into optimized Markdown.
 
-Layer 2 - The Providers (jitsu.providers & jitsu.utils): The adapters that inspect the real world. FileStateProvider, AST dumpers, Pydantic schema extractors.
+Layer 2 - The Providers (jitsu.providers): The adapters that inspect the real world. FileStateProvider, AST dumpers, Pydantic schema extractors, Markdown structural parsers, Git analyzers, and EnvVar readers. This layer MUST be AST-First to strip noise out of the LLM context.
 
-Layer 3 - The Transport Layer (jitsu.server & jitsu.cli): The Typer CLI and the MCP stdio server. It translates the external world into our core domain.
+Layer 3 - The Transport Layer (jitsu.server & jitsu.cli): The Typer CLI, background IPC daemon, and the MCP stdio server. It translates the external world into our core domain. Progressive Disclosure via dynamically responding to `jitsu_request_context` requests is handled here.
 
 ## Coding Rules & Engineering Standards
 

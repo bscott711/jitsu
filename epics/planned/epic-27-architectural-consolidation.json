@@ -1,0 +1,52 @@
+[
+  {
+    "epic_id": "epic-27-architectural-consolidation",
+    "phase_id": "phase-01-centralize-prompts",
+    "module_scope": "src/jitsu/models",
+    "instructions": "Create `src/jitsu/models/prompts.py`. Extract all hardcoded system prompt strings from `src/jitsu/cli/main.py` and `src/jitsu/core/executor.py`. Define them as constants or a simple `PromptRegistry` class. Ensure that both the Planner and the Executor import their instructions from this central source to prevent logic drift.",
+    "context_targets": [
+      {"provider_name": "file", "target_identifier": "src/jitsu/cli/main.py", "is_required": true, "resolution_mode": "FULL_SOURCE"},
+      {"provider_name": "file", "target_identifier": "src/jitsu/core/executor.py", "is_required": true, "resolution_mode": "FULL_SOURCE"}
+    ],
+    "anti_patterns": ["Do not leave any multiline string prompts in the logic files."],
+    "completion_criteria": ["All prompts are centralized in prompts.py.", "main.py and executor.py are significantly shorter and cleaner."],
+    "verification_commands": ["just verify"]
+  },
+  {
+    "epic_id": "epic-27-architectural-consolidation",
+    "phase_id": "phase-02-unify-client-config",
+    "module_scope": "src/jitsu/core",
+    "instructions": "Create a `BaseAgent` class or a shared utility in `src/jitsu/core/base.py` that handles the initialization of the `instructor` client, OpenRouter configuration, and standard timeouts (set to 120s). Refactor `JitsuExecutor` and the CLI's internal planning functions to inherit or use this shared client factory. This ensures consistent timeouts and headers across the entire app.",
+    "context_targets": [
+      {"provider_name": "file", "target_identifier": "src/jitsu/core/executor.py", "is_required": true, "resolution_mode": "FULL_SOURCE"}
+    ],
+    "anti_patterns": ["Do not duplicate the `instructor.from_openai` call in multiple modules."],
+    "completion_criteria": ["A single point of failure/config exists for the LLM client."],
+    "verification_commands": ["just verify"]
+  },
+  {
+    "epic_id": "epic-27-architectural-consolidation",
+    "phase_id": "phase-03-enforce-silos",
+    "module_scope": "src/jitsu",
+    "instructions": "Audit `src/jitsu/cli/main.py`. Any logic that isn't strictly related to Typer, argument parsing, or terminal output should be moved to `src/jitsu/core`. Specifically, move the planning execution loop and the logic for loading/validating epic files from disk into a new `JitsuOrchestrator` in `src/jitsu/core/orchestrator.py`. The CLI should only be a thin wrapper around this orchestrator.",
+    "context_targets": [
+      {"provider_name": "file", "target_identifier": "src/jitsu/cli/main.py", "is_required": true, "resolution_mode": "FULL_SOURCE"}
+    ],
+    "anti_patterns": ["The CLI should not contain `asyncio.run` blocks or complex Pydantic validation logic."],
+    "completion_criteria": ["main.py is a 'thin' entry point.", "Core logic is fully testable without the CLI."],
+    "verification_commands": ["just verify"]
+  },
+  {
+    "epic_id": "epic-27-architectural-consolidation",
+    "phase_id": "phase-04-final-verification",
+    "module_scope": "tests",
+    "instructions": "Update the test suite to reflect the new modular architecture. Ensure that 100% coverage is maintained for the new `prompts.py`, `base.py`, and `orchestrator.py`. Remove any remaining mock duplication in `test_main.py` and `test_executor.py` by using shared fixtures.",
+    "context_targets": [
+      {"provider_name": "file", "target_identifier": "tests/cli/test_main.py", "is_required": true, "resolution_mode": "FULL_SOURCE"},
+      {"provider_name": "file", "target_identifier": "tests/core/test_executor.py", "is_required": true, "resolution_mode": "FULL_SOURCE"}
+    ],
+    "anti_patterns": ["Do not allow coverage to drop below 100%."],
+    "completion_criteria": ["just verify passes with zero band-aids and clean architecture."],
+    "verification_commands": ["just verify"]
+  }
+]
