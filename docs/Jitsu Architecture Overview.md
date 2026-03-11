@@ -9,60 +9,73 @@ By shifting the heavy lifting of context preparation to Python, Jitsu ensures th
 ## **Core Philosophy**
 
 1. **The Code is the Source of Truth:** Documents lie; code does not. Jitsu uses reflection, AST analysis, and schema extraction to provide the absolute current state of the project.
-2. **Strict Typed Directives:** Agent instructions are not just text; they are validated Pydantic models (`AgentDirective`). They include explicit "Definitions of Done," verification commands, and strictly forbidden anti-patterns.
-3. **Context-on-Demand (Progressive Disclosure):** Provide the agent with exactly what it needs for the *current* task. If it discovers a dependency it didn't know it needed, it can request it dynamically.
-4. **Inversion of Control:** The agent does not guess its next move. It "pulls" its next objective from Jitsu, executes it, and "pushes" back a report on success or failure.
+2. **Strict Typed Directives:** Agent instructions are validated Pydantic models (`AgentDirective`). They include explicit "Definitions of Done," verification commands, and strictly forbidden anti-patterns.
+3. **Context-on-Demand (Progressive Disclosure):** Provide the agent with exactly what it needs for the *current* task. Agents can request additional context dynamically.
+4. **Self-Orchestration:** Jitsu enables an autonomous loop where agents can plan their own tasks, queue phases, and report progress without human intervention.
+5. **Security via Lifecycle:** All destructive actions (commits, pushes) are governed by a "Just-based Git Lifecycle" to ensure project integrity.
 
 ---
 
-## **System Architecture**
+## **The 1.0 Architecture**
 
-Jitsu operates through a multi-layered architecture designed to maximize fidelity while minimizing cost.
+Jitsu operates through a four-layer architecture designed to maximize fidelity and autonomy.
 
-### **Layer 1: The Directive Engine (Domain Models)**
+### **Layer 1: Strict Pydantic Models (The Core)**
 
-The heart of the system is the `AgentDirective`. This model defines the scope and constraints of a single work phase.
+The foundation of Jitsu is a set of rigorous Pydantic models that define the communication protocol between the orchestrator and the agent.
 
-* **TargetResolutionMode**: Directives indicate how context should be resolved for each target:
-  * `AUTO`: Use the intelligent AST-First fallback policy.
-  * `STRUCTURE_ONLY`: Provide a summarized AST (signatures, docstrings) without implementation bodies.
-  * `SCHEMA_ONLY`: Provide a Pydantic/JSON schema representation of a data model.
-  * `FULL_SOURCE`: Provide the complete raw source code (fallback).
+* **`AgentDirective`**: Defines a work phase, including instructions, anti-patterns, and context targets.
+* **`PhaseReport`**: Structured feedback from the agent, including artifacts and verification results.
+* **`TargetResolutionMode`**: Governs how the ContextCompiler handles specific files (AUTO, STRUCTURE_ONLY, SCHEMA_ONLY, FULL_SOURCE).
 
-### **Layer 1.5: The Context Compiler (The Engine)**
+### **Layer 2: AST-First Providers (The Eyes)**
 
-The `ContextCompiler` is where the magic happens. It weaves together static instructions and dynamic codebase state into a single, highly-optimized Markdown prompt.
+Providers are specialized modules that extract information from the filesystem and environment.
 
-* **AST-First Policy**: When a target is in `AUTO` mode, the compiler attempts resolution in a specific priority sequence:
-    1. **AST**: If the target is a `.py` file, provide a structural skeleton.
-    2. **Pydantic**: If the target looks like a class or symbol, provide its JSON schema.
-    3. **Tree**: If the target is a directory, provide a visual structure.
-    4. **FileState**: As a final fallback, provide the full source text.
-* **Context Manifests**: Every compiled prompt includes a manifest telling the agent *exactly* how its context was resolved (e.g., "Visual Tree Structure" vs "Full Source"). This meta-awareness helps the agent understand the level of detail it has.
+* **`ASTProvider`**: Strips implementation details from Python files, providing structural skeletons. **Token Savings: 70-90%**.
+* **`PydanticProvider`**: Uses live reflection to extract JSON schemas from models.
+* **`GitProvider`**: Provides snapshots of repository status and diffs.
+* **`DirectoryTreeProvider`**: Generates visual representations of the project structure.
 
-### **Layer 2: Specialized Context Providers**
+### **Layer 3: ContextCompiler with AUTO Fallback (The Engine)**
 
-Providers are the "eyes" of Jitsu. They are modular and can be extended to support any file type or data source.
+The `ContextCompiler` weaves together directives and live codebase state into optimized Markdown prompts.
 
-* **ASTProvider**: Uses Python's `ast` module to strip implementation details. **Token Savings: 70-90%** for large modules.
-* **DirectoryTreeProvider**: Generates a filtered, visual tree of the file system, ignoring noisy directories like `.git` or `__pycache__`.
-* **PydanticV2Provider**: Uses live reflection to extract schemas from Pydantic models.
-* **FileStateProvider**: Reads raw disk content for non-Python or configuration files.
+* **Intelligence**: When set to `AUTO`, the compiler follows a priority-based resolution policy:
+  1. **AST**: If it's a `.py` file, provide structure.
+  2. **Pydantic**: If it's a symbol, provide its schema.
+  3. **Tree**: If it's a directory, provide a visual structure.
+  4. **FileState**: Fallback to full source text.
+* **Verification Manifests**: Every prompt includes a manifest describing exactly how each context target was resolved, ensuring the agent knows its "ground truth" boundaries.
 
-### **Layer 3: The Transport Layer (MCP Server)**
+### **Layer 4: Self-Orchestrating MCP Server (The Gateway)**
 
-Jitsu exposes its capabilities to IDE agents via a standard Model Context Protocol interface.
+The top layer exposes Jitsu to IDEs via MCP and handles the autonomous execution loop.
 
-* `jitsu_get_next_phase()`: Retrieves the next compiled JIT directive from the orchestrator queue.
-* `jitsu_report_status()`: Submits a `PhaseReport` containing the outcome and verification output.
-* `jitsu_request_context()`: Enables **Progressive Disclosure**. Agents can call this mid-task to resolve any unforeseen dependencies or explore the codebase on-demand without manual searching.
+* **Planning & Execution**: Tools like `jitsu_get_planning_context` and `jitsu_submit_epic` allow agents to gather repository intelligence and queue their own future phases.
+* **Managed Queue**: A robust, stateful queue handles the sequence of tasks, ensuring the agent remains focused on one atomic phase at a time.
+* **Just-based Git Lifecycle**: Destructive operations are delegated to `just` recipes (`just commit`, `just sync`), providing a controlled security boundary for repository changes.
 
 ---
 
-## **The Standard Agent Workflow**
+## **The Autonomous Workflow Loop**
 
-1. **Pull**: Call `jitsu_get_next_phase()` to receive the current objective and initial context.
-2. **Resolve**: If the initial context is insufficient, call `jitsu_request_context()` to drill down into specific files or modules.
-3. **Code**: Implement changes based strictly on the directive's instructions and anti-patterns.
-4. **Verify**: Run the `verification_commands` provided in the directive to ensure correctness.
-5. **Status**: Call `jitsu_report_status()` to conclude the phase and allow the orchestrator to queue the next task.
+1. **Plan**: Use `jitsu_get_planning_context()` to understand the repo and rules.
+2. **Submit**: Use `jitsu_submit_epic()` to queue the planned work phases.
+3. **Pull**: Call `jitsu_get_next_phase()` to receive the first objective.
+4. **Execute**: Modify the code as directed. Use `jitsu_request_context()` for missing info.
+5. **Verify**: Run `just verify` to ensure tests, linting, and types are passing.
+6. **Commit**: Use `jitsu_git_commit` to stage and commit changes.
+7. **Report**: Call `jitsu_report_status()` to mark the phase as successful and move to the next.
+
+```mermaid
+graph TD
+    A[get_planning_context] --> B[Generate Plan]
+    B --> C[submit_epic]
+    C --> D[get_next_phase]
+    D --> E[Execution & Request Context]
+    E --> F[just verify]
+    F --> G[git_commit]
+    G --> H[report_status]
+    H --> D
+```
