@@ -8,6 +8,9 @@ from pathlib import Path
 
 import dotenv
 import instructor
+import openai
+import typer
+from instructor.core.exceptions import InstructorRetryException
 from openai import OpenAI
 
 from jitsu.models.core import AgentDirective
@@ -108,6 +111,20 @@ class JitsuExecutor:
                     max_retries + 1,
                 )
 
+            except openai.APIStatusError as e:
+                typer.secho(
+                    f"\n❌ Execution API Error [{e.status_code}]: {e.message}",
+                    fg=typer.colors.RED,
+                    err=True,
+                )
+                return False
+            except InstructorRetryException:
+                typer.secho(
+                    "\n❌ Executor Error: Failed to generate valid schema.",
+                    fg=typer.colors.RED,
+                    err=True,
+                )
+                return False
             except Exception as e:
                 logger.exception("Error during execution step")
                 last_error = f"Execution error: {e!s}"

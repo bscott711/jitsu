@@ -1,0 +1,54 @@
+[
+  {
+    "epic_id": "epic-24-executor-errors",
+    "phase_id": "phase-01-handle-api-errors",
+    "module_scope": "src/jitsu/core",
+    "instructions": "Update `JitsuExecutor.execute_directive` in `src/jitsu/core/executor.py` to gracefully handle API and schema errors. 1) Import `openai` and `typer`. 2) Above the generic `except Exception as e:` block, add an `except openai.APIStatusError as e:` block that prints `\\n❌ Execution API Error [{e.status_code}]: {e.message}` using `typer.secho(..., fg=typer.colors.RED, err=True)` and immediately returns `False`. 3) Add an `except instructor.InstructorRetryException as e:` block that prints `\\n❌ Executor Error: Failed to generate valid schema.` using `typer.secho(..., fg=typer.colors.RED, err=True)` and immediately returns `False`.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not allow API errors (like 403 or 429) to trigger the code-correction retry loop."
+    ],
+    "completion_criteria": [
+      "JitsuExecutor catches openai.APIStatusError and instructor.InstructorRetryException specifically, prints a clean Typer error, and fails fast."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-24-executor-errors",
+    "phase_id": "phase-02-test-executor-errors",
+    "module_scope": "tests/core",
+    "instructions": "Update `tests/core/test_executor.py` to add unit tests verifying the new fail-fast error handling in `JitsuExecutor`. Mock `client.chat.completions.create` to raise `openai.APIStatusError` (with a dummy response/message) and `instructor.InstructorRetryException`. Assert that `execute_directive` returns `False` immediately without retrying.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "ast",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not execute real LLM calls in the test suite."
+    ],
+    "completion_criteria": [
+      "Test coverage remains at 100% and tests pass via `just verify`."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

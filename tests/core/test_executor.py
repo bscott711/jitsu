@@ -3,7 +3,9 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import openai
 import pytest
+from instructor.core.exceptions import InstructorRetryException
 
 from jitsu.core.executor import JitsuExecutor
 from jitsu.models.core import AgentDirective
@@ -151,3 +153,51 @@ def test_executor_llm_exception(mock_directive: AgentDirective) -> None:
 
     assert success is False
     assert mock_client.chat.completions.create.call_count == 4  # noqa: PLR2004
+
+
+def test_executor_openai_api_error(mock_directive: AgentDirective) -> None:
+    """Test that OpenAI API errors cause immediate failure."""
+    mock_client = MagicMock()
+    # Create a mock error response
+    mock_response = MagicMock()
+    mock_response.status_code = 403
+    error = openai.APIStatusError("Limit hit", response=mock_response, body=None)
+    mock_client.chat.completions.create.side_effect = error
+
+    with (
+        patch("jitsu.core.executor.dotenv.load_dotenv"),
+        patch("jitsu.core.executor.os.environ.get", return_value="fake-key"),
+        patch("jitsu.core.executor.OpenAI"),
+        patch("jitsu.core.executor.instructor.from_openai", return_value=mock_client),
+        patch("typer.secho") as mock_secho,
+    ):
+        executor = JitsuExecutor()
+        success = executor.execute_directive(mock_directive, "compiler output")
+
+    assert success is False
+    assert mock_client.chat.completions.create.call_count == 1
+    mock_secho.assert_called_once()
+    assert "Execution API Error [403]" in mock_secho.call_args[0][0]
+
+
+def test_executor_instructor_retry_error(mock_directive: AgentDirective) -> None:
+    """Test that Instructor retry errors cause immediate failure."""
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = InstructorRetryException(
+        "Failed", last_completion=None, n_attempts=3, total_usage=0
+    )
+
+    with (
+        patch("jitsu.core.executor.dotenv.load_dotenv"),
+        patch("jitsu.core.executor.os.environ.get", return_value="fake-key"),
+        patch("jitsu.core.executor.OpenAI"),
+        patch("jitsu.core.executor.instructor.from_openai", return_value=mock_client),
+        patch("typer.secho") as mock_secho,
+    ):
+        executor = JitsuExecutor()
+        success = executor.execute_directive(mock_directive, "compiler output")
+
+    assert success is False
+    assert mock_client.chat.completions.create.call_count == 1
+    mock_secho.assert_called_once()
+    assert "Failed to generate valid schema" in mock_secho.call_args[0][0]
