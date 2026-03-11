@@ -1,6 +1,5 @@
 """Command Line Interface main entry point for Jitsu."""
 
-import importlib.resources
 import sys
 from functools import partial
 from pathlib import Path
@@ -13,7 +12,9 @@ from pydantic import TypeAdapter, ValidationError
 from jitsu.core.orchestrator import JitsuOrchestrator
 from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective
+from jitsu.server.client import send_payload
 from jitsu.server.mcp_server import run_server, state_manager
+from jitsu.templates.loader import TemplateLoader
 
 app = typer.Typer(
     name="jitsu",
@@ -106,7 +107,7 @@ def serve(
             err=True,
         )
         sys.exit(0)
-    except Exception as e:  # noqa: BLE001
+    except (OSError, RuntimeError) as e:
         typer.secho(
             f"\n❌ Fatal error during server execution: {e}",
             fg=typer.colors.RED,
@@ -123,17 +124,9 @@ def init() -> None:
 
     # Load templates from resources
     try:
-        rules_template = (
-            importlib.resources.files("jitsu.templates")
-            .joinpath("rules.md")
-            .read_text(encoding="utf-8")
-        )
-        justfile_template = (
-            importlib.resources.files("jitsu.templates")
-            .joinpath("justfile.tmpl")
-            .read_text(encoding="utf-8")
-        )
-    except Exception as e:
+        rules_template = TemplateLoader.load_template("rules.md")
+        justfile_template = TemplateLoader.load_template("justfile.tmpl")
+    except OSError as e:
         typer.secho(
             f"❌ Failed to load templates from resources: {e}", fg=typer.colors.RED, err=True
         )
@@ -187,26 +180,6 @@ def init() -> None:
     )
 
 
-async def _send_payload(payload: bytes, port: int = 8765) -> str:
-    """Async helper to send the payload over TCP and await response."""
-    try:
-        async with await anyio.connect_tcp("127.0.0.1", port) as client:
-            await client.send(payload)
-            await client.send_eof()  # Signal we are done writing so server can process
-
-            try:
-                response_data = await client.receive()
-                return response_data.decode("utf-8").strip()
-            except anyio.EndOfStream:
-                return "ERR: Server closed connection without responding."
-
-    except ConnectionRefusedError as e:
-        typer.secho(
-            "❌ Connection refused. Is the Jitsu server running?", fg=typer.colors.RED, err=True
-        )
-        raise typer.Exit(1) from e
-
-
 @app.command()
 def submit(
     epic: Annotated[
@@ -217,7 +190,7 @@ def submit(
     storage = EpicStorage()
     try:
         payload = storage.read_bytes(epic)
-        response = anyio.run(_send_payload, payload)
+        response = anyio.run(send_payload, payload)
 
         if response.startswith("ACK"):
             typer.secho(f"✅ {response}", fg=typer.colors.GREEN, err=True)
@@ -242,14 +215,14 @@ def submit(
 @queue_app.command("ls")
 def queue_ls() -> None:
     """List all pending phases in the Jitsu queue."""
-    response = anyio.run(_send_payload, b"QUEUE_LS")
+    response = anyio.run(send_payload, b"QUEUE_LS")
     typer.echo(response)
 
 
 @queue_app.command("clear")
 def queue_clear() -> None:
     """Clear all pending phases from the Jitsu queue."""
-    response = anyio.run(_send_payload, b"QUEUE_CLEAR")
+    response = anyio.run(send_payload, b"QUEUE_CLEAR")
     if response.startswith("ACK"):
         typer.secho(f"✅ {response}", fg=typer.colors.GREEN, err=True)
     else:

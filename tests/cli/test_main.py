@@ -10,14 +10,11 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from jitsu.cli.main import (
-    _send_payload,
-    app,
-    main,
-)
+from jitsu.cli.main import app, main
 from jitsu.core.orchestrator import JitsuOrchestrator
 from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective
+from jitsu.server.client import send_payload
 from jitsu.server.mcp_server import state_manager
 
 runner = CliRunner()
@@ -54,7 +51,7 @@ def test_cli_serve_keyboard_interrupt(mock_run: MagicMock) -> None:
     assert "Shutting down Jitsu MCP Server" in result.output
 
 
-@patch("jitsu.cli.main.anyio.run", side_effect=Exception("Test mock error"))
+@patch("jitsu.cli.main.anyio.run", side_effect=RuntimeError("Test mock error"))
 def test_cli_serve_exception(mock_run: MagicMock) -> None:
     """Test the CLI handles generic exceptions."""
     result = runner.invoke(app, ["serve"])
@@ -197,13 +194,13 @@ def test_cli_submit_failure(mock_read: MagicMock, tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_send_payload_success() -> None:
-    """Test internal _send_payload helper on success."""
+    """Test internal send_payload helper on success."""
     mock_client = AsyncMock()
     mock_client.receive.return_value = b"ACK: Queued 1 phase(s)."
 
-    with patch("jitsu.cli.main.anyio.connect_tcp", (mock_connect := AsyncMock())):
+    with patch("jitsu.server.client.anyio.connect_tcp", (mock_connect := AsyncMock())):
         mock_connect.return_value.__aenter__.return_value = mock_client
-        response = await _send_payload(b"test", port=1234)
+        response = await send_payload(b"test", port=1234)
 
         mock_connect.assert_called_once_with("127.0.0.1", 1234)
         mock_client.send.assert_called_once_with(b"test")
@@ -213,23 +210,23 @@ async def test_send_payload_success() -> None:
 
 @pytest.mark.asyncio
 async def test_send_payload_end_of_stream() -> None:
-    """Test internal _send_payload helper handles EOF cleanly."""
+    """Test internal send_payload helper handles EOF cleanly."""
     mock_client = AsyncMock()
     mock_client.receive.side_effect = anyio.EndOfStream()
 
-    with patch("jitsu.cli.main.anyio.connect_tcp", (mock_connect := AsyncMock())):
+    with patch("jitsu.server.client.anyio.connect_tcp", (mock_connect := AsyncMock())):
         mock_connect.return_value.__aenter__.return_value = mock_client
-        response = await _send_payload(b"test", port=1234)
+        response = await send_payload(b"test", port=1234)
 
         assert response == "ERR: Server closed connection without responding."
 
 
 @pytest.mark.asyncio
 async def test_send_payload_connection_refused() -> None:
-    """Test _send_payload when the server connection is refused."""
-    with patch("jitsu.cli.main.anyio.connect_tcp", side_effect=ConnectionRefusedError()):
+    """Test send_payload when the server connection is refused."""
+    with patch("jitsu.server.client.anyio.connect_tcp", side_effect=ConnectionRefusedError()):
         with pytest.raises(typer.Exit) as exc:
-            await _send_payload(b"test")
+            await send_payload(b"test")
         assert exc.value.exit_code == 1
 
 
@@ -455,7 +452,9 @@ def test_cli_init_resource_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     """Test handling of template loading failure."""
     monkeypatch.chdir(tmp_path)
 
-    with patch("jitsu.cli.main.importlib.resources.files", side_effect=Exception("Resource error")):
+    with patch(
+        "jitsu.cli.main.TemplateLoader.load_template", side_effect=OSError("Resource error")
+    ):
         result = runner.invoke(app, ["init"])
 
     assert result.exit_code == 1
