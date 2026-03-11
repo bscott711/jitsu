@@ -22,6 +22,7 @@ from jitsu.cli.main import (
     app,
     main,
 )
+from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective
 from jitsu.server.mcp_server import state_manager
 
@@ -118,7 +119,7 @@ def test_cli_serve_with_unreadable_epic(mock_run: MagicMock, tmp_path: Path) -> 
     epic_file.touch()
 
     # Force a read error using our mock
-    with patch.object(Path, "read_text", side_effect=OSError("Access Denied")):
+    with patch.object(EpicStorage, "read_text", side_effect=OSError("Access Denied")):
         result = runner.invoke(app, ["serve", "--epic", str(epic_file)])
 
     assert result.exit_code == 1
@@ -187,7 +188,7 @@ def test_cli_submit_server_error(
     mock_run.assert_called_once()
 
 
-@patch.object(Path, "read_bytes", side_effect=OSError("Read error"))
+@patch.object(EpicStorage, "read_bytes", side_effect=OSError("Read error"))
 def test_cli_submit_failure(mock_read: MagicMock, tmp_path: Path) -> None:
     """Test epic submission file read failure handling."""
     epic_file = tmp_path / "epic.json"
@@ -547,8 +548,8 @@ def test_cli_run_os_error(
 
     mock_run.side_effect = run_side_effect
 
-    # We patch Path.read_bytes to raise OSError
-    with patch.object(Path, "read_bytes", side_effect=OSError("Read error")):
+    # We patch EpicStorage.read_bytes to raise OSError
+    with patch.object(EpicStorage, "read_bytes", side_effect=OSError("Read error")):
         result = runner.invoke(app, ["run", "Build something"])
 
     assert result.exit_code == 1
@@ -774,7 +775,7 @@ def test_cli_auto_resume_os_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     epic_file = tmp_path / "unreadable.json"
     epic_file.touch()
 
-    with patch.object(Path, "read_text", side_effect=OSError("Permission denied")):
+    with patch.object(EpicStorage, "read_text", side_effect=OSError("Permission denied")):
         result = runner.invoke(app, ["auto", "--file", str(epic_file)])
 
     assert result.exit_code == 1
@@ -900,9 +901,9 @@ async def test_finalize_epic_success(tmp_path: Path) -> None:
     out_file.write_text("[]", encoding="utf-8")
     completed_dir = tmp_path / "epics" / "completed"
 
-    # monkeypatch cwd to tmp_path
-    with patch("pathlib.Path.cwd", return_value=tmp_path):
-        await _finalize_epic(out_file)
+    # Inject a storage instance rooted at tmp_path so no cwd patch is needed
+    storage = EpicStorage(base_dir=tmp_path)
+    await _finalize_epic(out_file, storage=storage)
 
     assert (completed_dir / "epic.json").exists()
     assert not out_file.exists()

@@ -16,6 +16,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from jitsu.core.compiler import ContextCompiler
 from jitsu.core.executor import JitsuExecutor
+from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective
 from jitsu.server.mcp_server import run_server, state_manager
 
@@ -56,8 +57,9 @@ def serve(
             fg=typer.colors.CYAN,
             err=True,
         )
+        storage = EpicStorage()
         try:
-            content = epic.read_text(encoding="utf-8")
+            content = storage.read_text(epic)
             adapter = TypeAdapter(list[AgentDirective])
             directives = adapter.validate_json(content)
 
@@ -217,20 +219,19 @@ def submit(
     ],
 ) -> None:
     """Submit a new epic payload to a running Jitsu server."""
+    storage = EpicStorage()
     try:
-        payload = epic.read_bytes()
+        payload = storage.read_bytes(epic)
         response = anyio.run(_send_payload, payload)
 
         if response.startswith("ACK"):
             typer.secho(f"✅ {response}", fg=typer.colors.GREEN, err=True)
 
             # Auto-archive the epic file
-            completed_dir = Path.cwd() / "epics" / "completed"
-            completed_dir.mkdir(parents=True, exist_ok=True)
-            epic.rename(completed_dir / epic.name)
+            dest = storage.archive(epic)
 
             typer.secho(
-                f"📂 Epic archived to {completed_dir.relative_to(Path.cwd())}/{epic.name}",
+                f"📂 Epic archived to {storage.completed_rel(dest)}",
                 fg=typer.colors.CYAN,
                 err=True,
             )
@@ -456,20 +457,19 @@ def run(
     )
 
     typer.secho("📡 Step 2: Submitting plan to server...", fg=typer.colors.CYAN, err=True)
+    storage = EpicStorage()
     try:
-        payload = out.read_bytes()
+        payload = storage.read_bytes(out)
         response = anyio.run(_send_payload, payload)
 
         if response.startswith("ACK"):
             typer.secho(f"✅ {response}", fg=typer.colors.GREEN, bold=True, err=True)
 
             # Auto-archive the epic file
-            completed_dir = Path.cwd() / "epics" / "completed"
-            completed_dir.mkdir(parents=True, exist_ok=True)
-            out.rename(completed_dir / out.name)
+            dest = storage.archive(out)
 
             typer.secho(
-                f"📂 Pipeline complete. Epic archived to {completed_dir.relative_to(Path.cwd())}/{out.name}",
+                f"📂 Pipeline complete. Epic archived to {storage.completed_rel(dest)}",
                 fg=typer.colors.CYAN,
                 err=True,
             )
@@ -533,15 +533,13 @@ async def _execute_phases(
             raise typer.Exit(1)
 
 
-async def _finalize_epic(out: Path) -> None:
+async def _finalize_epic(out: Path, storage: EpicStorage | None = None) -> None:
     """Archive the epic file to the completed directory."""
-    completed_dir = Path.cwd() / "epics" / "completed"
-    # mkdir is relatively fast, but for strictness:
-    await run_sync(lambda: completed_dir.mkdir(parents=True, exist_ok=True))
-    await run_sync(out.rename, completed_dir / out.name)
+    _storage = storage or EpicStorage()
+    dest = await run_sync(_storage.archive, out)
 
     typer.secho(
-        f"\n✨ Autonomous execution complete! Epic archived to {completed_dir.relative_to(Path.cwd())}/{out.name}",
+        f"\n✨ Autonomous execution complete! Epic archived to {_storage.completed_rel(dest)}/{out.name}",
         fg=typer.colors.GREEN,
         bold=True,
         err=True,
@@ -625,8 +623,9 @@ def auto(
             fg=typer.colors.CYAN,
             err=True,
         )
+        storage = EpicStorage()
         try:
-            content = file.read_text(encoding="utf-8")
+            content = storage.read_text(file)
             adapter = TypeAdapter(list[AgentDirective])
             directives = adapter.validate_json(content)
             out = file
