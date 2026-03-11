@@ -8,6 +8,7 @@ from jitsu.providers import (
     EnvVarProvider,
     FileStateProvider,
     GitProvider,
+    MarkdownASTProvider,
     PydanticProvider,
 )
 from jitsu.utils.logger import get_logger
@@ -26,6 +27,7 @@ class ContextCompiler:
         tree_provider = DirectoryTreeProvider()
         git_provider = GitProvider()
         env_provider = EnvVarProvider()
+        markdown_provider = MarkdownASTProvider()
 
         self._providers: dict[str, BaseProvider] = {
             file_provider.name: file_provider,
@@ -34,6 +36,7 @@ class ContextCompiler:
             tree_provider.name: tree_provider,
             git_provider.name: git_provider,
             env_provider.name: env_provider,
+            markdown_provider.name: markdown_provider,
         }
 
     async def compile_directive(self, directive: AgentDirective) -> str:
@@ -187,4 +190,5 @@ class ContextCompiler:
             "tree": "Visual Tree Structure",
             "git": "Git Repository State",
             "env_var": "Environment Variable",
+            "markdown_ast": "Markdown Structure (AST)",
         }.get(provider_name, "Included")

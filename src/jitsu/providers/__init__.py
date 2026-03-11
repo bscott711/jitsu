@@ -10,6 +10,7 @@ from jitsu.providers.base import BaseProvider
 from jitsu.providers.env import EnvVarProvider
 from jitsu.providers.file import FileStateProvider
 from jitsu.providers.git import GitProvider
+from jitsu.providers.markdown import MarkdownASTProvider
 from jitsu.providers.pydantic import PydanticProvider
 from jitsu.providers.tree import DirectoryTreeProvider
 
@@ -20,5 +21,6 @@ __all__ = [
     "EnvVarProvider",
     "FileStateProvider",
     "GitProvider",
+    "MarkdownASTProvider",
     "PydanticProvider",
 ]
