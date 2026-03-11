@@ -1,0 +1,70 @@
+[
+  {
+    "epic_id": "epic-21-verbose-debugging",
+    "phase_id": "phase-01-cli-verbosity",
+    "module_scope": "src/jitsu/cli",
+    "instructions": "1) Update the `plan` and `run` commands in `src/jitsu/cli/main.py` to accept a `verbose: Annotated[bool, typer.Option('--verbose', '-v', help='Enable verbose debug output.')] = False` parameter. 2) Update `_run_planner` signature to accept `verbose: bool = False` and pass the flag into it from the commands. 3) In `_run_planner`, update the `InstructorRetryException` block to print `e` and `e.__cause__` to stderr. 4) CRITICAL: To avoid Ruff C901 (complexity > 10), extract the exception handling block inside `_run_planner` into a separate helper function (e.g., `_handle_planner_error(e: Exception, verbose: bool)`). 5) Update `tests/cli/test_main.py` to cover the new flag.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not exceed McCabe complexity 10 in any function.",
+      "Do not break existing CLI command signatures; ensure `verbose` defaults to False."
+    ],
+    "completion_criteria": [
+      "The `--verbose` flag is added to `plan` and `run`.",
+      "Error handling is extracted to keep `_run_planner` complexity low.",
+      "CLI tests pass with 100% coverage and zero Ruff errors."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-21-verbose-debugging",
+    "phase_id": "phase-02-planner-verbosity",
+    "module_scope": "src/jitsu/core",
+    "instructions": "1) Update `JitsuPlanner.generate_plan` in `src/jitsu/core/planner.py` to accept a `verbose: bool = False` argument. Make sure `_run_planner` passes this in. 2) Inside `generate_plan`, if `verbose` is True, use `typer.secho(..., err=True)` to print the JSON string of the `EpicBlueprint` immediately after Pass 1 completes. 3) Similarly, if `verbose` is True, print the JSON string of each `AgentDirective` immediately after it is generated in Pass 2. 4) Update `tests/core/test_planner.py` to pass the `verbose` argument in tests and maintain 100% test coverage.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "ast",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not use standard `print()`; always use `typer.secho(..., err=True)` to respect the stdio boundary."
+    ],
+    "completion_criteria": [
+      "`generate_plan` accepts `verbose=True` and outputs JSON dumps of the models to stderr.",
+      "Planner tests pass with 100% coverage."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

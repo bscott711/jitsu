@@ -257,7 +257,56 @@ def queue_clear() -> None:
         raise typer.Exit(1)
 
 
-async def _run_planner(objective: str, files: list[str], out: Path, model: str) -> None:
+def _handle_planner_error(e: Exception, verbose: bool = False) -> None:  # noqa: FBT001, FBT002
+    """Handle planner errors and exit the CLI."""
+    if isinstance(e, RuntimeError):
+        typer.secho(f"\n❌ Planner Error: {e}", fg=typer.colors.RED, bold=True, err=True)
+        if "OPENROUTER_API_KEY" in str(e):
+            typer.secho(
+                "💡 Tip: Ensure OPENROUTER_API_KEY is set in your environment or .env file.",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
+        raise typer.Exit(1) from None
+
+    if isinstance(e, openai.APIStatusError):
+        typer.secho(
+            f"\n❌ OpenRouter API Error [{e.status_code}]: {e.message}",
+            fg=typer.colors.RED,
+            bold=True,
+            err=True,
+        )
+        raise typer.Exit(1) from None
+
+    if isinstance(e, InstructorRetryException):
+        typer.secho(
+            "\n❌ Planner Error: The model failed to generate valid JSON matching the Jitsu schema after multiple retries. Try a larger model.",
+            fg=typer.colors.RED,
+            bold=True,
+            err=True,
+        )
+        if verbose:
+            typer.secho(f"\nDEBUG: {e}", fg=typer.colors.YELLOW, err=True)
+            if e.__cause__:
+                typer.secho(f"CAUSE: {e.__cause__}", fg=typer.colors.YELLOW, err=True)
+        raise typer.Exit(1) from None
+
+    # Fallback for unexpected exceptions
+    typer.secho(f"\n❌ Unexpected Error: {e}", fg=typer.colors.RED, bold=True, err=True)
+    if verbose:
+        typer.secho(f"\nDEBUG: {e}", fg=typer.colors.YELLOW, err=True)
+        if hasattr(e, "__cause__") and e.__cause__:
+            typer.secho(f"CAUSE: {e.__cause__}", fg=typer.colors.YELLOW, err=True)
+    raise typer.Exit(1) from None
+
+
+async def _run_planner(
+    objective: str,
+    files: list[str],
+    out: Path,
+    model: str,
+    verbose: bool = False,  # noqa: FBT001, FBT002
+) -> None:
     """Async helper to run the planner and save the output."""
     from jitsu.core.planner import JitsuPlanner  # noqa: PLC0415
 
@@ -288,34 +337,8 @@ async def _run_planner(objective: str, files: list[str], out: Path, model: str) 
             else:
                 raise
 
-    except RuntimeError as e:
-        typer.secho(f"\n❌ Planner Error: {e}", fg=typer.colors.RED, bold=True, err=True)
-        if "OPENROUTER_API_KEY" in str(e):
-            typer.secho(
-                "💡 Tip: Ensure OPENROUTER_API_KEY is set in your environment or .env file.",
-                fg=typer.colors.YELLOW,
-                err=True,
-            )
-        raise typer.Exit(1) from None
-    except openai.APIStatusError as e:
-        typer.secho(
-            f"\n❌ OpenRouter API Error [{e.status_code}]: {e.message}",
-            fg=typer.colors.RED,
-            bold=True,
-            err=True,
-        )
-        raise typer.Exit(1) from None
-    except InstructorRetryException:
-        typer.secho(
-            "\n❌ Planner Error: The model failed to generate valid JSON matching the Jitsu schema after multiple retries. Try a larger model.",
-            fg=typer.colors.RED,
-            bold=True,
-            err=True,
-        )
-        raise typer.Exit(1) from None
     except Exception as e:  # noqa: BLE001
-        typer.secho(f"\n❌ Unexpected Error: {e}", fg=typer.colors.RED, bold=True, err=True)
-        raise typer.Exit(1) from None
+        _handle_planner_error(e, verbose=verbose)
 
     if not directives or not planner:
         typer.secho(
@@ -329,6 +352,7 @@ async def _run_planner(objective: str, files: list[str], out: Path, model: str) 
 @app.command()
 def plan(
     objective: Annotated[str, typer.Argument(help="The natural language objective for the epic.")],
+    *,
     files: Annotated[
         list[Path] | None,
         typer.Option(
@@ -349,6 +373,9 @@ def plan(
             help="The LLM model to use via OpenRouter.",
         ),
     ] = "qwen/qwen-3-coder-480b-instruct:free",
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Enable verbose debug output.")
+    ] = False,
 ) -> None:
     """Generate a Jitsu plan from a natural language objective."""
     file_strings = [str(f) for f in files] if files else []
@@ -362,7 +389,7 @@ def plan(
 
     with typer.progressbar(length=100, label="Pondering...") as progress:
         # We run the planner. (Note: progress bar is just visual UX here since LLM calls are opaque in duration)
-        anyio.run(_run_planner, objective, file_strings, out, model)
+        anyio.run(_run_planner, objective, file_strings, out, model, verbose)
         progress.update(100)
 
     typer.secho(
@@ -376,6 +403,7 @@ def plan(
 @app.command()
 def run(
     objective: Annotated[str, typer.Argument(help="The natural language objective for the epic.")],
+    *,
     files: Annotated[
         list[Path] | None,
         typer.Option(
@@ -393,6 +421,9 @@ def run(
             help="The LLM model to use via OpenRouter.",
         ),
     ] = "meta-llama/llama-3.3-70b-instruct:free",
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Enable verbose debug output.")
+    ] = False,
 ) -> None:
     """Generate a Jitsu plan and immediately submit it to the server."""
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -408,7 +439,7 @@ def run(
     typer.secho(f"🧠 Step 1: Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True)
 
     with typer.progressbar(length=100, label="Pondering...") as progress:
-        anyio.run(_run_planner, objective, file_strings, out, model)
+        anyio.run(_run_planner, objective, file_strings, out, model, verbose)
         progress.update(100)
 
     typer.secho(

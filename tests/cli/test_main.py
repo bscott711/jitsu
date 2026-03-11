@@ -380,6 +380,23 @@ def test_cli_plan_instructor_retry_error(mock_generate: AsyncMock, tmp_path: Pat
 
 
 @patch("jitsu.core.planner.JitsuPlanner.generate_plan")
+def test_cli_plan_instructor_retry_error_verbose(mock_generate: AsyncMock, tmp_path: Path) -> None:
+    """Test plan generation includes debug info on Instructor failure with --verbose."""
+    e = InstructorRetryException("mock_failure", n_attempts=3, total_usage=0)
+    cause = ValueError("Underlying cause")
+    e.__cause__ = cause
+
+    mock_generate.side_effect = e
+    out_file = tmp_path / "epic.json"
+
+    result = runner.invoke(app, ["plan", "test feature", "--out", str(out_file), "--verbose"])
+
+    assert result.exit_code == 1
+    assert "DEBUG: mock_failure" in result.output
+    assert "CAUSE: Underlying cause" in result.output
+
+
+@patch("jitsu.core.planner.JitsuPlanner.generate_plan")
 def test_cli_plan_unexpected_exception(mock_generate: AsyncMock, tmp_path: Path) -> None:
     """Test plan generation safely catches unexpected blind exceptions."""
     # Use ValueError instead of a raw Exception so Pytest/AnyIO propagates it perfectly
@@ -390,6 +407,23 @@ def test_cli_plan_unexpected_exception(mock_generate: AsyncMock, tmp_path: Path)
 
     assert result.exit_code == 1
     assert "Unexpected Error:" in result.output
+
+
+@patch("jitsu.core.planner.JitsuPlanner.generate_plan")
+def test_cli_plan_unexpected_exception_verbose(mock_generate: AsyncMock, tmp_path: Path) -> None:
+    """Test plan generation includes debug info on unexpected failure with --verbose."""
+    cause = ValueError("Cosmic ray")
+    e = ValueError("A wild cosmic ray flipped a bit.")
+    e.__cause__ = cause
+
+    mock_generate.side_effect = e
+    out_file = tmp_path / "epic.json"
+
+    result = runner.invoke(app, ["plan", "test feature", "--out", str(out_file), "-v"])
+
+    assert result.exit_code == 1
+    assert "DEBUG: A wild cosmic ray flipped a bit." in result.output
+    assert "CAUSE: Cosmic ray" in result.output
 
 
 @patch("jitsu.cli.main.anyio.run")
@@ -446,6 +480,10 @@ def test_cli_run_success(
     assert "Submitting plan to server" in result.output
     assert "ACK: Queued 1 phase(s)." in result.output
     assert "Pipeline complete. Epic archived" in result.output
+
+    # Verify verbose flag is accepted
+    result_v = runner.invoke(app, ["run", "Build something", "-v"])
+    assert result_v.exit_code == 0
 
 
 @patch("jitsu.cli.main.anyio.run")
