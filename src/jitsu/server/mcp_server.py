@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from jitsu.core.compiler import ContextCompiler
 from jitsu.core.state import JitsuStateManager
-from jitsu.models.core import PhaseReport
+from jitsu.models.core import PhaseReport, PhaseStatus
 from jitsu.providers import (
     ASTProvider,
     DirectoryTreeProvider,
@@ -77,6 +77,14 @@ async def handle_list_tools() -> list[types.Tool]:
                 "required": ["target_identifier"],
             },
         ),
+        types.Tool(
+            name="jitsu_inspect_queue",
+            description="Inspect the current queue of pending phases.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
     ]
 
 
@@ -91,6 +99,8 @@ async def handle_call_tool(
         return _handle_report_status(arguments)
     if name == "jitsu_request_context":
         return await _handle_request_context(arguments)
+    if name == "jitsu_inspect_queue":
+        return _handle_inspect_queue()
 
     msg = f"Unknown tool: {name}"
     raise ValueError(msg)
@@ -113,11 +123,29 @@ def _handle_report_status(arguments: dict[str, object] | None) -> list[types.Tex
 
     try:
         report = PhaseReport.model_validate(arguments)
-        state_manager.update_phase_status(report)
-        msg = f"Successfully recorded status {report.status} for phase {report.phase_id}."
+        epic_id = state_manager.update_phase_status(report)
+
+        if report.status == PhaseStatus.SUCCESS and epic_id:
+            count = state_manager.get_remaining_count(epic_id)
+            msg = f"ACK. {count} phases remaining."
+        else:
+            msg = f"Successfully recorded status {report.status} for phase {report.phase_id}."
+
         return [types.TextContent(type="text", text=msg)]
     except ValidationError as e:
         return [types.TextContent(type="text", text=f"Validation Error: {e!s}")]
+
+
+def _handle_inspect_queue() -> list[types.TextContent]:
+    """Handle the 'inspect_queue' tool request."""
+    pending = state_manager.get_pending_phases()
+    if not pending:
+        return [types.TextContent(type="text", text="The queue is currently empty.")]
+
+    lines = ["Current Queue:"]
+    lines.extend([f"- Phase: {item['phase_id']} (Epic: {item['epic_id']})" for item in pending])
+
+    return [types.TextContent(type="text", text="\n".join(lines))]
 
 
 async def _handle_request_context(arguments: dict[str, object] | None) -> list[types.TextContent]:

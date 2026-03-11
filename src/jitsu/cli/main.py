@@ -19,6 +19,9 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
+queue_app = typer.Typer(help="Manage the Jitsu execution queue.")
+app.add_typer(queue_app, name="queue")
+
 
 @app.callback()
 def main_callback() -> None:
@@ -150,6 +153,24 @@ def submit(
     except OSError as e:
         typer.secho(f"❌ Failed to read epic file: {e}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from e
+
+
+@queue_app.command("ls")
+def queue_ls() -> None:
+    """List all pending phases in the Jitsu queue."""
+    response = anyio.run(_send_payload, b"QUEUE_LS")
+    typer.echo(response)
+
+
+@queue_app.command("clear")
+def queue_clear() -> None:
+    """Clear all pending phases from the Jitsu queue."""
+    response = anyio.run(_send_payload, b"QUEUE_CLEAR")
+    if response.startswith("ACK"):
+        typer.secho(f"✅ {response}", fg=typer.colors.GREEN, err=True)
+    else:
+        typer.secho(f"❌ Server Error: {response}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
 
 
 async def _run_planner(objective: str, files: list[str], out: Path, model: str) -> None:

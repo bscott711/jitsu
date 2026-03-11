@@ -10,6 +10,7 @@ class JitsuStateManager:
         """Initialize an empty state manager."""
         self._queue: list[AgentDirective] = []
         self._reports: list[PhaseReport] = []
+        self._phase_to_epic: dict[str, str] = {}
 
     def queue_directive(self, directive: AgentDirective) -> None:
         """
@@ -20,6 +21,7 @@ class JitsuStateManager:
 
         """
         self._queue.append(directive)
+        self._phase_to_epic[directive.phase_id] = directive.epic_id
 
     def get_next_directive(self) -> AgentDirective | None:
         """
@@ -33,15 +35,47 @@ class JitsuStateManager:
             return None
         return self._queue.pop(0)
 
-    def update_phase_status(self, report: PhaseReport) -> None:
+    def update_phase_status(self, report: PhaseReport) -> str | None:
         """
         Record the outcome of a completed phase.
 
         Args:
             report: The phase report submitted by the agent.
 
+        Returns:
+            The epic ID associated with the phase, if known.
+
         """
         self._reports.append(report)
+        return self._phase_to_epic.get(report.phase_id)
+
+    def get_remaining_count(self, epic_id: str) -> int:
+        """
+        Return the number of remaining phases in the queue for a specific epic.
+
+        Args:
+            epic_id: The ID of the epic to filter by.
+
+        Returns:
+            int: The count of pending phases for that epic.
+
+        """
+        return sum(1 for d in self._queue if d.epic_id == epic_id)
+
+    def get_pending_phases(self) -> list[dict[str, str]]:
+        """
+        Return a list of all pending phases in the queue.
+
+        Returns:
+            list[dict[str, str]]: A list of dicts with phase_id and epic_id.
+
+        """
+        return [{"phase_id": d.phase_id, "epic_id": d.epic_id} for d in self._queue]
+
+    def clear_queue(self) -> None:
+        """Clear all pending directives from the queue."""
+        self._queue.clear()
+        self._phase_to_epic.clear()
 
     @property
     def pending_count(self) -> int:

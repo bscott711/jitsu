@@ -1,0 +1,59 @@
+[
+  {
+    "epic_id": "epic-14-file-lifecycle",
+    "phase_id": "phase-01-auto-archive",
+    "module_scope": "src/jitsu/cli",
+    "instructions": "Update the `submit` command in `src/jitsu/cli/main.py`. When a payload is successfully sent and the server responds with an 'ACK' string, use `pathlib` to automatically move the submitted epic file to a new `epics/completed/` directory relative to the current working directory. Create the `epics/completed/` directory if it does not exist using `mkdir(parents=True, exist_ok=True)`. Print a success message indicating the file was successfully archived.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not move the file if the server responds with an error (ERR:).",
+      "Do not use `os.system` to move the file."
+    ],
+    "completion_criteria": [
+      "The submitted file is moved to `epics/completed/` upon successful submission.",
+      "The `epics/completed/` directory is created if it does not exist.",
+      "The file is NOT moved if the server returns an error."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-14-file-lifecycle",
+    "phase_id": "phase-02-archive-tests",
+    "module_scope": "tests/cli",
+    "instructions": "Update `tests/cli/test_main.py` to cover the new file archiving logic in the `submit` command. Ensure `test_cli_submit_success` verifies the file is moved to the correct destination and the directory is created. Ensure `test_cli_submit_server_error` verifies the file is NOT moved on a server failure. Maintain 100% statement coverage.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not drop coverage below 100%."
+    ],
+    "completion_criteria": [
+      "Tests cover the file moving logic on success.",
+      "Tests cover the file staying in place on server error.",
+      "Statement coverage for `src/jitsu/cli/main.py` remains at 100%."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

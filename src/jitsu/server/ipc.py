@@ -29,7 +29,22 @@ class IPCServer:
                 if not chunks:
                     return
 
-                payload = b"".join(chunks).decode("utf-8")
+                payload = b"".join(chunks).decode("utf-8").strip()
+
+                if payload == "QUEUE_LS":
+                    pending = self.state_manager.get_pending_phases()
+                    if not pending:
+                        await client.send(b"Queue is empty.")
+                    else:
+                        lines = [f"Phase: {p['phase_id']} (Epic: {p['epic_id']})" for p in pending]
+                        await client.send("\n".join(lines).encode())
+                    return
+
+                if payload == "QUEUE_CLEAR":
+                    self.state_manager.clear_queue()
+                    await client.send(b"ACK. Queue cleared.")
+                    return
+
                 epics_data = json.loads(payload)
                 count = 0
 

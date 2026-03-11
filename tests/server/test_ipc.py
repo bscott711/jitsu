@@ -7,6 +7,7 @@ import pytest
 from anyio.abc import SocketStream
 
 from jitsu.core.state import JitsuStateManager
+from jitsu.models.core import AgentDirective
 from jitsu.server.ipc import IPCServer
 
 
@@ -103,6 +104,61 @@ async def test_ipc_serve(ipc_server: IPCServer) -> None:
 
         mock_listener.assert_called_once_with(local_host="127.0.0.1", local_port=ipc_server.port)
         mock_server.serve.assert_called_once_with(ipc_server.handle_client)
+
+
+@pytest.mark.asyncio
+async def test_handle_client_queue_ls(
+    ipc_server: IPCServer, state_manager: JitsuStateManager
+) -> None:
+    """Test the QUEUE_LS command."""
+    directive_data = {
+        "epic_id": "test-epic",
+        "phase_id": "phase-1",
+        "module_scope": "test",
+        "instructions": "do something",
+    }
+    state_manager.queue_directive(AgentDirective.model_validate(directive_data))
+
+    mock_client = AsyncMock(spec=SocketStream)
+    mock_client.__aiter__.return_value = [b"QUEUE_LS"]
+
+    await ipc_server.handle_client(mock_client)
+
+    mock_client.send.assert_called_once()
+    response = mock_client.send.call_args[0][0]
+    assert b"Phase: phase-1 (Epic: test-epic)" in response
+
+
+@pytest.mark.asyncio
+async def test_handle_client_queue_ls_empty(ipc_server: IPCServer) -> None:
+    """Test QUEUE_LS command on empty queue."""
+    mock_client = AsyncMock(spec=SocketStream)
+    mock_client.__aiter__.return_value = [b"QUEUE_LS"]
+
+    await ipc_server.handle_client(mock_client)
+
+    mock_client.send.assert_called_once()
+    assert b"Queue is empty." in mock_client.send.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_handle_client_queue_clear(
+    ipc_server: IPCServer, state_manager: JitsuStateManager
+) -> None:
+    """Test the QUEUE_CLEAR command."""
+    state_manager.queue_directive(
+        AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    )
+    assert state_manager.pending_count == 1
+
+    mock_client = AsyncMock(spec=SocketStream)
+    mock_client.__aiter__.return_value = [b"QUEUE_CLEAR"]
+
+    await ipc_server.handle_client(mock_client)
+
+    mock_client.send.assert_called_once()
+    assert b"ACK. Queue cleared." in mock_client.send.call_args[0][0]
+    assert state_manager.pending_count == 0
 
 
 @pytest.mark.asyncio

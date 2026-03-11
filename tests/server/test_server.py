@@ -10,7 +10,7 @@ from mcp.types import TextContent
 from jitsu.models.core import AgentDirective
 from jitsu.server.mcp_server import handle_call_tool, handle_list_tools, run_server, state_manager
 
-EXPECTED_TOOL_COUNT = 3
+EXPECTED_TOOL_COUNT = 4
 
 
 @pytest.mark.asyncio
@@ -22,6 +22,7 @@ async def test_list_tools() -> None:
     assert "jitsu_get_next_phase" in names
     assert "jitsu_report_status" in names
     assert "jitsu_request_context" in names
+    assert "jitsu_inspect_queue" in names
 
 
 @pytest.mark.asyncio
@@ -54,12 +55,62 @@ async def test_get_next_phase_with_data() -> None:
 @pytest.mark.asyncio
 async def test_report_status_success() -> None:
     """Test reporting a successful status."""
+    directive = AgentDirective(
+        epic_id="epic-1",
+        phase_id="phase-success",
+        module_scope="src/test",
+        instructions="Test",
+    )
+    state_manager.queue_directive(directive)
+    state_manager.get_next_directive()  # Pop it so it's "running" and remaining=0
+
     result = await handle_call_tool(
-        "jitsu_report_status", {"phase_id": "phase-1", "status": "SUCCESS"}
+        "jitsu_report_status", {"phase_id": "phase-success", "status": "SUCCESS"}
     )
     assert isinstance(result[0], TextContent)
-    assert "Successfully recorded status SUCCESS" in result[0].text
-    assert state_manager.completed_reports[-1].phase_id == "phase-1"
+    assert "ACK. 0 phases remaining." in result[0].text
+    assert state_manager.completed_reports[-1].phase_id == "phase-success"
+
+
+@pytest.mark.asyncio
+async def test_report_status_failed() -> None:
+    """Test reporting a failed status (hits line 132)."""
+    result = await handle_call_tool(
+        "jitsu_report_status", {"phase_id": "phase-fail", "status": "FAILED"}
+    )
+    assert isinstance(result[0], TextContent)
+    assert "Successfully recorded status FAILED" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_inspect_queue_empty() -> None:
+    """Test inspecting an empty queue (hits line 143)."""
+    while state_manager.get_next_directive():
+        pass
+    result = await handle_call_tool("jitsu_inspect_queue", {})
+    assert isinstance(result[0], TextContent)
+    assert "The queue is currently empty." in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_inspect_queue() -> None:
+    """Test inspecting the queue."""
+    # Clear queue first (roughly, by popping)
+    while state_manager.get_next_directive():
+        pass
+
+    directive = AgentDirective(
+        epic_id="epic-inspect",
+        phase_id="phase-inspect",
+        module_scope="src/test",
+        instructions="Test",
+    )
+    state_manager.queue_directive(directive)
+
+    result = await handle_call_tool("jitsu_inspect_queue", {})
+    assert isinstance(result[0], TextContent)
+    assert "phase-inspect" in result[0].text
+    assert "epic-inspect" in result[0].text
 
 
 @pytest.mark.asyncio

@@ -357,3 +357,30 @@ def test_cli_plan_unexpected_exception(mock_generate: AsyncMock, tmp_path: Path)
 
     assert result.exit_code == 1
     assert "Unexpected Error:" in result.output
+
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_queue_ls(mock_run: MagicMock) -> None:
+    """Test the 'jitsu queue ls' command."""
+    mock_run.return_value = "Phase: p1 (Epic: e1)"
+    result = runner.invoke(app, ["queue", "ls"])
+    assert result.exit_code == 0
+    assert "Phase: p1 (Epic: e1)" in result.output
+
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_queue_clear_success(mock_run: MagicMock) -> None:
+    """Test the 'jitsu queue clear' command on success."""
+    mock_run.return_value = "ACK. Queue cleared."
+    result = runner.invoke(app, ["queue", "clear"])
+    assert result.exit_code == 0
+    assert "ACK. Queue cleared." in result.output
+
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_queue_clear_error(mock_run: MagicMock) -> None:
+    """Test the 'jitsu queue clear' command on failure."""
+    mock_run.return_value = "ERR: Server down"
+    result = runner.invoke(app, ["queue", "clear"])
+    assert result.exit_code == 1
+    assert "Server Error: ERR: Server down" in result.output

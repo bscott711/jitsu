@@ -37,14 +37,58 @@ def test_state_manager_update_status() -> None:
     """Test recording phase reports."""
     manager = JitsuStateManager()
 
+    directive = AgentDirective(
+        epic_id="epic-001",
+        phase_id="phase-001",
+        module_scope="src/test",
+        instructions="Test",
+    )
+    manager.queue_directive(directive)
+
     report = PhaseReport(
         phase_id="phase-001",
         status=PhaseStatus.SUCCESS,
         agent_notes="All tests pass.",
     )
 
-    manager.update_phase_status(report)
+    epic_id = manager.update_phase_status(report)
+    assert epic_id == "epic-001"
 
     reports = manager.completed_reports
     assert len(reports) == 1
     assert reports[0] == report
+
+
+def test_state_manager_remaining_count() -> None:
+    """Test correctly calculating remaining phases for an epic."""
+    manager = JitsuStateManager()
+    d1 = AgentDirective(epic_id="epic-1", phase_id="p1", module_scope="s", instructions="i")
+    d2 = AgentDirective(epic_id="epic-1", phase_id="p2", module_scope="s", instructions="i")
+    d3 = AgentDirective(epic_id="epic-2", phase_id="p3", module_scope="s", instructions="i")
+
+    manager.queue_directive(d1)
+    manager.queue_directive(d2)
+    manager.queue_directive(d3)
+
+    assert manager.get_remaining_count("epic-1") == 2  # noqa: PLR2004
+    assert manager.get_remaining_count("epic-2") == 1
+
+    manager.get_next_directive()  # remove p1
+    assert manager.get_remaining_count("epic-1") == 1
+
+
+def test_state_manager_pending_phases() -> None:
+    """Test retrieving list of pending phases."""
+    manager = JitsuStateManager()
+    directive = AgentDirective(
+        epic_id="epic-1",
+        phase_id="phase-1",
+        module_scope="src/test",
+        instructions="Test",
+    )
+    manager.queue_directive(directive)
+
+    pending = manager.get_pending_phases()
+    assert len(pending) == 1
+    assert pending[0]["phase_id"] == "phase-1"
+    assert pending[0]["epic_id"] == "epic-1"
