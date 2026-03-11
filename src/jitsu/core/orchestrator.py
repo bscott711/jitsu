@@ -169,9 +169,7 @@ class JitsuOrchestrator:
 
         """
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        epics_dir = Path.cwd() / "epics" / "current"
-        epics_dir.mkdir(parents=True, exist_ok=True)
-        out = epics_dir / f"epic_{timestamp}.json"
+        out = self._storage.current_dir / f"epic_{timestamp}.json"
 
         typer.secho(
             f"🧠 Step 1: Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True
@@ -180,7 +178,7 @@ class JitsuOrchestrator:
         await self.execute_plan(objective, files, out, model=model, verbose=verbose)
 
         typer.secho(
-            f"✅ Plan successfully generated and saved to {out.relative_to(Path.cwd())}",
+            f"✅ Plan successfully generated and saved to {self._storage.rel_path(out)}",
             fg=typer.colors.GREEN,
             err=True,
         )
@@ -267,9 +265,7 @@ class JitsuOrchestrator:
                 raise typer.Exit(1)
 
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-            epics_dir = Path.cwd() / "epics" / "current"
-            epics_dir.mkdir(parents=True, exist_ok=True)
-            out = epics_dir / f"epic_{timestamp}.json"
+            out = self._storage.current_dir / f"epic_{timestamp}.json"
 
             file_strings = [str(f) for f in context] if context else []
             typer.secho(

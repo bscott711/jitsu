@@ -17,7 +17,7 @@ from jitsu.models.core import AgentDirective
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_execute_phases_success() -> None:
+async def test_orchestrator_execute_phases_success(tmp_path: Path) -> None:
     """Test JitsuOrchestrator.execute_phases on success."""
     mock_compiler = MagicMock()
     mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
@@ -25,7 +25,8 @@ async def test_orchestrator_execute_phases_success() -> None:
     mock_executor.execute_directive.return_value = True
     directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
 
-    orchestrator = JitsuOrchestrator(executor=mock_executor)
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
 
     with (
         patch("shutil.which", return_value="/usr/bin/just"),
@@ -37,7 +38,7 @@ async def test_orchestrator_execute_phases_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_execute_phases_failure() -> None:
+async def test_orchestrator_execute_phases_failure(tmp_path: Path) -> None:
     """Test JitsuOrchestrator.execute_phases when execution fails."""
     mock_compiler = MagicMock()
     mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
@@ -45,7 +46,8 @@ async def test_orchestrator_execute_phases_failure() -> None:
     mock_executor.execute_directive.return_value = False
     directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
 
-    orchestrator = JitsuOrchestrator(executor=mock_executor)
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
 
     with pytest.raises(typer.Exit) as exc:
         await orchestrator.execute_phases([directive], compiler=mock_compiler)
@@ -53,7 +55,7 @@ async def test_orchestrator_execute_phases_failure() -> None:
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_execute_phases_just_missing() -> None:
+async def test_orchestrator_execute_phases_just_missing(tmp_path: Path) -> None:
     """Test JitsuOrchestrator.execute_phases when 'just' is missing."""
     mock_compiler = MagicMock()
     mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
@@ -61,7 +63,8 @@ async def test_orchestrator_execute_phases_just_missing() -> None:
     mock_executor.execute_directive.return_value = True
     directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
 
-    orchestrator = JitsuOrchestrator(executor=mock_executor)
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
 
     with patch("shutil.which", return_value=None):
         with pytest.raises(typer.Exit) as exc:
@@ -85,9 +88,10 @@ async def test_orchestrator_finalize_success(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_run_autonomous_bridge() -> None:
+async def test_orchestrator_run_autonomous_bridge(tmp_path: Path) -> None:
     """Test JitsuOrchestrator.run_autonomous bridges to execute_phases and finalize."""
-    orchestrator = JitsuOrchestrator()
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
 
     with (
         patch.object(orchestrator, "execute_phases", new_callable=AsyncMock) as mock_exec,
@@ -194,18 +198,20 @@ async def test_orchestrator_execute_auto_validation_error(tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_execute_auto_no_objective_or_file() -> None:
+async def test_orchestrator_execute_auto_no_objective_or_file(tmp_path: Path) -> None:
     """Test execute_auto fails if neither objective nor file is provided."""
-    orchestrator = JitsuOrchestrator()
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
     with pytest.raises(typer.Exit) as exc:
         await orchestrator.execute_auto(model="test")
     assert exc.value.exit_code == 1
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_send_payload_failure() -> None:
+async def test_orchestrator_send_payload_failure(tmp_path: Path) -> None:
     """Test _send_payload handles connection refused."""
-    orchestrator = JitsuOrchestrator()
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
     with patch("anyio.connect_tcp", side_effect=ConnectionRefusedError()):
         with pytest.raises(typer.Exit) as exc:
             await orchestrator._send_payload(b"test")  # noqa: SLF001
@@ -213,9 +219,10 @@ async def test_orchestrator_send_payload_failure() -> None:
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_send_payload_eof() -> None:
+async def test_orchestrator_send_payload_eof(tmp_path: Path) -> None:
     """Test _send_payload handles EndOfStream."""
-    orchestrator = JitsuOrchestrator()
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
     mock_client = AsyncMock()
     mock_client.receive.side_effect = anyio.EndOfStream()
 
@@ -233,7 +240,8 @@ async def test_orchestrator_run_plan_success(tmp_path: Path) -> None:
     directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
     mock_planner.generate_plan = AsyncMock(return_value=[directive])
 
-    orchestrator = JitsuOrchestrator(planner=mock_planner)
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(planner=mock_planner, storage=storage)
     out_file = tmp_path / "out.json"
 
     res = await orchestrator.run_plan("test", [], out_file, model="test")
@@ -251,7 +259,8 @@ async def test_orchestrator_run_plan_fallback(tmp_path: Path) -> None:
 
     mock_planner.generate_plan.side_effect = [mock_error, AsyncMock(return_value=[directive])()]
 
-    orchestrator = JitsuOrchestrator(planner=mock_planner)
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(planner=mock_planner, storage=storage)
     out_file = tmp_path / "out.json"
 
     await orchestrator.run_plan("test", [], out_file, model="test")
@@ -265,7 +274,8 @@ async def test_orchestrator_run_plan_planner_failure(tmp_path: Path) -> None:
     mock_planner = MagicMock()
     mock_planner.generate_plan = AsyncMock(return_value=None)
 
-    orchestrator = JitsuOrchestrator(planner=mock_planner)
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(planner=mock_planner, storage=storage)
     out_file = tmp_path / "out.json"
 
     with pytest.raises(typer.Exit) as exc:
@@ -279,7 +289,8 @@ async def test_orchestrator_run_plan_general_exception(tmp_path: Path) -> None:
     mock_planner = MagicMock()
     mock_planner.generate_plan.side_effect = ValueError("fail")
 
-    orchestrator = JitsuOrchestrator(planner=mock_planner)
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(planner=mock_planner, storage=storage)
     out_file = tmp_path / "out.json"
 
     with pytest.raises(typer.Exit) as exc:
@@ -315,7 +326,8 @@ def test_orchestrator_handle_planner_error_runtime() -> None:
 @pytest.mark.asyncio
 async def test_orchestrator_execute_plan_async(tmp_path: Path) -> None:
     """Test execute_plan is async and behaves correctly."""
-    orchestrator = JitsuOrchestrator()
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
     out = tmp_path / "out.json"
     with patch.object(orchestrator, "run_plan", new_callable=AsyncMock) as mock_run:
         mock_run.return_value = ["dummy"]
@@ -336,7 +348,8 @@ async def test_orchestrator_run_plan_on_progress(tmp_path: Path) -> None:
         return_value=[AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")]
     )
 
-    orchestrator = JitsuOrchestrator(planner=mock_planner, on_progress=on_progress)
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(planner=mock_planner, on_progress=on_progress, storage=storage)
     out_file = tmp_path / "out.json"
 
     await orchestrator.run_plan("test", [], out_file, model="test")
@@ -381,7 +394,8 @@ async def test_orchestrator_run_plan_fallback_fail(tmp_path: Path) -> None:
 
     # If starting with gpt-oss-120b and it fails, it should raise immediately
     mock_planner.generate_plan.side_effect = mock_error
-    orchestrator = JitsuOrchestrator(planner=mock_planner)
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(planner=mock_planner, storage=storage)
     out_file = tmp_path / "out.json"
 
     with pytest.raises(typer.Exit) as exc:
@@ -393,7 +407,8 @@ async def test_orchestrator_run_plan_fallback_fail(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_orchestrator_execute_auto_os_error_direct(tmp_path: Path) -> None:
     """Cover OSError in execute_auto loading file."""
-    orchestrator = JitsuOrchestrator()
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
     epic_file = tmp_path / "epic.json"
     epic_file.touch()
 
@@ -405,9 +420,10 @@ async def test_orchestrator_execute_auto_os_error_direct(tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_send_payload_direct() -> None:
+async def test_orchestrator_send_payload_direct(tmp_path: Path) -> None:
     """Cover the decode line in _send_payload."""
-    orchestrator = JitsuOrchestrator()
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
     mock_client = MagicMock()
     mock_client.receive = AsyncMock(return_value=b"RESPONSE")
     mock_client.send = AsyncMock()
@@ -423,7 +439,7 @@ async def test_orchestrator_send_payload_direct() -> None:
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_execute_phases_commit_failure() -> None:
+async def test_orchestrator_execute_phases_commit_failure(tmp_path: Path) -> None:
     """Test execute_phases when the commit command fails."""
     mock_compiler = MagicMock()
     mock_compiler.compile_directive = AsyncMock(return_value="prompt")
@@ -431,7 +447,8 @@ async def test_orchestrator_execute_phases_commit_failure() -> None:
     mock_executor.execute_directive.return_value = True
     directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
 
-    orchestrator = JitsuOrchestrator(executor=mock_executor)
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
 
     with (
         patch("shutil.which", return_value="/usr/bin/just"),

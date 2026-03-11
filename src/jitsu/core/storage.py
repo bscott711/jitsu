@@ -95,6 +95,19 @@ class EpicStorage:
         path.rename(dest)
         return dest
 
+    def rel_path(self, path: Path) -> str:
+        """
+        Return the path relative to the base directory.
+
+        Args:
+            path: Absolute path to relativize.
+
+        Returns:
+            A human-readable relative path string.
+
+        """
+        return str(path.relative_to(self._base_dir))
+
     def completed_rel(self, dest: Path) -> str:
         """
         Return the completed path relative to the base directory.
@@ -106,4 +119,4 @@ class EpicStorage:
             A human-readable relative path string.
 
         """
-        return str(dest.relative_to(self._base_dir))
+        return self.rel_path(dest)
