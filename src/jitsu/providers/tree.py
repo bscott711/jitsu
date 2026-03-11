@@ -57,7 +57,7 @@ class DirectoryTreeProvider(BaseProvider):
             lines = [root_label]
             lines.extend(self._generate_tree_lines(target_path))
             tree_content = "\n".join(lines)
-        except Exception as e:  # noqa: BLE001
+        except OSError as e:
             return f"ERROR: Failed to build directory tree for '{target_str}': {e}"
         else:
             return f"### Directory Tree: {target_str}\n```text\n{tree_content}\n```"
@@ -98,5 +98,5 @@ class DirectoryTreeProvider(BaseProvider):
 
         except PermissionError:
             yield f"{prefix} [Permission Denied]"
-        except Exception as e:  # noqa: BLE001
+        except OSError as e:
             yield f"{prefix} [Error: {e}]"

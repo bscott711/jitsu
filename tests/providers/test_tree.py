@@ -119,7 +119,7 @@ async def test_tree_provider_recursive_error(tmp_path: Path) -> None:
     provider = DirectoryTreeProvider(tmp_path)
 
     with (
-        patch.object(Path, "iterdir", side_effect=ValueError("Boom")),
+        patch.object(Path, "iterdir", side_effect=OSError("Boom")),
     ):
         res = await provider.resolve(".")
         assert "[Error: Boom]" in res
@@ -132,7 +132,7 @@ async def test_tree_provider_top_level_error(tmp_path: Path) -> None:
 
     with (
         patch.object(
-            DirectoryTreeProvider, "_generate_tree_lines", side_effect=RuntimeError("Top Fail")
+            DirectoryTreeProvider, "_generate_tree_lines", side_effect=OSError("Top Fail")
         ),
     ):
         res = await provider.resolve(".")

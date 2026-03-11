@@ -46,7 +46,7 @@ class MarkdownASTProvider(BaseProvider):
                     # Code block delimiter: starts with exactly three backticks
                     if stripped.startswith("```") and not stripped.startswith("````"):
                         ast_lines.append(line.rstrip())
-        except Exception:  # noqa: BLE001
+        except (OSError, UnicodeDecodeError):
             return []
 
         return ast_lines
