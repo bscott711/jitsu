@@ -48,7 +48,8 @@ class JitsuPlanner:
             OpenAI(
                 base_url="https://openrouter.ai/api/v1",
                 api_key=api_key,
-            )
+            ),
+            mode=instructor.Mode.JSON,
         )
 
         # Extract allowed provider names for prompt engineering
@@ -85,11 +86,19 @@ class JitsuPlanner:
         if on_progress:
             on_progress("Drafting Epic Blueprint...")
 
+        blueprint_system_prompt = base_system_prompt + (
+            "\n\nCRITICAL MACRO RULE: You are drafting a high-level blueprint ONLY. "
+            "You must return a SINGLE EpicBlueprint object. "
+            "Each phase inside the blueprint MUST contain ONLY a `phase_id` and a 1-sentence `description`. "
+            "Do NOT generate full instructions, module_scopes, context_targets, or any other fields yet. "
+            "We will elaborate on those in a separate pass."
+        )
+
         blueprint = client.chat.completions.create(
             model=model,
             response_model=EpicBlueprint,
             messages=[
-                {"role": "system", "content": base_system_prompt},
+                {"role": "system", "content": blueprint_system_prompt},
                 {"role": "user", "content": user_message},
             ],
         )
@@ -111,6 +120,8 @@ class JitsuPlanner:
                 f"You MUST generate a single AgentDirective object that fulfills this phase's goals.\n\n"
                 f"CRITICAL SCHEMA RULE: For any context_targets, you MUST ONLY use the following registered provider_names: [{allowed_providers}]. "
                 "Do NOT use the provider you are currently building as a target."
+                "CRITICAL GENERATION RULE: To prevent model degeneration, NEVER generate "
+                "more than 5 items in ANY list or array (e.g., completion_criteria, anti_patterns).\n"
             )
 
             directive = client.chat.completions.create(

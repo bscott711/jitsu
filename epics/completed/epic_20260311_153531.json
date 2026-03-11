@@ -1,0 +1,137 @@
+[
+  {
+    "epic_id": "markdown-ast-provider",
+    "phase_id": "create-markdown-provider",
+    "module_scope": "src/jitsu/providers/markdown.py",
+    "instructions": "Create a new file src/jitsu/providers/markdown.py implementing a MarkdownASTProvider class.\n\n- The class must inherit from BaseProvider (import from src/jitsu/providers/base.py).\n- Implement a method `read(self, path: str) -> List[str]` (or similar) that opens the markdown file at the given path, iterates over its lines, and collects only:\n  * Heading lines (those that start with one or more `#` characters followed by a space).\n  * Code\u2011block delimiter lines (those that start with exactly three backticks `````).\n- Return the collected lines as a list preserving their original order.\n- Add a module\u2011level constant `PROVIDER_NAME = \"markdown_ast\"` and expose the class via `__all__`.\n- Register the provider in src/jitsu/models/core.py by adding an entry to the `PROVIDERS` mapping (or equivalent) with the key `'markdown_ast'` pointing to `MarkdownASTProvider`.\n- Ensure the new provider does not introduce side effects, heavy imports, or modify any existing files other than the registration entry.\n- Write comprehensive unit tests in tests/providers/test_markdown.py that cover:\n  * Reading a markdown string with headings of various levels and code\u2011block delimiters.\n  * Ignoring non\u2011heading, non\u2011code lines.\n  * Correct handling of empty files.\n- All tests must pass when the repository verification command `just verify` is executed.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/providers/base.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not edit files outside src/jitsu/providers or src/jitsu/models.",
+      "Do not change the BaseProvider interface.",
+      "Do not add runtime side effects such as printing or logging to stdout.",
+      "Do not import heavy external libraries; use only the Python standard library.",
+      "Do not duplicate logic that already exists in other providers."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "src/jitsu/providers/markdown.py exists with a MarkdownASTProvider class.",
+      "MarkdownASTProvider inherits from BaseProvider.",
+      "The provider reads a markdown file and returns only heading lines and triple\u2011backtick delimiters.",
+      "The provider is registered in src/jitsu/models/core.py under the literal key 'markdown_ast'.",
+      "All tests in tests/providers/test_markdown.py pass when running just verify."
+    ]
+  },
+  {
+    "epic_id": "markdown-ast-provider",
+    "phase_id": "register-markdown-provider",
+    "module_scope": "src/jitsu/models",
+    "instructions": "Edit **src/jitsu/models/core.py** to:\n1. Add an import for the new provider: `from jitsu.providers.markdown import MarkdownASTProvider`.\n2. Register the provider in the existing provider registry (e.g., a dict named `PROVIDERS` or similar) using the literal key `'markdown_ast'` so that the mapping becomes `PROVIDERS['markdown_ast'] = MarkdownASTProvider`.\n3. Follow the same style and ordering as the existing provider registrations (alphabetical import order, one registration per line).\n4. Do not modify any other files or alter existing registrations.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not edit files other than src/jitsu/models/core.py",
+      "Do not remove or rename existing provider entries",
+      "Do not introduce duplicate keys in the registry",
+      "Do not use relative imports that break package resolution",
+      "Do not change the logical flow of the file beyond the required registration"
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "MarkdownASTProvider is imported without import errors",
+      "The provider is registered under the key 'markdown_ast' in the registry",
+      "Running `just verify` succeeds with no failures",
+      "No linting or type\u2011checking errors are introduced",
+      "Import statements remain alphabetically ordered"
+    ]
+  },
+  {
+    "epic_id": "markdown-ast-provider",
+    "phase_id": "extend-context-compiler",
+    "module_scope": "src/jitsu",
+    "instructions": "Modify the ContextCompiler (src/jitsu/core/compiler.py) so that when a request specifies the provider name \"markdown_ast\" it looks up the MarkdownASTProvider from the provider registry (registered in src/jitsu/models/core.py) and invokes its `provide` method. Add any necessary import statements, but keep the change limited to handling this new literal. Do not alter existing provider logic or introduce side\u2011effects for other providers.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not add imports for unrelated modules.",
+      "Do not change the behavior of existing providers.",
+      "Do not modify test files or documentation."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "ContextCompiler contains a branch that matches the literal \"markdown_ast\".",
+      "The branch retrieves the provider from the registry and calls its `provide` method.",
+      "All existing tests still pass after the change.",
+      "The new branch does not introduce new runtime errors."
+    ]
+  },
+  {
+    "epic_id": "markdown-ast-provider",
+    "phase_id": "add-markdown-tests",
+    "module_scope": "tests/providers",
+    "instructions": "Create a new test module at `tests/providers/test_markdown.py` that fully exercises the `MarkdownASTProvider` implementation.\n\nThe tests must:\n1. Import `MarkdownASTProvider` from `src.jitsu.providers.markdown`.\n2. Verify that the provider returns **only** markdown headings (lines beginning with one or more `#` followed by a space) and code\u2011block delimiters (lines that are exactly three backticks ```).\n3. Cover the following scenarios:\n   - A file containing multiple heading levels (`#`, `##`, `###`).\n   - A file containing a single fenced code block and multiple fenced code blocks.\n   - Mixed content where non\u2011heading, non\u2011code\u2011block lines are present and must be ignored.\n   - Edge cases: empty file, file with only whitespace, and a file where a line starts with `#` but is not a heading because it lacks a following space.\n4. Use temporary in\u2011memory strings via `io.StringIO` or `tempfile.NamedTemporaryFile` to avoid creating permanent files on disk.\n5. Assert that the returned list preserves the original order of the extracted lines.\n6. Additionally, confirm that the provider is correctly registered under the literal key `\"markdown_ast\"` in the central provider registry (`src/jitsu.models.core`). This can be done by importing the registry (e.g., `from src.jitsu.models.core import ProviderRegistry`) and checking that `ProviderRegistry.get('markdown_ast')` returns an instance of `MarkdownASTProvider`.\n\nThe test suite must achieve **100\u202f% line coverage** for `src/jitsu/providers/markdown.py`. No changes to production code are allowed in this phase; only the test file is to be added.\n\nDo not write any print statements or use standard logging; the test runner will capture output automatically.\n\n**Do not**:\n- Modify any existing source files.\n- Access the network or external resources.\n- Write more than one test file.\n- Use `os.system` or similar commands.\n- Assume any global state beyond the imported modules.\n\nWhen the tests are added, running the repository verification command (`just verify`) must succeed and report full coverage for the markdown provider.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/providers/markdown.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not edit any files other than the new test file.",
+      "Do not import unrelated modules or perform I/O beyond temporary files.",
+      "Do not rely on environment variables or external services."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "tests/providers/test_markdown.py exists in the repository.",
+      "All tests pass when executing `just verify`.",
+      "Coverage report shows 100% line coverage for src/jitsu/providers/markdown.py."
+    ]
+  }
+]
