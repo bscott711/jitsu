@@ -15,6 +15,7 @@ from openai import OpenAI
 
 from jitsu.models.core import AgentDirective
 from jitsu.models.execution import ExecutionResult
+from jitsu.prompts import EXECUTOR_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +48,9 @@ class JitsuExecutor:
 
         while attempts <= max_retries:
             # 1. Call LLM to get ExecutionResult
-            system_prompt = (
-                "You are an autonomous coding agent. "
-                "Given a directive and the relevant context, you must propose file edits "
-                "to fulfill the task. Your output must be valid JSON matching the ExecutionResult schema.\n\n"
-                f"Scope: {directive.module_scope}\n"
-                f"Anti-Patterns: {', '.join(directive.anti_patterns)}\n"
+            system_prompt = EXECUTOR_SYSTEM_PROMPT.format(
+                module_scope=directive.module_scope,
+                anti_patterns=", ".join(directive.anti_patterns),
             )
 
             user_message = (

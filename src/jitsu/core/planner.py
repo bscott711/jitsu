@@ -14,6 +14,7 @@ import typer
 from openai import OpenAI
 
 from jitsu.models.core import AgentDirective, ContextTarget, EpicBlueprint
+from jitsu.prompts import PLANNER_BASE_PROMPT, PLANNER_MACRO_PROMPT, PLANNER_MICRO_PROMPT
 from jitsu.providers.tree import DirectoryTreeProvider
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ class JitsuPlanner:
         if await prompt_path.exists():
             base_system_prompt = await prompt_path.read_text()
         else:
-            base_system_prompt = "You are a helpful assistant."
+            base_system_prompt = PLANNER_BASE_PROMPT
 
         # Dynamically inject the project-specific rules
         rules_path = anyio.Path(".jitsurules")
@@ -86,13 +87,7 @@ class JitsuPlanner:
         if on_progress:
             on_progress("Drafting Epic Blueprint...")
 
-        blueprint_system_prompt = base_system_prompt + (
-            "\n\nCRITICAL MACRO RULE: You are drafting a high-level blueprint ONLY. "
-            "You must return a SINGLE EpicBlueprint object. "
-            "Each phase inside the blueprint MUST contain ONLY a `phase_id` and a 1-sentence `description`. "
-            "Do NOT generate full instructions, module_scopes, context_targets, or any other fields yet. "
-            "We will elaborate on those in a separate pass."
-        )
+        blueprint_system_prompt = base_system_prompt + PLANNER_MACRO_PROMPT
 
         blueprint = client.chat.completions.create(
             model=model,
@@ -113,15 +108,11 @@ class JitsuPlanner:
             if on_progress:
                 on_progress(f"Elaborating Phase {i + 1} of {len(blueprint.phases)}...")
 
-            phase_system_prompt = base_system_prompt + (
-                f"\n\nYou are elaborating a specific Phase for the Epic '{blueprint.epic_id}'.\n"
-                f"Phase ID: {phase.phase_id}\n"
-                f"Phase Description: {phase.description}\n"
-                f"You MUST generate a single AgentDirective object that fulfills this phase's goals.\n\n"
-                f"CRITICAL SCHEMA RULE: For any context_targets, you MUST ONLY use the following registered provider_names: [{allowed_providers}]. "
-                "Do NOT use the provider you are currently building as a target."
-                "CRITICAL GENERATION RULE: To prevent model degeneration, NEVER generate "
-                "more than 5 items in ANY list or array (e.g., completion_criteria, anti_patterns).\n"
+            phase_system_prompt = base_system_prompt + PLANNER_MICRO_PROMPT.format(
+                epic_id=blueprint.epic_id,
+                phase_id=phase.phase_id,
+                phase_description=phase.description,
+                allowed_providers=allowed_providers,
             )
 
             directive = client.chat.completions.create(
