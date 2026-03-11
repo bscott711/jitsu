@@ -178,8 +178,9 @@ async def test_request_context_unknown_provider() -> None:
 @pytest.mark.asyncio
 async def test_request_context_mocked_ast() -> None:
     """Test correctly routing an AST request with mocked provider."""
-    # Patch the class in mcp_server so when it instantiates, we control it
-    with patch("jitsu.server.mcp_server.ASTProvider") as mock_cls:
+    # Patch the class in ProviderRegistry so when it instantiates, we control it
+    with patch("jitsu.server.mcp_server.ProviderRegistry", {"ast": MagicMock()}) as mock_registry:
+        mock_cls = mock_registry["ast"]
         mock_instance = mock_cls.return_value
         mock_instance.resolve = AsyncMock(return_value="## AST OUTPUT")
 
@@ -196,7 +197,10 @@ async def test_request_context_mocked_ast() -> None:
 @pytest.mark.asyncio
 async def test_request_context_mocked_pydantic() -> None:
     """Test correctly routing a Pydantic request with mocked provider."""
-    with patch("jitsu.server.mcp_server.PydanticProvider") as mock_cls:
+    with patch(
+        "jitsu.server.mcp_server.ProviderRegistry", {"pydantic": MagicMock()}
+    ) as mock_registry:
+        mock_cls = mock_registry["pydantic"]
         mock_instance = mock_cls.return_value
         mock_instance.resolve = AsyncMock(return_value="## PYDANTIC OUTPUT")
 

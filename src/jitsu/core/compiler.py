@@ -3,16 +3,7 @@
 from pathlib import Path
 
 from jitsu.models.core import AgentDirective, TargetResolutionMode
-from jitsu.providers import (
-    ASTProvider,
-    BaseProvider,
-    DirectoryTreeProvider,
-    EnvVarProvider,
-    FileStateProvider,
-    GitProvider,
-    MarkdownASTProvider,
-    PydanticProvider,
-)
+from jitsu.providers import BaseProvider, ProviderRegistry
 from jitsu.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -24,22 +15,8 @@ class ContextCompiler:
     def __init__(self, workspace_root: Path | None = None) -> None:
         """Initialize the compiler with registered providers."""
         self.workspace_root = workspace_root or Path.cwd()
-        file_provider = FileStateProvider(self.workspace_root)
-        pydantic_provider = PydanticProvider(self.workspace_root)
-        ast_provider = ASTProvider(self.workspace_root)
-        tree_provider = DirectoryTreeProvider(self.workspace_root)
-        git_provider = GitProvider(self.workspace_root)
-        env_provider = EnvVarProvider(self.workspace_root)
-        markdown_provider = MarkdownASTProvider(self.workspace_root)
-
         self._providers: dict[str, BaseProvider] = {
-            file_provider.name: file_provider,
-            pydantic_provider.name: pydantic_provider,
-            ast_provider.name: ast_provider,
-            tree_provider.name: tree_provider,
-            git_provider.name: git_provider,
-            env_provider.name: env_provider,
-            markdown_provider.name: markdown_provider,
+            name: cls(self.workspace_root) for name, cls in ProviderRegistry.items()
         }
 
     async def compile_directive(self, directive: AgentDirective) -> str:

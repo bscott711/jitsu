@@ -9,6 +9,13 @@ from jitsu.providers.file import FileStateProvider
 
 
 @pytest.mark.asyncio
+async def test_file_provider_name(tmp_path: Path) -> None:
+    """Test that the FileStateProvider name property returns 'file'."""
+    provider = FileStateProvider(tmp_path)
+    assert provider.name == "file"
+
+
+@pytest.mark.asyncio
 async def test_file_provider_success(tmp_path: Path) -> None:
     """Test successful resolution of a file."""
     target_file = tmp_path / "test.py"

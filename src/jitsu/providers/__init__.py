@@ -12,6 +12,7 @@ from jitsu.providers.file import FileStateProvider
 from jitsu.providers.git import GitProvider
 from jitsu.providers.markdown import MarkdownASTProvider
 from jitsu.providers.pydantic import PydanticProvider
+from jitsu.providers.registry import ProviderRegistry
 from jitsu.providers.tree import DirectoryTreeProvider
 
 __all__ = [
@@ -22,5 +23,6 @@ __all__ = [
     "FileStateProvider",
     "GitProvider",
     "MarkdownASTProvider",
+    "ProviderRegistry",
     "PydanticProvider",
 ]

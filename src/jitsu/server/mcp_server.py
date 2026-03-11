@@ -14,13 +14,7 @@ from pydantic import ValidationError
 from jitsu.core.compiler import ContextCompiler
 from jitsu.core.state import JitsuStateManager
 from jitsu.models.core import AgentDirective, PhaseReport, PhaseStatus
-from jitsu.providers import (
-    ASTProvider,
-    DirectoryTreeProvider,
-    FileStateProvider,
-    GitProvider,
-    PydanticProvider,
-)
+from jitsu.providers import DirectoryTreeProvider, GitProvider, ProviderRegistry
 from jitsu.server.ipc import IPCServer
 
 # Initialize the global state manager and compiler for the server
@@ -228,15 +222,7 @@ async def _handle_request_context(arguments: dict[str, object] | None) -> list[t
     target_id = str(arguments["target_identifier"])
     provider_name = str(arguments.get("provider_name", "file"))
 
-    providers = {
-        "file": FileStateProvider,
-        "pydantic": PydanticProvider,
-        "ast": ASTProvider,
-        "tree": DirectoryTreeProvider,
-        "directory_tree": DirectoryTreeProvider,
-    }
-
-    provider_cls = providers.get(provider_name)
+    provider_cls = ProviderRegistry.get(provider_name)
     if not provider_cls:
         return [types.TextContent(type="text", text=f"Error: Unknown provider '{provider_name}'.")]
 
