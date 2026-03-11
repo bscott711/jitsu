@@ -25,6 +25,24 @@ class TargetResolutionMode(StrEnum):
     SCHEMA_ONLY = "SCHEMA_ONLY"
 
 
+class PhaseBlueprint(BaseModel):
+    """A high-level blueprint for a single Jitsu phase."""
+
+    model_config = ConfigDict(frozen=True)
+
+    phase_id: str
+    description: str
+
+
+class EpicBlueprint(BaseModel):
+    """A high-level blueprint for a multi-phase Jitsu epic."""
+
+    model_config = ConfigDict(frozen=True)
+
+    epic_id: str
+    phases: list[PhaseBlueprint]
+
+
 class ContextTarget(BaseModel):
     """A specific target for JIT context resolution."""
 

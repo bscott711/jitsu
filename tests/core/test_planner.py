@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from jitsu.core.planner import JitsuPlanner
-from jitsu.models.core import AgentDirective
+from jitsu.models.core import AgentDirective, EpicBlueprint, PhaseBlueprint
 
 
 @pytest.mark.asyncio
@@ -20,8 +20,13 @@ async def test_planner_initialization() -> None:
 
 @pytest.mark.asyncio
 async def test_planner_plan_generation_success() -> None:
-    """Test that the planner successfully generates a plan using instructor."""
+    """Test that the planner successfully generates a plan using two passes."""
     planner = JitsuPlanner(objective="Test", relevant_files=["src/main.py"])
+
+    blueprint = EpicBlueprint(
+        epic_id="e1",
+        phases=[PhaseBlueprint(phase_id="p1", description="test phase")],
+    )
 
     directive = AgentDirective(
         epic_id="e1",
@@ -33,7 +38,9 @@ async def test_planner_plan_generation_success() -> None:
     )
 
     mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = [directive]
+    mock_client.chat.completions.create.side_effect = [blueprint, directive]
+
+    on_progress_mock = MagicMock()
 
     with (
         patch("jitsu.core.planner.instructor.from_openai", return_value=mock_client),
@@ -44,11 +51,16 @@ async def test_planner_plan_generation_success() -> None:
         patch("jitsu.core.planner.anyio.Path.read_text", return_value="system prompt"),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
     ):
-        plan = await planner.generate_plan()
+        plan = await planner.generate_plan(on_progress=on_progress_mock)
 
     assert len(plan) == 1
     assert plan[0].epic_id == "e1"
     assert planner._directives == [directive]  # noqa: SLF001
+
+    # Verify progress calls
+    assert on_progress_mock.call_count == 2  # noqa: PLR2004
+    on_progress_mock.assert_any_call("Drafting Epic Blueprint...")
+    on_progress_mock.assert_any_call("Elaborating Phase 1 of 1...")
 
 
 @pytest.mark.asyncio
@@ -90,8 +102,9 @@ async def test_planner_generation_fallback_prompt() -> None:
     """Test that the planner uses the fallback prompt if the prompt file is missing."""
     planner = JitsuPlanner(objective="Test", relevant_files=[])
 
+    blueprint = EpicBlueprint(epic_id="e1", phases=[])
     mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = []
+    mock_client.chat.completions.create.return_value = blueprint
 
     with (
         patch("jitsu.core.planner.instructor.from_openai", return_value=mock_client),

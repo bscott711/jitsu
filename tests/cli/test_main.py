@@ -2,9 +2,10 @@
 
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import anyio
 import httpx
@@ -235,14 +236,22 @@ async def test_send_payload_connection_refused() -> None:
 @patch("jitsu.core.planner.JitsuPlanner.save_plan")
 def test_cli_plan_success(mock_save: MagicMock, mock_generate: AsyncMock, tmp_path: Path) -> None:
     """Test successful plan generation via CLI."""
-    mock_generate.return_value = [
-        AgentDirective(
-            epic_id="test-epic",
-            phase_id="p1",
-            module_scope="test",
-            instructions="test instructions",
-        )
-    ]
+
+    async def mock_gen_side_effect(
+        model: str, on_progress: Callable[[str], None] | None = None
+    ) -> list[AgentDirective]:
+        if on_progress:
+            on_progress(f"test progress using {model}")
+        return [
+            AgentDirective(
+                epic_id="test-epic",
+                phase_id="p1",
+                module_scope="test",
+                instructions="test instructions",
+            )
+        ]
+
+    mock_generate.side_effect = mock_gen_side_effect
     out_file = tmp_path / "epic.json"
 
     result = runner.invoke(
@@ -252,7 +261,8 @@ def test_cli_plan_success(mock_save: MagicMock, mock_generate: AsyncMock, tmp_pa
     assert result.exit_code == 0
     assert "Plan successfully generated" in result.output
     assert "Using model: gpt-4o" in result.output
-    mock_generate.assert_awaited_once_with(model="gpt-4o")
+    assert "test progress using gpt-4o" in result.output
+    mock_generate.assert_awaited_once_with(model="gpt-4o", on_progress=ANY)
     mock_save.assert_called_once_with(out_file)
 
 
