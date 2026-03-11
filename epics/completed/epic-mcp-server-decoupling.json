@@ -1,0 +1,53 @@
+[
+  {
+    "epic_id": "epic-mcp-server-decoupling",
+    "phase_id": "phase-create-tool-registry",
+    "module_scope": "src/jitsu/server/registry.py",
+    "instructions": "1. Create a new file `src/jitsu/server/registry.py`. 2. Import `typing` and `mcp.types`. 3. Define a `ToolRegistry` class. 4. In `__init__`, create two dictionaries: `self._tools: dict[str, types.Tool] = {}` and `self._handlers: dict[str, typing.Callable] = {}`. 5. Add a method `def register(self, tool: types.Tool, handler: typing.Callable) -> None:` that stores the tool and handler by `tool.name`. 6. Add a method `def get_tools(self) -> list[types.Tool]:` that returns a list of all registered tools. 7. Add an async method `async def execute(self, name: str, arguments: dict[str, object] | None) -> list[types.TextContent]:` that looks up the handler by name. If not found, raise `ValueError(f'Unknown tool: {name}')`. If the handler is an async function (`asyncio.iscoroutinefunction`), await it; otherwise, call it synchronously. Return the result.",
+    "context_targets": [],
+    "anti_patterns": [
+      "Do NOT modify mcp_server.py in this phase.",
+      "Do NOT add any domain logic or specific tools to registry.py. It must remain purely generic."
+    ],
+    "completion_criteria": [
+      "`src/jitsu/server/registry.py` is created with a fully functional `ToolRegistry` class.",
+      "The registry supports both synchronous and asynchronous handlers."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-mcp-server-decoupling",
+    "phase_id": "phase-refactor-mcp-routing",
+    "module_scope": "src/jitsu/server/mcp_server.py",
+    "instructions": "1. In `src/jitsu/server/mcp_server.py`, import `ToolRegistry` from `jitsu.server.registry`. 2. Instantiate `tool_registry = ToolRegistry()` at the module level. 3. Immediately below the instantiation, register all 8 existing tools by calling `tool_registry.register(types.Tool(...), _handle_...)` for each tool. Copy the exact `types.Tool` schemas from the old `handle_list_tools` function. 4. Rewrite the `@app.list_tools()` function to simply return `tool_registry.get_tools()`. 5. Rewrite the `@app.call_tool()` function to simply return `await tool_registry.execute(name, arguments)`. 6. Delete the old hardcoded list of tools from `handle_list_tools` and delete the entire `if/elif` routing block from `handle_call_tool`.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/registry.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT modify or rename any of the existing `_handle_*` functions.",
+      "Do NOT leave any `if name == ...` routing logic inside `handle_call_tool`.",
+      "Do NOT forget to register both the schema and the function reference for all 8 tools."
+    ],
+    "completion_criteria": [
+      "`handle_list_tools` delegates entirely to `tool_registry.get_tools()`.",
+      "`handle_call_tool` delegates entirely to `tool_registry.execute()`.",
+      "The giant if/elif block is completely removed."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]
