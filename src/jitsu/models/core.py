@@ -72,7 +72,7 @@ class AgentDirective(BaseModel):
     anti_patterns: list[str] = Field(default=[])
     verification_commands: list[str] = Field(
         default=[],
-        description="Commands to verify the phase is complete. You MUST strictly follow the verification constraints defined in the PROJECT RULES (e.g., this MUST include 'just verify').",
+        description="Commands to verify the phase is complete.",
     )
     completion_criteria: list[str] = Field(default=[])
 
