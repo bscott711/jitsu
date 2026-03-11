@@ -1,5 +1,6 @@
 """Tests for the Jitsu MCP server."""
 
+import subprocess
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -10,7 +11,7 @@ from mcp.types import TextContent
 from jitsu.models.core import AgentDirective
 from jitsu.server.mcp_server import handle_call_tool, handle_list_tools, run_server, state_manager
 
-EXPECTED_TOOL_COUNT = 6
+EXPECTED_TOOL_COUNT = 8
 
 
 @pytest.mark.asyncio
@@ -25,6 +26,8 @@ async def test_list_tools() -> None:
     assert "jitsu_inspect_queue" in names
     assert "jitsu_get_planning_context" in names
     assert "jitsu_submit_epic" in names
+    assert "jitsu_git_status" in names
+    assert "jitsu_git_commit" in names
 
 
 @pytest.mark.asyncio
@@ -304,3 +307,63 @@ async def test_submit_epic_internal_error() -> None:
     ):
         result = await handle_call_tool("jitsu_submit_epic", {"directives": [{"good": "data"}]})
         assert "Internal Error: BOOM" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_git_status() -> None:
+    """Test the jitsu_git_status tool."""
+    mock_status = "M src/main.py"
+    with patch("jitsu.server.mcp_server.GitProvider") as mock_cls:
+        mock_instance = mock_cls.return_value
+        mock_instance.resolve = AsyncMock(
+            return_value=f"### Git Status\n```text\n{mock_status}\n```"
+        )
+
+        result = await handle_call_tool("jitsu_git_status", {})
+        assert isinstance(result[0], TextContent)
+        assert mock_status in result[0].text
+        mock_instance.resolve.assert_called_once_with("status")
+
+
+@pytest.mark.asyncio
+async def test_git_commit_success() -> None:
+    """Test successful jitsu_git_commit."""
+    with patch("jitsu.server.mcp_server.subprocess.run") as mock_run:
+        result = await handle_call_tool(
+            "jitsu_git_commit", {"message": "feat: add git tools", "sync": True}
+        )
+        assert isinstance(result[0], TextContent)
+        assert "Successfully committed and pushed" in result[0].text
+        assert mock_run.call_count == 3  # noqa: PLR2004
+
+
+@pytest.mark.asyncio
+async def test_git_commit_invalid_message() -> None:
+    """Test jitsu_git_commit with invalid conventional commit message."""
+    result = await handle_call_tool("jitsu_git_commit", {"message": "bad message"})
+    assert isinstance(result[0], TextContent)
+    assert "MUST follow Conventional Commits" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_git_commit_missing_message() -> None:
+    """Test jitsu_git_commit with missing message."""
+    result = await handle_call_tool("jitsu_git_commit", {})
+    assert "Missing 'message' argument" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_git_commit_error() -> None:
+    """Test jitsu_git_commit with git error."""
+    error = subprocess.CalledProcessError(returncode=1, cmd="git add .")
+    with patch("jitsu.server.mcp_server.subprocess.run", side_effect=error):
+        result = await handle_call_tool("jitsu_git_commit", {"message": "feat: test"})
+        assert "Error: Git command failed" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_git_commit_generic_error() -> None:
+    """Test jitsu_git_commit with generic error."""
+    with patch("jitsu.server.mcp_server.subprocess.run", side_effect=Exception("BOOM")):
+        result = await handle_call_tool("jitsu_git_commit", {"message": "feat: test"})
+        assert "Error: BOOM" in result[0].text

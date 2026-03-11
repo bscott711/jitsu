@@ -1,78 +1,79 @@
-"""Tests for the GitDiffProvider."""
+"""Tests for the GitProvider."""
 
 import subprocess
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from jitsu.providers.git import GitDiffProvider
+from jitsu.providers.git import GitProvider
 
 
 @pytest.mark.asyncio
-async def test_git_diff_provider_name() -> None:
+async def test_git_provider_name() -> None:
     """Test the provider name."""
-    provider = GitDiffProvider()
-    assert provider.name == "git_diff"
+    provider = GitProvider()
+    assert provider.name == "git"
 
 
 @pytest.mark.asyncio
-async def test_git_diff_provider_success() -> None:
-    """Test successful git diff execution."""
-    provider = GitDiffProvider()
+async def test_git_provider_resolve_diff() -> None:
+    """Test successful git diff resolution."""
+    provider = GitProvider()
     mock_output = "diff --git a/file.py b/file.py\n+new line"
 
-    with patch("jitsu.providers.git.subprocess.check_output", return_value=mock_output):
-        content = provider.fetch_content()
-        assert content == mock_output
+    mock_result = MagicMock()
+    mock_result.stdout = mock_output
 
+    with patch("jitsu.providers.git.subprocess.run", return_value=mock_result):
         resolved = await provider.resolve("HEAD")
         assert "### Git Diff: HEAD" in resolved
         assert mock_output in resolved
 
 
 @pytest.mark.asyncio
-async def test_git_diff_provider_called_process_error() -> None:
+async def test_git_provider_resolve_status() -> None:
+    """Test successful git status resolution."""
+    provider = GitProvider()
+    mock_output = "M  src/main.py\n?? tests/test.py"
+
+    mock_result = MagicMock()
+    mock_result.stdout = mock_output
+
+    with patch("jitsu.providers.git.subprocess.run", return_value=mock_result):
+        resolved = await provider.resolve("status")
+        assert "### Git Status" in resolved
+        assert mock_output in resolved
+
+
+@pytest.mark.asyncio
+async def test_git_provider_called_process_error() -> None:
     """Test handling of CalledProcessError."""
-    provider = GitDiffProvider()
+    provider = GitProvider()
     error = subprocess.CalledProcessError(
-        returncode=128, cmd="git diff HEAD", output="not a git repo"
+        returncode=128, cmd=["git", "diff", "HEAD"], stderr="not a git repo"
     )
 
-    with patch("jitsu.providers.git.subprocess.check_output", side_effect=error):
-        content = provider.fetch_content()
-        assert "ERROR: Git command failed with exit code 128" in content
-        assert "not a git repo" in content
+    with patch("jitsu.providers.git.subprocess.run", side_effect=error):
+        resolved = await provider.resolve("HEAD")
+        assert "ERROR: Git command failed with exit code 128" in resolved
+        assert "not a git repo" in resolved
 
 
 @pytest.mark.asyncio
-async def test_git_diff_provider_file_not_found() -> None:
+async def test_git_provider_file_not_found() -> None:
     """Test handling of FileNotFoundError (git not installed)."""
-    provider = GitDiffProvider()
+    provider = GitProvider()
 
-    with patch("jitsu.providers.git.subprocess.check_output", side_effect=FileNotFoundError):
-        content = provider.fetch_content()
-        assert "ERROR: git command not found." in content
+    with patch("jitsu.providers.git.subprocess.run", side_effect=FileNotFoundError):
+        resolved = await provider.resolve("HEAD")
+        assert "ERROR: git command not found." in resolved
 
 
 @pytest.mark.asyncio
-async def test_git_diff_provider_generic_exception() -> None:
+async def test_git_provider_generic_exception() -> None:
     """Test handling of other exceptions."""
-    provider = GitDiffProvider()
+    provider = GitProvider()
 
-    with patch(
-        "jitsu.providers.git.subprocess.check_output", side_effect=RuntimeError("unexpected")
-    ):
-        content = provider.fetch_content()
-        assert "ERROR: Failed to execute git command: unexpected" in content
-
-
-@pytest.mark.asyncio
-async def test_git_diff_provider_custom_command() -> None:
-    """Test provider with a custom command."""
-    custom_command = ["git", "diff", "--staged"]
-    provider = GitDiffProvider(command=custom_command)
-
-    with patch("jitsu.providers.git.subprocess.check_output") as mock_check:
-        mock_check.return_value = "staged changes"
-        await provider.resolve("staged")
-        mock_check.assert_called_once_with(custom_command, text=True, stderr=subprocess.STDOUT)
+    with patch("jitsu.providers.git.subprocess.run", side_effect=RuntimeError("unexpected")):
+        resolved = await provider.resolve("HEAD")
+        assert "ERROR: Failed to execute git command: unexpected" in resolved

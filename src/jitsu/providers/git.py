@@ -1,41 +1,40 @@
-"""Git Diff context provider for Jitsu."""
+"""Git context provider for Jitsu."""
 
 import subprocess
 
 from jitsu.providers.base import BaseProvider
 
 
-class GitDiffProvider(BaseProvider):
-    """Provides the git diff of the current repository."""
-
-    def __init__(self, command: list[str] | None = None) -> None:
-        """
-        Initialize the provider with an optional command.
-
-        Args:
-            command: The git command to execute. Defaults to ["git", "diff", "HEAD"].
-
-        """
-        self._command = command or ["git", "diff", "HEAD"]
+class GitProvider(BaseProvider):
+    """Provides git-related context (diffs, status) of the current repository."""
 
     @property
     def name(self) -> str:
         """The unique name of this provider."""
-        return "git_diff"
+        return "git"
 
-    def fetch_content(self) -> str:
+    def _run_git(self, args: list[str]) -> str:
         """
-        Execute git diff HEAD using subprocess and return the output.
+        Execute a git command and return its output.
+
+        Args:
+            args: The git command arguments.
 
         Returns:
-            str: The output of the git diff command or an error message.
+            str: The output of the git command or an error message.
 
         """
         try:
-            # Using text=True for string output as requested by directive
-            return subprocess.check_output(self._command, text=True, stderr=subprocess.STDOUT)  # noqa: S603
+            result = subprocess.run(  # noqa: S603
+                ["git", *args],  # noqa: S607
+                capture_output=True,
+                text=True,
+                check=True,
+                shell=False,
+            )
+            return result.stdout.strip()
         except subprocess.CalledProcessError as e:
-            return f"ERROR: Git command failed with exit code {e.returncode}: {e.output}"
+            return f"ERROR: Git command failed with exit code {e.returncode}: {e.stderr}"
         except FileNotFoundError:
             return "ERROR: git command not found."
         except Exception as e:  # noqa: BLE001
@@ -43,15 +42,20 @@ class GitDiffProvider(BaseProvider):
 
     async def resolve(self, target: str) -> str:
         """
-        Resolve the git diff into a context string.
+        Resolve git context into a markdown string.
 
         Args:
-            target: The target identifier (e.g., 'HEAD' or a specific ref).
+            target: The target identifier ('status', 'diff', or a specific ref).
 
         Returns:
             str: The resolved context string.
 
         """
-        diff_output = self.fetch_content()
-        display_target = target or "HEAD"
-        return f"### Git Diff: {display_target}\n```diff\n{diff_output}\n```"
+        if target == "status":
+            output = self._run_git(["status", "--short"])
+            return f"### Git Status\n```text\n{output}\n```"
+
+        # Default to diff
+        diff_target = target if target and target != "diff" else "HEAD"
+        output = self._run_git(["diff", diff_target])
+        return f"### Git Diff: {diff_target}\n```diff\n{output}\n```"

@@ -1,5 +1,7 @@
 """The core MCP server implementation for Jitsu."""
 
+import re
+import subprocess
 import typing
 
 import anyio
@@ -15,6 +17,7 @@ from jitsu.providers import (
     ASTProvider,
     DirectoryTreeProvider,
     FileStateProvider,
+    GitProvider,
     PydanticProvider,
 )
 from jitsu.server.ipc import IPCServer
@@ -117,6 +120,33 @@ async def handle_list_tools() -> list[types.Tool]:
                 "properties": {},
             },
         ),
+        types.Tool(
+            name="jitsu_git_status",
+            description="Returns the output of 'git status --short'.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        types.Tool(
+            name="jitsu_git_commit",
+            description="Stages all changes and commits them. Optionally pushes.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "The commit message (MUST follow Conventional Commits).",
+                    },
+                    "sync": {
+                        "type": "boolean",
+                        "description": "Whether to run 'git push' after committing.",
+                        "default": False,
+                    },
+                },
+                "required": ["message"],
+            },
+        ),
     ]
 
 
@@ -126,20 +156,26 @@ async def handle_call_tool(
 ) -> list[types.TextContent]:
     """Handle tool execution requests from the IDE agent."""
     if name == "jitsu_get_next_phase":
-        return await _handle_get_next_phase()
-    if name == "jitsu_report_status":
-        return _handle_report_status(arguments)
-    if name == "jitsu_request_context":
-        return await _handle_request_context(arguments)
-    if name == "jitsu_inspect_queue":
-        return _handle_inspect_queue()
-    if name == "jitsu_get_planning_context":
-        return await _handle_get_planning_context(arguments)
-    if name == "jitsu_submit_epic":
-        return _handle_submit_epic(arguments)
+        res = await _handle_get_next_phase()
+    elif name == "jitsu_report_status":
+        res = _handle_report_status(arguments)
+    elif name == "jitsu_request_context":
+        res = await _handle_request_context(arguments)
+    elif name == "jitsu_inspect_queue":
+        res = _handle_inspect_queue()
+    elif name == "jitsu_get_planning_context":
+        res = await _handle_get_planning_context(arguments)
+    elif name == "jitsu_submit_epic":
+        res = _handle_submit_epic(arguments)
+    elif name == "jitsu_git_status":
+        res = await _handle_git_status()
+    elif name == "jitsu_git_commit":
+        res = _handle_git_commit(arguments)
+    else:
+        msg = f"Unknown tool: {name}"
+        raise ValueError(msg)
 
-    msg = f"Unknown tool: {name}"
-    raise ValueError(msg)
+    return res
 
 
 async def _handle_get_next_phase() -> list[types.TextContent]:
@@ -252,6 +288,51 @@ def _handle_submit_epic(arguments: dict[str, object] | None) -> list[types.TextC
         return [types.TextContent(type="text", text=f"Validation Error: {e!s}")]
     except Exception as e:  # noqa: BLE001
         return [types.TextContent(type="text", text=f"Internal Error: {e!s}")]
+
+
+async def _handle_git_status() -> list[types.TextContent]:
+    """Handle 'git_status' tool request."""
+    provider = GitProvider()
+    res = await provider.resolve("status")
+    return [types.TextContent(type="text", text=res)]
+
+
+def _handle_git_commit(arguments: dict[str, object] | None) -> list[types.TextContent]:
+    """Handle 'git_commit' tool request."""
+    if not arguments or "message" not in arguments:
+        return [types.TextContent(type="text", text="Error: Missing 'message' argument.")]
+
+    message = str(arguments["message"])
+    sync = bool(arguments.get("sync", False))
+
+    # Conventional Commit Enforcement
+    pattern = (
+        r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|deps)(\(.+\))?!?: .+$"
+    )
+    if not re.match(pattern, message):
+        return [
+            types.TextContent(
+                type="text",
+                text="Error: Commit message MUST follow Conventional Commits (e.g., 'feat: add git tool').",
+            )
+        ]
+
+    try:
+        # git add .
+        subprocess.run(["git", "add", "."], check=True, shell=False)  # noqa: S607
+
+        # git commit -m <message>
+        subprocess.run(["git", "commit", "-m", message], check=True, shell=False)  # noqa: S603, S607
+
+        if sync:
+            subprocess.run(["git", "push"], check=True, shell=False)  # noqa: S607
+
+        msg = f"Successfully committed{' and pushed' if sync else ''} changes."
+        return [types.TextContent(type="text", text=msg)]
+    except subprocess.CalledProcessError as e:
+        return [types.TextContent(type="text", text=f"Error: Git command failed: {e!s}")]
+    except Exception as e:  # noqa: BLE001
+        return [types.TextContent(type="text", text=f"Error: {e!s}")]
 
 
 async def run_server() -> None:

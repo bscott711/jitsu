@@ -7,7 +7,7 @@ from jitsu.providers import (
     DirectoryTreeProvider,
     EnvVarProvider,
     FileStateProvider,
-    GitDiffProvider,
+    GitProvider,
     PydanticProvider,
 )
 from jitsu.utils.logger import get_logger
@@ -24,7 +24,7 @@ class ContextCompiler:
         pydantic_provider = PydanticProvider()
         ast_provider = ASTProvider()
         tree_provider = DirectoryTreeProvider()
-        git_provider = GitDiffProvider()
+        git_provider = GitProvider()
         env_provider = EnvVarProvider()
 
         self._providers: dict[str, BaseProvider] = {
@@ -185,6 +185,6 @@ class ContextCompiler:
             "pydantic": "Condensed (JSON Schema)",
             "file": "Full Source",
             "tree": "Visual Tree Structure",
-            "git_diff": "Git Repository Diff",
+            "git": "Git Repository State",
             "env_var": "Environment Variable",
         }.get(provider_name, "Included")
