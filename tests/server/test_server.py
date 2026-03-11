@@ -10,7 +10,7 @@ from mcp.types import TextContent
 from jitsu.models.core import AgentDirective
 from jitsu.server.mcp_server import handle_call_tool, handle_list_tools, run_server, state_manager
 
-EXPECTED_TOOL_COUNT = 4
+EXPECTED_TOOL_COUNT = 6
 
 
 @pytest.mark.asyncio
@@ -23,6 +23,8 @@ async def test_list_tools() -> None:
     assert "jitsu_report_status" in names
     assert "jitsu_request_context" in names
     assert "jitsu_inspect_queue" in names
+    assert "jitsu_get_planning_context" in names
+    assert "jitsu_submit_epic" in names
 
 
 @pytest.mark.asyncio
@@ -219,3 +221,86 @@ async def test_run_server(mock_run: MagicMock, mock_stdio: MagicMock) -> None:
 
     await run_server()
     mock_run.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_planning_context() -> None:
+    """Test getting planning context (hits lines 215-227)."""
+    with patch("jitsu.server.mcp_server.DirectoryTreeProvider") as mock_tree_cls:
+        mock_tree = mock_tree_cls.return_value
+        mock_tree.resolve = AsyncMock(return_value="### Tree\n- src")
+
+        # Mock anyio.Path.exists and read_text by patching anyio.Path
+        # Use a more targeted patch if possible, but patching the methods works
+        with (
+            patch("anyio.Path.exists", AsyncMock(return_value=True)),
+            patch("anyio.Path.read_text", AsyncMock(return_value="RULE 1")),
+        ):
+            result = await handle_call_tool("jitsu_get_planning_context", {})
+            assert isinstance(result[0], TextContent)
+            assert "### Tree" in result[0].text
+            assert "### .jitsurules" in result[0].text
+            assert "RULE 1" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_get_planning_context_no_rules() -> None:
+    """Test getting planning context when .jitsurules is missing."""
+    with patch("jitsu.server.mcp_server.DirectoryTreeProvider") as mock_tree_cls:
+        mock_tree = mock_tree_cls.return_value
+        mock_tree.resolve = AsyncMock(return_value="### Tree")
+
+        with patch("anyio.Path.exists", AsyncMock(return_value=False)):
+            result = await handle_call_tool("jitsu_get_planning_context", {})
+            assert "(Not found)" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_submit_epic_success() -> None:
+    """Test successfully submitting an epic (hits lines 234-245)."""
+    # Clear queue
+    while state_manager.get_next_directive():
+        pass
+
+    directive_data = {
+        "epic_id": "epic-new",
+        "phase_id": "phase-new",
+        "module_scope": "src",
+        "instructions": "Go",
+    }
+
+    result = await handle_call_tool("jitsu_submit_epic", {"directives": [directive_data]})
+    assert "Successfully queued 1 phases." in result[0].text
+    assert state_manager.pending_count == 1
+
+
+@pytest.mark.asyncio
+async def test_submit_epic_missing_args() -> None:
+    """Test submit_epic with missing arguments."""
+    result = await handle_call_tool("jitsu_submit_epic", {})
+    assert "Missing 'directives' argument" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_submit_epic_not_list() -> None:
+    """Test submit_epic with non-list directives."""
+    result = await handle_call_tool("jitsu_submit_epic", {"directives": "not a list"})
+    assert "'directives' must be a list" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_submit_epic_invalid_directives() -> None:
+    """Test submit_epic with invalid directive data (hits line 248)."""
+    result = await handle_call_tool("jitsu_submit_epic", {"directives": [{"bad": "data"}]})
+    assert "Validation Error" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_submit_epic_internal_error() -> None:
+    """Test submit_epic with internal error (hits line 249)."""
+    # Use a real dict but force validation to fail with a non-Pydantic error
+    with patch(
+        "jitsu.server.mcp_server.AgentDirective.model_validate", side_effect=Exception("BOOM")
+    ):
+        result = await handle_call_tool("jitsu_submit_epic", {"directives": [{"good": "data"}]})
+        assert "Internal Error: BOOM" in result[0].text

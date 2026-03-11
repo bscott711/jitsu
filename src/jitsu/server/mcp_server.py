@@ -1,5 +1,7 @@
 """The core MCP server implementation for Jitsu."""
 
+import typing
+
 import anyio
 import mcp.server.stdio
 from mcp import types
@@ -8,7 +10,7 @@ from pydantic import ValidationError
 
 from jitsu.core.compiler import ContextCompiler
 from jitsu.core.state import JitsuStateManager
-from jitsu.models.core import PhaseReport, PhaseStatus
+from jitsu.models.core import AgentDirective, PhaseReport, PhaseStatus
 from jitsu.providers import (
     ASTProvider,
     DirectoryTreeProvider,
@@ -16,6 +18,7 @@ from jitsu.providers import (
     PydanticProvider,
 )
 from jitsu.server.ipc import IPCServer
+from jitsu.utils import root
 
 # Initialize the global state manager and compiler for the server
 state_manager = JitsuStateManager()
@@ -78,6 +81,35 @@ async def handle_list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="jitsu_get_planning_context",
+            description="Get the repository skeleton and .jitsurules to help plan an epic.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "relevant_files": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of files relevant to the planning task.",
+                    }
+                },
+            },
+        ),
+        types.Tool(
+            name="jitsu_submit_epic",
+            description="Submit an array of phase directives to the Jitsu queue.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "directives": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": "An array of validated AgentDirective objects.",
+                    }
+                },
+                "required": ["directives"],
+            },
+        ),
+        types.Tool(
             name="jitsu_inspect_queue",
             description="Inspect the current queue of pending phases.",
             inputSchema={
@@ -101,6 +133,10 @@ async def handle_call_tool(
         return await _handle_request_context(arguments)
     if name == "jitsu_inspect_queue":
         return _handle_inspect_queue()
+    if name == "jitsu_get_planning_context":
+        return await _handle_get_planning_context(arguments)
+    if name == "jitsu_submit_epic":
+        return _handle_submit_epic(arguments)
 
     msg = f"Unknown tool: {name}"
     raise ValueError(msg)
@@ -171,6 +207,51 @@ async def _handle_request_context(arguments: dict[str, object] | None) -> list[t
     provider = provider_cls()
     context_data = await provider.resolve(target_id)
     return [types.TextContent(type="text", text=context_data)]
+
+
+async def _handle_get_planning_context(
+    _arguments: dict[str, object] | None,
+) -> list[types.TextContent]:
+    """Handle 'get_planning_context' tool request."""
+    # 1. Get repo skeleton
+    tree_provider = DirectoryTreeProvider()
+    skeleton = await tree_provider.resolve(".")
+
+    # 2. Read .jitsurules
+    rules_path = anyio.Path(root()) / ".jitsurules"
+    if await rules_path.exists():
+        rules_content = await rules_path.read_text()
+        rules_msg = f"### .jitsurules\n```text\n{rules_content}\n```"
+    else:
+        rules_msg = "### .jitsurules\n(Not found)"
+
+    combined = f"{skeleton}\n\n{rules_msg}"
+    return [types.TextContent(type="text", text=combined)]
+
+
+def _handle_submit_epic(arguments: dict[str, object] | None) -> list[types.TextContent]:
+    """Handle 'submit_epic' tool request."""
+    if not arguments or "directives" not in arguments:
+        return [types.TextContent(type="text", text="Error: Missing 'directives' argument.")]
+
+    directives_data = arguments["directives"]
+    if not isinstance(directives_data, list):
+        return [types.TextContent(type="text", text="Error: 'directives' must be a list.")]
+
+    try:
+        directives = [
+            AgentDirective.model_validate(d) for d in typing.cast("list[object]", directives_data)
+        ]
+        for directive in directives:
+            state_manager.queue_directive(directive)
+
+        return [
+            types.TextContent(type="text", text=f"Successfully queued {len(directives)} phases.")
+        ]
+    except ValidationError as e:
+        return [types.TextContent(type="text", text=f"Validation Error: {e!s}")]
+    except Exception as e:  # noqa: BLE001
+        return [types.TextContent(type="text", text=f"Internal Error: {e!s}")]
 
 
 async def run_server() -> None:
