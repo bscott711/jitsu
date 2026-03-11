@@ -11,7 +11,7 @@ from jitsu.providers.tree import DirectoryTreeProvider
 @pytest.mark.asyncio
 async def test_tree_provider_name() -> None:
     """Test the provider name."""
-    provider = DirectoryTreeProvider()
+    provider = DirectoryTreeProvider(Path.cwd())
     assert provider.name == "tree"
 
 
@@ -43,10 +43,10 @@ async def test_tree_provider_resolve_success(tmp_path: Path) -> None:
 
     (tmp_path / "file3.txt").touch()
 
-    provider = DirectoryTreeProvider()
+    provider = DirectoryTreeProvider(tmp_path)
 
-    # Stub Path.cwd() to return tmp_path
-    with patch("jitsu.providers.tree.Path.cwd", return_value=tmp_path):
+    # Stub root() to return tmp_path
+    if True:
         res = await provider.resolve(".")
 
     assert "### Directory Tree: ." in res
@@ -71,9 +71,9 @@ async def test_tree_provider_resolve_specific_subdir(tmp_path: Path) -> None:
     dir1.mkdir()
     (dir1 / "file1.txt").touch()
 
-    provider = DirectoryTreeProvider()
+    provider = DirectoryTreeProvider(tmp_path)
 
-    with patch("jitsu.providers.tree.Path.cwd", return_value=tmp_path):
+    if True:
         res = await provider.resolve("dir1")
 
     assert "### Directory Tree: dir1" in res
@@ -83,8 +83,8 @@ async def test_tree_provider_resolve_specific_subdir(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_tree_provider_not_found(tmp_path: Path) -> None:
     """Test resolution when the directory does not exist."""
-    provider = DirectoryTreeProvider()
-    with patch("jitsu.providers.tree.Path.cwd", return_value=tmp_path):
+    provider = DirectoryTreeProvider(tmp_path)
+    if True:
         res = await provider.resolve("non_existent")
     assert "ERROR: Directory 'non_existent' does not exist" in res
 
@@ -95,8 +95,8 @@ async def test_tree_provider_not_a_dir(tmp_path: Path) -> None:
     file_path = tmp_path / "file.txt"
     file_path.touch()
 
-    provider = DirectoryTreeProvider()
-    with patch("jitsu.providers.tree.Path.cwd", return_value=tmp_path):
+    provider = DirectoryTreeProvider(tmp_path)
+    if True:
         res = await provider.resolve("file.txt")
     assert "ERROR: Target 'file.txt' is not a directory" in res
 
@@ -104,10 +104,9 @@ async def test_tree_provider_not_a_dir(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_tree_provider_permission_denied(tmp_path: Path) -> None:
     """Test handling of permission errors."""
-    provider = DirectoryTreeProvider()
+    provider = DirectoryTreeProvider(tmp_path)
 
     with (
-        patch("jitsu.providers.tree.Path.cwd", return_value=tmp_path),
         patch.object(Path, "iterdir", side_effect=PermissionError("Denied")),
     ):
         res = await provider.resolve(".")
@@ -117,10 +116,9 @@ async def test_tree_provider_permission_denied(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_tree_provider_recursive_error(tmp_path: Path) -> None:
     """Test handling of unexpected errors during recursion."""
-    provider = DirectoryTreeProvider()
+    provider = DirectoryTreeProvider(tmp_path)
 
     with (
-        patch("jitsu.providers.tree.Path.cwd", return_value=tmp_path),
         patch.object(Path, "iterdir", side_effect=ValueError("Boom")),
     ):
         res = await provider.resolve(".")
@@ -130,10 +128,9 @@ async def test_tree_provider_recursive_error(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_tree_provider_top_level_error(tmp_path: Path) -> None:
     """Test handling of errors before recursion."""
-    provider = DirectoryTreeProvider()
+    provider = DirectoryTreeProvider(tmp_path)
 
     with (
-        patch("jitsu.providers.tree.Path.cwd", return_value=tmp_path),
         patch.object(
             DirectoryTreeProvider, "_generate_tree_lines", side_effect=RuntimeError("Top Fail")
         ),
@@ -148,8 +145,8 @@ async def test_tree_provider_empty_dir(tmp_path: Path) -> None:
     empty_dir = tmp_path / "empty"
     empty_dir.mkdir()
 
-    provider = DirectoryTreeProvider()
-    with patch("jitsu.providers.tree.Path.cwd", return_value=tmp_path):
+    provider = DirectoryTreeProvider(tmp_path)
+    if True:
         res = await provider.resolve("empty")
 
     assert "### Directory Tree: empty" in res

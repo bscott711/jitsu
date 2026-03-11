@@ -1,6 +1,7 @@
 """Unit tests for the EnvVarProvider."""
 
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -13,7 +14,7 @@ from jitsu.providers.env import EnvVarProvider
 @pytest.mark.asyncio
 async def test_env_var_provider_resolve_existing() -> None:
     """Test resolving an existing environment variable."""
-    provider = EnvVarProvider()
+    provider = EnvVarProvider(Path.cwd())
     with patch.dict(os.environ, {"TEST_VAR": "test_value"}):
         result = await provider.resolve("TEST_VAR")
         assert result == "test_value"
@@ -22,7 +23,7 @@ async def test_env_var_provider_resolve_existing() -> None:
 @pytest.mark.asyncio
 async def test_env_var_provider_resolve_missing() -> None:
     """Test resolving a missing environment variable."""
-    provider = EnvVarProvider()
+    provider = EnvVarProvider(Path.cwd())
     with patch.dict(os.environ, {}, clear=True):
         result = await provider.resolve("MISSING_VAR")
         assert result == "Not Set"
@@ -30,7 +31,7 @@ async def test_env_var_provider_resolve_missing() -> None:
 
 def test_env_var_provider_name() -> None:
     """Test the provider name."""
-    provider = EnvVarProvider()
+    provider = EnvVarProvider(Path.cwd())
     assert provider.name == "env_var"
 
 

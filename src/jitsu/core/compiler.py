@@ -1,5 +1,7 @@
 """JIT Context Compiler for weaving directives and codebase state."""
 
+from pathlib import Path
+
 from jitsu.models.core import AgentDirective, TargetResolutionMode
 from jitsu.providers import (
     ASTProvider,
@@ -19,15 +21,16 @@ logger = get_logger(__name__)
 class ContextCompiler:
     """Compiles AgentDirectives into highly-contextualized Markdown prompts."""
 
-    def __init__(self) -> None:
+    def __init__(self, workspace_root: Path | None = None) -> None:
         """Initialize the compiler with registered providers."""
-        file_provider = FileStateProvider()
-        pydantic_provider = PydanticProvider()
-        ast_provider = ASTProvider()
-        tree_provider = DirectoryTreeProvider()
-        git_provider = GitProvider()
-        env_provider = EnvVarProvider()
-        markdown_provider = MarkdownASTProvider()
+        self.workspace_root = workspace_root or Path.cwd()
+        file_provider = FileStateProvider(self.workspace_root)
+        pydantic_provider = PydanticProvider(self.workspace_root)
+        ast_provider = ASTProvider(self.workspace_root)
+        tree_provider = DirectoryTreeProvider(self.workspace_root)
+        git_provider = GitProvider(self.workspace_root)
+        env_provider = EnvVarProvider(self.workspace_root)
+        markdown_provider = MarkdownASTProvider(self.workspace_root)
 
         self._providers: dict[str, BaseProvider] = {
             file_provider.name: file_provider,

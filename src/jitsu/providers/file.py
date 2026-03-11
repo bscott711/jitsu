@@ -1,7 +1,5 @@
 """File state context provider for Jitsu."""
 
-from pathlib import Path
-
 from jitsu.providers.base import BaseProvider
 
 
@@ -15,7 +13,7 @@ class FileStateProvider(BaseProvider):
 
     async def resolve(self, target: str) -> str:
         """Resolve the file path and return its contents."""
-        target_path = Path.cwd() / target
+        target_path = self.workspace_root / target
 
         if not target_path.exists():
             return f"ERROR: File '{target}' does not exist in the current workspace."
@@ -25,7 +23,7 @@ class FileStateProvider(BaseProvider):
 
         try:
             content = target_path.read_text(encoding="utf-8")
-        except Exception as e:  # noqa: BLE001
+        except (OSError, UnicodeDecodeError) as e:
             return f"ERROR: Failed to read '{target}': {e}"
         else:
             return f"### File: {target}\n```python\n{content}\n```"

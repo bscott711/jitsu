@@ -77,8 +77,8 @@ class JitsuPlanner:
             base_system_prompt += f"\n\nPROJECT RULES (.jitsurules):\n{rules_text}"
 
         # Get repository skeleton
-        tree_provider = DirectoryTreeProvider()
-        skeleton = await tree_provider.resolve(str(Path.cwd()))
+        tree_provider = DirectoryTreeProvider(Path.cwd())
+        skeleton = await tree_provider.resolve(".")
 
         # Build the user message
         files_str = "\n".join(f"- {f}" for f in self.relevant_files)

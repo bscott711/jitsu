@@ -240,7 +240,7 @@ async def _handle_request_context(arguments: dict[str, object] | None) -> list[t
     if not provider_cls:
         return [types.TextContent(type="text", text=f"Error: Unknown provider '{provider_name}'.")]
 
-    provider = provider_cls()
+    provider = provider_cls(Path.cwd())
     context_data = await provider.resolve(target_id)
     return [types.TextContent(type="text", text=context_data)]
 
@@ -250,7 +250,7 @@ async def _handle_get_planning_context(
 ) -> list[types.TextContent]:
     """Handle 'get_planning_context' tool request."""
     # 1. Get repo skeleton
-    tree_provider = DirectoryTreeProvider()
+    tree_provider = DirectoryTreeProvider(Path.cwd())
     skeleton = await tree_provider.resolve(".")
 
     # 2. Read .jitsurules
@@ -292,7 +292,7 @@ def _handle_submit_epic(arguments: dict[str, object] | None) -> list[types.TextC
 
 async def _handle_git_status() -> list[types.TextContent]:
     """Handle 'git_status' tool request."""
-    provider = GitProvider()
+    provider = GitProvider(Path.cwd())
     res = await provider.resolve("status")
     return [types.TextContent(type="text", text=res)]
 

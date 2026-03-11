@@ -34,7 +34,7 @@ def my_function(x: str="default"):
         encoding="utf-8",
     )
 
-    provider = ASTProvider()
+    provider = ASTProvider(tmp_path)
     assert provider.name == "ast"
     res = await provider.resolve(str(file_path))
 
@@ -55,7 +55,7 @@ async def test_ast_provider_empty_structure(tmp_path: Path) -> None:
     file_path = tmp_path / "empty.py"
     file_path.write_text("x = 10\ny = 20\n", encoding="utf-8")
 
-    provider = ASTProvider()
+    provider = ASTProvider(tmp_path)
     res = await provider.resolve(str(file_path))
     assert "No structural elements (classes/functions) found." in res
 
@@ -63,7 +63,7 @@ async def test_ast_provider_empty_structure(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_ast_provider_file_not_found() -> None:
     """Test resolution when the target file does not exist."""
-    provider = ASTProvider()
+    provider = ASTProvider(Path.cwd())
     res = await provider.resolve("non_existent_file.py")
     assert "**ERROR:** File not found" in res
 
@@ -74,7 +74,7 @@ async def test_ast_provider_syntax_error(tmp_path: Path) -> None:
     file_path = tmp_path / "invalid.py"
     file_path.write_text("class Def Invalid Syntax::::", encoding="utf-8")
 
-    provider = ASTProvider()
+    provider = ASTProvider(tmp_path)
     res = await provider.resolve(str(file_path))
     assert "**ERROR:** Syntax error in file" in res
 
@@ -85,7 +85,7 @@ async def test_ast_provider_unexpected_error(tmp_path: Path) -> None:
     file_path = tmp_path / "error.py"
     file_path.write_text("class MyClass:\n    pass\n", encoding="utf-8")
 
-    provider = ASTProvider()
+    provider = ASTProvider(tmp_path)
     with patch("anyio.Path.read_text", side_effect=RuntimeError("Disk failure!")):
         res = await provider.resolve(str(file_path))
         assert "**ERROR:** Unexpected error: Disk failure!" in res

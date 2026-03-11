@@ -1,6 +1,7 @@
 """The abstract base interface for all Jitsu Context Providers."""
 
 import abc
+from pathlib import Path
 
 
 class BaseProvider(abc.ABC):
@@ -11,6 +12,16 @@ class BaseProvider(abc.ABC):
     (e.g., a file path, a class name, a database table) and resolving it into
     a deterministic, LLM-optimized string representation of that target's state.
     """
+
+    def __init__(self, workspace_root: Path) -> None:
+        """
+        Initialize the provider with a workspace root.
+
+        Args:
+            workspace_root: The root directory of the workspace.
+
+        """
+        self.workspace_root = workspace_root
 
     @property
     @abc.abstractmethod
