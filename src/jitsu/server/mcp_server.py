@@ -13,7 +13,7 @@ from jitsu.providers import (
     ASTProvider,
     DirectoryTreeProvider,
     FileStateProvider,
-    PydanticV2Provider,
+    PydanticProvider,
 )
 from jitsu.server.ipc import IPCServer
 
@@ -70,8 +70,8 @@ async def handle_list_tools() -> list[types.Tool]:
                     },
                     "provider_name": {
                         "type": "string",
-                        "description": "Provider to use (file_state, pydantic_v2, ast, tree).",
-                        "default": "file_state",
+                        "description": "Provider to use (file, pydantic, ast, tree).",
+                        "default": "file",
                     },
                 },
                 "required": ["target_identifier"],
@@ -154,11 +154,11 @@ async def _handle_request_context(arguments: dict[str, object] | None) -> list[t
         return [types.TextContent(type="text", text="Error: Missing target_identifier.")]
 
     target_id = str(arguments["target_identifier"])
-    provider_name = str(arguments.get("provider_name", "file_state"))
+    provider_name = str(arguments.get("provider_name", "file"))
 
     providers = {
-        "file_state": FileStateProvider,
-        "pydantic_v2": PydanticV2Provider,
+        "file": FileStateProvider,
+        "pydantic": PydanticProvider,
         "ast": ASTProvider,
         "tree": DirectoryTreeProvider,
         "directory_tree": DirectoryTreeProvider,

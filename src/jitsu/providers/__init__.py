@@ -9,7 +9,7 @@ from jitsu.providers.ast import ASTProvider
 from jitsu.providers.base import BaseProvider
 from jitsu.providers.file import FileStateProvider
 from jitsu.providers.git import GitDiffProvider
-from jitsu.providers.pydantic import PydanticV2Provider
+from jitsu.providers.pydantic import PydanticProvider
 from jitsu.providers.tree import DirectoryTreeProvider
 
 __all__ = [
@@ -18,5 +18,5 @@ __all__ = [
     "DirectoryTreeProvider",
     "FileStateProvider",
     "GitDiffProvider",
-    "PydanticV2Provider",
+    "PydanticProvider",
 ]

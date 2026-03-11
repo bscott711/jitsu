@@ -144,7 +144,7 @@ async def test_request_context_success() -> None:
     # We'll use a real file to test the FileStateProvider
     result = await handle_call_tool(
         "jitsu_request_context",
-        {"target_identifier": "pyproject.toml", "provider_name": "file_state"},
+        {"target_identifier": "pyproject.toml", "provider_name": "file"},
     )
     assert isinstance(result[0], TextContent)
     # FileStateProvider returns content or "not found"
@@ -191,13 +191,13 @@ async def test_request_context_mocked_ast() -> None:
 @pytest.mark.asyncio
 async def test_request_context_mocked_pydantic() -> None:
     """Test correctly routing a Pydantic request with mocked provider."""
-    with patch("jitsu.server.mcp_server.PydanticV2Provider") as mock_cls:
+    with patch("jitsu.server.mcp_server.PydanticProvider") as mock_cls:
         mock_instance = mock_cls.return_value
         mock_instance.resolve = AsyncMock(return_value="## PYDANTIC OUTPUT")
 
         result = await handle_call_tool(
             "jitsu_request_context",
-            {"target_identifier": "User", "provider_name": "pydantic_v2"},
+            {"target_identifier": "User", "provider_name": "pydantic"},
         )
 
         assert isinstance(result[0], TextContent)

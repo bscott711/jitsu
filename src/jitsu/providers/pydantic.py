@@ -12,7 +12,7 @@ from jitsu.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class PydanticV2Provider(BaseProvider):
+class PydanticProvider(BaseProvider):
     """Provides the JSON schema of a specific Pydantic V2 model."""
 
     @property

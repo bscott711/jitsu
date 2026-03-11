@@ -7,7 +7,7 @@ from jitsu.providers import (
     DirectoryTreeProvider,
     FileStateProvider,
     GitDiffProvider,
-    PydanticV2Provider,
+    PydanticProvider,
 )
 from jitsu.utils.logger import get_logger
 
@@ -20,7 +20,7 @@ class ContextCompiler:
     def __init__(self) -> None:
         """Initialize the compiler with registered providers."""
         file_provider = FileStateProvider()
-        pydantic_provider = PydanticV2Provider()
+        pydantic_provider = PydanticProvider()
         ast_provider = ASTProvider()
         tree_provider = DirectoryTreeProvider()
         git_provider = GitDiffProvider()
