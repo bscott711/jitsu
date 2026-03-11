@@ -146,6 +146,17 @@ def submit(
 
         if response.startswith("ACK"):
             typer.secho(f"✅ {response}", fg=typer.colors.GREEN, err=True)
+
+            # Auto-archive the epic file
+            completed_dir = Path.cwd() / "epics" / "completed"
+            completed_dir.mkdir(parents=True, exist_ok=True)
+            epic.rename(completed_dir / epic.name)
+
+            typer.secho(
+                f"📂 Epic archived to {completed_dir.relative_to(Path.cwd())}/{epic.name}",
+                fg=typer.colors.CYAN,
+                err=True,
+            )
         else:
             typer.secho(f"❌ Server Error: {response}", fg=typer.colors.RED, err=True)
             raise typer.Exit(1)

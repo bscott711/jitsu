@@ -128,8 +128,13 @@ def test_cli_main() -> None:
 
 
 @patch("jitsu.cli.main.anyio.run")
-def test_cli_submit_success(mock_run: MagicMock, tmp_path: Path) -> None:
+def test_cli_submit_success(
+    mock_run: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test successful epic submission via CLI."""
+    # Change working directory to tmp_path so 'epics/completed' is created there
+    monkeypatch.chdir(tmp_path)
+
     epic_file = tmp_path / "epic.json"
     epic_file.write_text("[]", encoding="utf-8")
 
@@ -139,12 +144,23 @@ def test_cli_submit_success(mock_run: MagicMock, tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert "ACK: Queued 0 phase(s)." in result.output
+    assert "Epic archived to epics/completed/epic.json" in result.output
+
+    # Verify file was moved
+    completed_file = tmp_path / "epics" / "completed" / "epic.json"
+    assert completed_file.exists()
+    assert not epic_file.exists()
+
     mock_run.assert_called_once()
 
 
 @patch("jitsu.cli.main.anyio.run")
-def test_cli_submit_server_error(mock_run: MagicMock, tmp_path: Path) -> None:
+def test_cli_submit_server_error(
+    mock_run: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test epic submission handles ERR: responses correctly."""
+    monkeypatch.chdir(tmp_path)
+
     epic_file = tmp_path / "epic.json"
     epic_file.write_text("[]", encoding="utf-8")
 
@@ -154,6 +170,12 @@ def test_cli_submit_server_error(mock_run: MagicMock, tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert "ERR: Invalid Schema" in result.output
+
+    # Verify file was NOT moved
+    completed_file = tmp_path / "epics" / "completed" / "epic.json"
+    assert not completed_file.exists()
+    assert epic_file.exists()
+
     mock_run.assert_called_once()
 
 
