@@ -332,7 +332,8 @@ async def test_git_status() -> None:
 @pytest.mark.asyncio
 async def test_git_commit_success() -> None:
     """Test successful jitsu_git_commit."""
-    with patch("jitsu.server.mcp_server.subprocess.run") as mock_run:
+    with patch("jitsu.server.mcp_server.CommandRunner.run_args") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
         result = await handle_call_tool(
             "jitsu_git_commit", {"message": "feat: add git tools", "sync": True}
         )
@@ -361,7 +362,7 @@ async def test_git_commit_error() -> None:
     """Test jitsu_git_commit with git error."""
     error = subprocess.CalledProcessError(returncode=1, cmd="just commit")
     error.stderr = "git error"
-    with patch("jitsu.server.mcp_server.subprocess.run", side_effect=error):
+    with patch("jitsu.server.mcp_server.CommandRunner.run_args", side_effect=error):
         result = await handle_call_tool("jitsu_git_commit", {"message": "feat: test"})
         assert "Error: Git command failed" in result[0].text
         assert "git error" in result[0].text

@@ -12,6 +12,7 @@ from mcp.server import Server
 from pydantic import ValidationError
 
 from jitsu.core.compiler import ContextCompiler
+from jitsu.core.runner import CommandRunner
 from jitsu.core.state import JitsuStateManager
 from jitsu.models.core import AgentDirective, PhaseReport, PhaseStatus
 from jitsu.providers import DirectoryTreeProvider, GitProvider, ProviderRegistry
@@ -304,15 +305,10 @@ def _handle_git_commit(arguments: dict[str, object] | None) -> list[types.TextCo
         ]
 
     try:
-        # Delegate to JustFile recipes
+        # Delegate to JustFile recipes via CommandRunner (no hardcoded paths)
         recipe = "sync" if sync else "commit"
-        subprocess.run(
-            ["/opt/homebrew/bin/just", recipe, message],
-            check=True,
-            shell=False,
-            capture_output=True,
-            text=True,
-        )
+        res = CommandRunner.run_args(["just", recipe, message], check=True)
+        del res  # result not needed on success
 
         msg = f"Successfully committed{' and pushed' if sync else ''} changes."
         return [types.TextContent(type="text", text=msg)]

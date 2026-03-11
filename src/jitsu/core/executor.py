@@ -1,8 +1,6 @@
 """Autonomous execution engine for Jitsu directives."""
 
 import logging
-import shlex
-import subprocess
 from pathlib import Path
 
 import openai
@@ -11,6 +9,7 @@ from instructor.core.client import Instructor
 from instructor.core.exceptions import InstructorRetryException
 
 from jitsu.core.client import LLMClientFactory
+from jitsu.core.runner import CommandRunner
 from jitsu.models.core import AgentDirective
 from jitsu.models.execution import ExecutionResult
 from jitsu.prompts import EXECUTOR_SYSTEM_PROMPT
@@ -25,6 +24,7 @@ class JitsuExecutor:
         self,
         model: str = "openai/gpt-oss-120b:free",
         client: Instructor | None = None,
+        runner: CommandRunner | None = None,
     ) -> None:
         """
         Initialize the executor with a model name and optional LLM client.
@@ -33,10 +33,13 @@ class JitsuExecutor:
             model: The model name to use for LLM calls.
             client: An optional pre-constructed instructor client. If not provided,
                     one will be created via LLMClientFactory.
+            runner: An optional CommandRunner instance. If not provided,
+                    a default CommandRunner is used.
 
         """
         self.model = model
         self.client = client if client is not None else LLMClientFactory.create()
+        self.runner = runner if runner is not None else CommandRunner()
 
     def execute_directive(self, directive: AgentDirective, compiler_output: str) -> bool:
         """Execute a single directive with retries on verification failure."""
@@ -83,12 +86,7 @@ class JitsuExecutor:
                 all_stderr: list[str] = []
                 for cmd in directive.verification_commands:
                     logger.info("Running verification: %s", cmd)
-                    res = subprocess.run(
-                        shlex.split(cmd),
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
+                    res = self.runner.run(cmd)
                     if res.returncode != 0:
                         verification_success = False
                         all_stderr.append(

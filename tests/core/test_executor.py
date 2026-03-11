@@ -26,12 +26,20 @@ def mock_directive() -> AgentDirective:
     )
 
 
+@pytest.fixture
+def mock_runner() -> MagicMock:
+    """Create a mock CommandRunner."""
+    return MagicMock()
+
+
 def test_executor_initialization() -> None:
-    """Test executor initialization with injected client."""
+    """Test executor initialization with injected client and runner."""
     mock_client = MagicMock()
-    executor = JitsuExecutor(client=mock_client)
+    mock_runner = MagicMock()
+    executor = JitsuExecutor(client=mock_client, runner=mock_runner)
     assert executor.model == "openai/gpt-oss-120b:free"
     assert executor.client is mock_client
+    assert executor.runner is mock_runner
 
 
 def test_executor_missing_api_key() -> None:
@@ -44,7 +52,9 @@ def test_executor_missing_api_key() -> None:
         JitsuExecutor()
 
 
-def test_executor_execute_success(mock_directive: AgentDirective, tmp_path: Path) -> None:
+def test_executor_execute_success(
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
+) -> None:
     """Test successful directive execution."""
     mock_client = MagicMock()
 
@@ -53,16 +63,16 @@ def test_executor_execute_success(mock_directive: AgentDirective, tmp_path: Path
     result = ExecutionResult(thoughts="Fixed it", edits=[edit])
     mock_client.chat.completions.create.return_value = result
 
-    # Mock subprocess success
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0)
-        executor = JitsuExecutor(client=mock_client)
-        success = executor.execute_directive(mock_directive, "compiler output")
+    # Mock runner success
+    mock_runner.run.return_value = MagicMock(returncode=0)
+
+    executor = JitsuExecutor(client=mock_client, runner=mock_runner)
+    success = executor.execute_directive(mock_directive, "compiler output")
 
     assert success is True
     assert (tmp_path / "test.py").read_text() == "print('hello')"
     assert mock_client.chat.completions.create.call_count == 1
-    assert mock_run.call_count == 1
+    assert mock_runner.run.call_count == 1
 
     # Verify the system prompt uses the EXECUTOR_SYSTEM_PROMPT constant
     call_args = mock_client.chat.completions.create.call_args[1]
@@ -76,7 +86,9 @@ def test_executor_execute_success(mock_directive: AgentDirective, tmp_path: Path
     )
 
 
-def test_executor_execute_retry_success(mock_directive: AgentDirective, tmp_path: Path) -> None:
+def test_executor_execute_retry_success(
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
+) -> None:
     """Test successful directive execution after a retry."""
     mock_client = MagicMock()
 
@@ -84,19 +96,18 @@ def test_executor_execute_retry_success(mock_directive: AgentDirective, tmp_path
     result = ExecutionResult(thoughts="Fixed it", edits=[edit])
     mock_client.chat.completions.create.return_value = result
 
-    # Mock subprocess failure then success
-    with patch("subprocess.run") as mock_run:
-        # 1st run fails, 2nd run succeeds
-        mock_run.side_effect = [
-            MagicMock(returncode=1, stderr="Syntax Error"),
-            MagicMock(returncode=0),
-        ]
-        executor = JitsuExecutor(client=mock_client)
-        success = executor.execute_directive(mock_directive, "compiler output")
+    # 1st run fails, 2nd run succeeds
+    mock_runner.run.side_effect = [
+        MagicMock(returncode=1, stderr="Syntax Error"),
+        MagicMock(returncode=0),
+    ]
+
+    executor = JitsuExecutor(client=mock_client, runner=mock_runner)
+    success = executor.execute_directive(mock_directive, "compiler output")
 
     assert success is True
     assert mock_client.chat.completions.create.call_count == 2  # noqa: PLR2004
-    assert mock_run.call_count == 2  # noqa: PLR2004
+    assert mock_runner.run.call_count == 2  # noqa: PLR2004
     # Verify the second call includes the error message
     second_call_user_msg = mock_client.chat.completions.create.call_args_list[1][1]["messages"][1][
         "content"
@@ -105,7 +116,9 @@ def test_executor_execute_retry_success(mock_directive: AgentDirective, tmp_path
     assert "Syntax Error" in second_call_user_msg
 
 
-def test_executor_execute_failure(mock_directive: AgentDirective, tmp_path: Path) -> None:
+def test_executor_execute_failure(
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
+) -> None:
     """Test directive execution failure after all retries."""
     mock_client = MagicMock()
 
@@ -113,33 +126,32 @@ def test_executor_execute_failure(mock_directive: AgentDirective, tmp_path: Path
     result = ExecutionResult(thoughts="Fixed it", edits=[edit])
     mock_client.chat.completions.create.return_value = result
 
-    # Mock subprocess always failure
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=1, stderr="Linter Error")
-        executor = JitsuExecutor(client=mock_client)
-        success = executor.execute_directive(mock_directive, "compiler output")
+    # Mock runner always fails
+    mock_runner.run.return_value = MagicMock(returncode=1, stderr="Linter Error")
+
+    executor = JitsuExecutor(client=mock_client, runner=mock_runner)
+    success = executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
     assert (
         mock_client.chat.completions.create.call_count == 4  # noqa: PLR2004
     )  # Initial + 3 retries
-    assert mock_run.call_count == 4  # noqa: PLR2004
+    assert mock_runner.run.call_count == 4  # noqa: PLR2004
 
 
-def test_executor_llm_exception(mock_directive: AgentDirective) -> None:
+def test_executor_llm_exception(mock_directive: AgentDirective, mock_runner: MagicMock) -> None:
     """Test that LLM exceptions are handled and count as attempts."""
     mock_client = MagicMock()
     mock_client.chat.completions.create.side_effect = Exception("API down")
 
-    with patch("subprocess.run"):
-        executor = JitsuExecutor(client=mock_client)
-        success = executor.execute_directive(mock_directive, "compiler output")
+    executor = JitsuExecutor(client=mock_client, runner=mock_runner)
+    success = executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
     assert mock_client.chat.completions.create.call_count == 4  # noqa: PLR2004
 
 
-def test_executor_openai_api_error(mock_directive: AgentDirective) -> None:
+def test_executor_openai_api_error(mock_directive: AgentDirective, mock_runner: MagicMock) -> None:
     """Test that OpenAI API errors cause immediate failure."""
     mock_client = MagicMock()
     # Create a mock error response
@@ -149,7 +161,7 @@ def test_executor_openai_api_error(mock_directive: AgentDirective) -> None:
     mock_client.chat.completions.create.side_effect = error
 
     with patch("typer.secho") as mock_secho:
-        executor = JitsuExecutor(client=mock_client)
+        executor = JitsuExecutor(client=mock_client, runner=mock_runner)
         success = executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
@@ -158,7 +170,9 @@ def test_executor_openai_api_error(mock_directive: AgentDirective) -> None:
     assert "Execution API Error [403]" in mock_secho.call_args[0][0]
 
 
-def test_executor_instructor_retry_error(mock_directive: AgentDirective) -> None:
+def test_executor_instructor_retry_error(
+    mock_directive: AgentDirective, mock_runner: MagicMock
+) -> None:
     """Test that Instructor retry errors cause immediate failure."""
     mock_client = MagicMock()
     mock_client.chat.completions.create.side_effect = InstructorRetryException(
@@ -166,7 +180,7 @@ def test_executor_instructor_retry_error(mock_directive: AgentDirective) -> None
     )
 
     with patch("typer.secho") as mock_secho:
-        executor = JitsuExecutor(client=mock_client)
+        executor = JitsuExecutor(client=mock_client, runner=mock_runner)
         success = executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
