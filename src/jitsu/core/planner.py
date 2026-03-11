@@ -5,13 +5,14 @@ import logging
 import os
 from collections.abc import Callable
 from pathlib import Path
+from typing import get_args
 
 import anyio
 import dotenv
 import instructor
 from openai import OpenAI
 
-from jitsu.models.core import AgentDirective, EpicBlueprint
+from jitsu.models.core import AgentDirective, ContextTarget, EpicBlueprint
 from jitsu.providers.tree import DirectoryTreeProvider
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,11 @@ class JitsuPlanner:
                 base_url="https://openrouter.ai/api/v1",
                 api_key=api_key,
             )
+        )
+
+        # Extract allowed provider names for prompt engineering
+        allowed_providers = ", ".join(
+            get_args(ContextTarget.model_fields["provider_name"].annotation)
         )
 
         # Read the core orchestrator prompt
@@ -95,7 +101,9 @@ class JitsuPlanner:
                 f"\n\nYou are elaborating a specific Phase for the Epic '{blueprint.epic_id}'.\n"
                 f"Phase ID: {phase.phase_id}\n"
                 f"Phase Description: {phase.description}\n"
-                f"You MUST generate a single AgentDirective object that fulfills this phase's goals."
+                f"You MUST generate a single AgentDirective object that fulfills this phase's goals.\n\n"
+                f"CRITICAL SCHEMA RULE: For any context_targets, you MUST ONLY use the following registered provider_names: [{allowed_providers}]. "
+                "Do NOT use the provider you are currently building as a target."
             )
 
             directive = client.chat.completions.create(
