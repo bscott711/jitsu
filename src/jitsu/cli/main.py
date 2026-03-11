@@ -427,7 +427,7 @@ def run(
             "-m",
             help="The LLM model to use via OpenRouter.",
         ),
-    ] = "meta-llama/llama-3.3-70b-instruct:free",
+    ] = "openai/gpt-oss-120b:free",
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable verbose debug output.")
     ] = False,
@@ -502,7 +502,7 @@ def auto(
             "-m",
             help="The LLM model to use via OpenRouter.",
         ),
-    ] = "meta-llama/llama-3.3-70b-instruct:free",
+    ] = "openai/gpt-oss-120b:free",
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable verbose debug output.")
     ] = False,
