@@ -238,8 +238,9 @@ def test_cli_plan_success(mock_save: MagicMock, mock_generate: AsyncMock, tmp_pa
     """Test successful plan generation via CLI."""
 
     async def mock_gen_side_effect(
-        model: str, on_progress: Callable[[str], None] | None = None
+        model: str, on_progress: Callable[[str], None] | None = None, *, verbose: bool = False
     ) -> list[AgentDirective]:
+        del verbose  # Mark as used for Ruff
         if on_progress:
             on_progress(f"test progress using {model}")
         return [
@@ -262,7 +263,7 @@ def test_cli_plan_success(mock_save: MagicMock, mock_generate: AsyncMock, tmp_pa
     assert "Plan successfully generated" in result.output
     assert "Using model: gpt-4o" in result.output
     assert "test progress using gpt-4o" in result.output
-    mock_generate.assert_awaited_once_with(model="gpt-4o", on_progress=ANY)
+    mock_generate.assert_awaited_once_with(model="gpt-4o", on_progress=ANY, verbose=False)
     mock_save.assert_called_once_with(out_file)
 
 

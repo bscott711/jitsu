@@ -320,7 +320,9 @@ async def _run_planner(
         planner = JitsuPlanner(objective=objective, relevant_files=files)
 
         try:
-            directives = await planner.generate_plan(model=model, on_progress=on_progress)
+            directives = await planner.generate_plan(
+                model=model, on_progress=on_progress, verbose=verbose
+            )
         except openai.APIStatusError as e:
             # 403 = OpenRouter Monthly Limit, 429 = Rate Limit
             if e.status_code in (403, 429):
@@ -332,7 +334,7 @@ async def _run_planner(
                     err=True,
                 )
                 directives = await planner.generate_plan(
-                    model=backup_model, on_progress=on_progress
+                    model=backup_model, on_progress=on_progress, verbose=verbose
                 )
             else:
                 raise

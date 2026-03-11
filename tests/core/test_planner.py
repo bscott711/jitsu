@@ -142,3 +142,43 @@ async def test_planner_save_plan(tmp_path: Path) -> None:
 
     assert len(data) == 1
     assert data[0]["epic_id"] == "epic-1"
+
+
+@pytest.mark.asyncio
+async def test_planner_generate_plan_verbose() -> None:
+    """Test that the planner outputs debug info when verbose is True."""
+    planner = JitsuPlanner(objective="Test", relevant_files=[])
+
+    blueprint = EpicBlueprint(
+        epic_id="e1",
+        phases=[PhaseBlueprint(phase_id="p1", description="test phase")],
+    )
+
+    directive = AgentDirective(
+        epic_id="e1",
+        phase_id="p1",
+        module_scope="test",
+        instructions="test",
+    )
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = [blueprint, directive]
+
+    with (
+        patch("jitsu.core.planner.instructor.from_openai", return_value=mock_client),
+        patch("jitsu.core.planner.OpenAI"),
+        patch("jitsu.core.planner.dotenv.load_dotenv"),
+        patch("jitsu.core.planner.os.environ.get", return_value="fake-key"),
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=True),
+        patch("jitsu.core.planner.anyio.Path.read_text", return_value="system prompt"),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+        patch("jitsu.core.planner.typer.secho") as mock_secho,
+    ):
+        await planner.generate_plan(verbose=True)
+
+    # Verify debug info was printed
+    assert mock_secho.called
+    # Check for specific strings
+    calls = [str(call.args[0]) for call in mock_secho.call_args_list]
+    assert any("[DEBUG] Epic Blueprint:" in s for s in calls)
+    assert any("[DEBUG] Phase 1 Directive (p1):" in s for s in calls)

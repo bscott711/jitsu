@@ -10,6 +10,7 @@ from typing import get_args
 import anyio
 import dotenv
 import instructor
+import typer
 from openai import OpenAI
 
 from jitsu.models.core import AgentDirective, ContextTarget, EpicBlueprint
@@ -31,6 +32,8 @@ class JitsuPlanner:
         self,
         model: str = "google/gemini-2.0-flash-001",
         on_progress: Callable[[str], None] | None = None,
+        *,
+        verbose: bool = False,
     ) -> list[AgentDirective]:
         """Query the LLM and generate a validated list of directives using two passes."""
         dotenv.load_dotenv()
@@ -91,6 +94,10 @@ class JitsuPlanner:
             ],
         )
 
+        if verbose:
+            typer.secho("\n[DEBUG] Epic Blueprint:", fg=typer.colors.YELLOW, bold=True, err=True)
+            typer.secho(blueprint.model_dump_json(indent=2), fg=typer.colors.YELLOW, err=True)
+
         # Pass 2: Micro - Elaborate each phase
         self._directives = []
         for i, phase in enumerate(blueprint.phases):
@@ -114,6 +121,16 @@ class JitsuPlanner:
                     {"role": "user", "content": user_message},
                 ],
             )
+
+            if verbose:
+                typer.secho(
+                    f"\n[DEBUG] Phase {i + 1} Directive ({phase.phase_id}):",
+                    fg=typer.colors.CYAN,
+                    bold=True,
+                    err=True,
+                )
+                typer.secho(directive.model_dump_json(indent=2), fg=typer.colors.CYAN, err=True)
+
             self._directives.append(directive)
 
         return self._directives
