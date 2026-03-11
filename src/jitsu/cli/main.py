@@ -379,7 +379,7 @@ def plan(
             "-m",
             help="The LLM model to use via OpenRouter.",
         ),
-    ] = "qwen/qwen-3-coder-480b-instruct:free",
+    ] = "openai/gpt-oss-120b:free",
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable verbose debug output.")
     ] = False,
