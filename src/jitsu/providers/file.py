@@ -10,7 +10,7 @@ class FileStateProvider(BaseProvider):
     @property
     def name(self) -> str:
         """The unique name of this provider."""
-        return "file_state"
+        return "file"
 
     async def resolve(self, target: str) -> str:
         """Resolve the file path and return its contents."""

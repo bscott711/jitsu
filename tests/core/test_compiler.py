@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from jitsu.core.compiler import ContextCompiler
 from jitsu.models.core import AgentDirective, ContextTarget, TargetResolutionMode
@@ -42,45 +43,24 @@ async def test_compile_with_anti_patterns() -> None:
 
 @pytest.mark.asyncio
 async def test_compile_unknown_provider_required() -> None:
-    """Test compiling with a required target requesting an unknown provider."""
-    compiler = ContextCompiler()
-    directive = AgentDirective(
-        epic_id="epic-1",
-        phase_id="phase-1",
-        module_scope="test",
-        instructions="test",
-        context_targets=[
-            ContextTarget(
-                provider_name="fake_provider",
-                target_identifier="test_target",
-                is_required=True,
-            )
-        ],
-    )
-    res = await compiler.compile_directive(directive)
-    assert "### [FAILED] test_target" in res
-    assert "Unknown provider 'fake_provider'" in res
+    """Test that unknown providers are rejected at instantiation time."""
+    with pytest.raises(ValidationError):
+        ContextTarget(
+            provider_name="fake_provider",  # type: ignore
+            target_identifier="test_target",
+            is_required=True,
+        )
 
 
 @pytest.mark.asyncio
 async def test_compile_unknown_provider_optional() -> None:
-    """Test compiling with an optional target requesting an unknown provider."""
-    compiler = ContextCompiler()
-    directive = AgentDirective(
-        epic_id="epic-1",
-        phase_id="phase-1",
-        module_scope="test",
-        instructions="test",
-        context_targets=[
-            ContextTarget(
-                provider_name="fake_provider",
-                target_identifier="test_target",
-                is_required=False,
-            )
-        ],
-    )
-    res = await compiler.compile_directive(directive)
-    assert "[FAILED]" not in res
+    """Test that unknown preferred providers are rejected at instantiation time."""
+    with pytest.raises(ValidationError):
+        ContextTarget(
+            provider_name="fake_provider",  # type: ignore
+            target_identifier="test_target",
+            is_required=False,
+        )
 
 
 @pytest.mark.asyncio
@@ -91,7 +71,7 @@ async def test_compile_valid_provider() -> None:
     # We use AsyncMock because the compiler expects resolve() to be awaitable
     mock_provider = AsyncMock()
     mock_provider.resolve.return_value = "MOCK_FILE_CONTENT"
-    compiler._providers["mock_provider"] = mock_provider  # noqa: SLF001
+    compiler._providers["file"] = mock_provider  # noqa: SLF001
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -100,7 +80,7 @@ async def test_compile_valid_provider() -> None:
         instructions="test",
         context_targets=[
             ContextTarget(
-                provider_name="mock_provider",
+                provider_name="file",
                 target_identifier="test_target",
             )
         ],
@@ -125,7 +105,7 @@ async def test_compile_auto_ast_preference() -> None:
         instructions="test",
         context_targets=[
             ContextTarget(
-                provider_name="file_state",
+                provider_name="file",
                 target_identifier="src/main.py",
                 resolution_mode=TargetResolutionMode.AUTO,
             )
@@ -147,7 +127,7 @@ async def test_compile_auto_fallback_to_file_on_ast_failure() -> None:
 
     mock_file = AsyncMock()
     mock_file.resolve.return_value = "FILE_CONTENT"
-    compiler._providers["file_state"] = mock_file  # noqa: SLF001
+    compiler._providers["file"] = mock_file  # noqa: SLF001
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -156,7 +136,7 @@ async def test_compile_auto_fallback_to_file_on_ast_failure() -> None:
         instructions="test",
         context_targets=[
             ContextTarget(
-                provider_name="none",
+                provider_name="file",
                 target_identifier="src/main.py",
                 resolution_mode=TargetResolutionMode.AUTO,
             )
@@ -180,7 +160,7 @@ async def test_compile_context_manifest_inclusion() -> None:
         instructions="test",
         context_targets=[
             ContextTarget(
-                provider_name="file_state",
+                provider_name="file",
                 target_identifier="README.md",
                 resolution_mode=TargetResolutionMode.FULL_SOURCE,
             )
@@ -188,7 +168,7 @@ async def test_compile_context_manifest_inclusion() -> None:
     )
     res = await compiler.compile_directive(directive)
     assert "## Compiled Context Manifest" in res
-    assert "- `README.md`: **Full Source** (file_state)" in res
+    assert "- `README.md`: **Full Source** (file)" in res
 
 
 @pytest.mark.asyncio
@@ -197,7 +177,7 @@ async def test_compile_auto_pydantic_trigger() -> None:
     compiler = ContextCompiler()
     mock_pydantic = AsyncMock()
     mock_pydantic.resolve.return_value = "SCHEMA_OUTPUT"
-    compiler._providers["pydantic_v2"] = mock_pydantic  # noqa: SLF001
+    compiler._providers["pydantic"] = mock_pydantic  # noqa: SLF001
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -206,7 +186,7 @@ async def test_compile_auto_pydantic_trigger() -> None:
         instructions="test",
         context_targets=[
             ContextTarget(
-                provider_name="none",
+                provider_name="pydantic",
                 target_identifier="jitsu.models.core.AgentDirective",
                 resolution_mode=TargetResolutionMode.AUTO,
             )
@@ -223,7 +203,7 @@ async def test_explicit_mode_failure_string_in_manifest() -> None:
     compiler = ContextCompiler()
     mock_file = AsyncMock()
     mock_file.resolve.return_value = "ERROR: something happened"
-    compiler._providers["file_state"] = mock_file  # noqa: SLF001
+    compiler._providers["file"] = mock_file  # noqa: SLF001
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -232,7 +212,7 @@ async def test_explicit_mode_failure_string_in_manifest() -> None:
         instructions="test",
         context_targets=[
             ContextTarget(
-                provider_name="any",
+                provider_name="file",
                 target_identifier="t",
                 resolution_mode=TargetResolutionMode.FULL_SOURCE,
             )
@@ -240,7 +220,7 @@ async def test_explicit_mode_failure_string_in_manifest() -> None:
     )
 
     res = await compiler.compile_directive(directive)
-    assert "Unknown provider 'any' or resolution failed for 't'." in res
+    assert "Unknown provider 'file' or resolution failed for 't'." in res
 
 
 @pytest.mark.asyncio
@@ -249,7 +229,7 @@ async def test_compile_explicit_schema_mode() -> None:
     compiler = ContextCompiler()
     mock_pydantic = AsyncMock()
     mock_pydantic.resolve.return_value = "SCHEMA_JSON"
-    compiler._providers["pydantic_v2"] = mock_pydantic  # noqa: SLF001
+    compiler._providers["pydantic"] = mock_pydantic  # noqa: SLF001
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -258,7 +238,7 @@ async def test_compile_explicit_schema_mode() -> None:
         instructions="test",
         context_targets=[
             ContextTarget(
-                provider_name="none",
+                provider_name="pydantic",
                 target_identifier="models.User",
                 resolution_mode=TargetResolutionMode.SCHEMA_ONLY,
             )
@@ -282,7 +262,7 @@ async def test_explicit_mode_missing_provider_failure() -> None:
         instructions="test",
         context_targets=[
             ContextTarget(
-                provider_name="none",
+                provider_name="ast",
                 target_identifier="t",
                 resolution_mode=TargetResolutionMode.STRUCTURE_ONLY,
             )
@@ -348,7 +328,7 @@ async def test_compiler_resolve_auto_tree_fallback() -> None:
     # We mock the tree provider to return a success string.
     # We pass a target without '.py' or '.' so AST and Pydantic skip it.
     with patch.object(DirectoryTreeProvider, "resolve", return_value="### Directory Tree"):
-        res, provider = await compiler._resolve_auto("my_directory", "file_state")  # noqa: SLF001
+        res, provider = await compiler._resolve_auto("my_directory", "file")  # noqa: SLF001
 
         assert provider == "tree"
         assert "### Directory Tree" in res
@@ -365,3 +345,18 @@ async def test_compiler_resolve_auto_unknown_preferred() -> None:
         await compiler._resolve_auto("fake_target", "hallucinated_provider")  # noqa: SLF001
 
         mock_logger.assert_called_with("Unknown provider '%s' requested", "hallucinated_provider")
+
+
+@pytest.mark.asyncio
+async def test_compiler_resolve_auto_git_diff_as_preferred() -> None:
+    """Test that AUTO resolution successfully resolves an unusual preferred provider like git_diff."""
+    compiler = ContextCompiler()
+    mock_git = AsyncMock()
+    mock_git.resolve.return_value = "### Git Diff: HEAD"
+    compiler._providers["git_diff"] = mock_git  # noqa: SLF001
+
+    res, provider = await compiler._resolve_auto("HEAD", "git_diff")  # noqa: SLF001
+
+    assert provider == "git_diff"
+    assert "### Git Diff: HEAD" in res
+    mock_git.resolve.assert_called_once_with("HEAD")

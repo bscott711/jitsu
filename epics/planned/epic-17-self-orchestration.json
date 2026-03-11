@@ -1,0 +1,64 @@
+[
+  {
+    "epic_id": "epic-17-self-orchestration",
+    "phase_id": "phase-01-planning-tools",
+    "module_scope": "src/jitsu/server",
+    "instructions": "Update `src/jitsu/server/mcp_server.py` to add two new tools. 1) `jitsu_get_planning_context(relevant_files: list[str])`: Uses `DirectoryTreeProvider` to get the repo skeleton, reads `.jitsurules`, and returns them as a combined string to help the agent plan. 2) `jitsu_submit_epic(directives: list[dict])`: Accepts a list of dictionaries, validates them into `AgentDirective` Pydantic models, and pushes them into the `state_manager` queue, returning a success message.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "ast",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not break existing tools.",
+      "Ensure `jitsu_submit_epic` gracefully handles and returns Pydantic validation errors if the agent submits bad JSON."
+    ],
+    "completion_criteria": [
+      "`jitsu_get_planning_context` tool is registered and functioning.",
+      "`jitsu_submit_epic` tool is registered, validates input, and updates the queue."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-17-self-orchestration",
+    "phase_id": "phase-02-planning-tests",
+    "module_scope": "tests/server",
+    "instructions": "Update `tests/server/test_server.py` to add tests for the two new tools. Mock the providers and state manager to ensure `jitsu_get_planning_context` returns the correct formatted string and `jitsu_submit_epic` successfully validates correct payloads while returning clear errors for invalid payloads. Maintain 100% statement coverage in the server module.",
+    "context_targets": [
+      {
+        "provider_name": "file_state",
+        "target_identifier": "tests/server/test_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "ast",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not let coverage drop below 100%."
+    ],
+    "completion_criteria": [
+      "Tests are written for `jitsu_get_planning_context`.",
+      "Tests are written for `jitsu_submit_epic` (both success and validation failure).",
+      "100% coverage is maintained."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

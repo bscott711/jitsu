@@ -18,7 +18,7 @@ class PydanticV2Provider(BaseProvider):
     @property
     def name(self) -> str:
         """The unique name of this provider."""
-        return "pydantic_v2"
+        return "pydantic"
 
     async def resolve(self, target: str) -> str:
         """

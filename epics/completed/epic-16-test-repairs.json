@@ -1,0 +1,40 @@
+[
+  {
+    "epic_id": "epic-16-test-repairs",
+    "phase_id": "phase-01-fix-pydantic-tests",
+    "module_scope": "tests",
+    "instructions": "The `ContextTarget` model in `src/jitsu/models/core.py` now enforces a strict `Literal[\"file\", \"ast\", \"tree\", \"pydantic\"]` for `provider_name`. Because of this, tests in `tests/core/test_compiler.py` and `tests/models/test_core.py` that use mock or invalid provider names (like 'unknown' or 'fake') are failing with Pydantic `ValidationError`s. Update the tests: 1) For happy-path tests, use valid literal values like 'file' or 'ast'. 2) For tests intending to fail on unknown providers, assert that a `pydantic.ValidationError` is raised during `ContextTarget` instantiation. Maintain 100% statement coverage.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_compiler.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/models/test_core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "ast",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not revert the Literal typing in core.py. The strict typing must remain.",
+      "Do not allow coverage to drop below 100%."
+    ],
+    "completion_criteria": [
+      "All failing tests are updated to respect the new Literal constraints.",
+      "Failing provider tests correctly assert Pydantic ValidationErrors.",
+      "`just verify` runs completely green."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

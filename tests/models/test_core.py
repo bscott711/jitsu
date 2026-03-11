@@ -32,10 +32,10 @@ def test_target_resolution_mode_enum() -> None:
 def test_context_target_initialization() -> None:
     """Test valid instantiation and defaults of ContextTarget."""
     target = ContextTarget(
-        provider_name="pydantic_v2",
+        provider_name="pydantic",
         target_identifier="src.schemas.User",
     )
-    assert target.provider_name == "pydantic_v2"
+    assert target.provider_name == "pydantic"
     assert target.target_identifier == "src.schemas.User"
     assert target.is_required is True  # Default value
     assert target.resolution_mode == TargetResolutionMode.AUTO  # Default value
@@ -43,7 +43,7 @@ def test_context_target_initialization() -> None:
 
 def test_context_target_strictness_and_frozen() -> None:
     """Test that ContextTarget is frozen and prevents mutation."""
-    target = ContextTarget(provider_name="file_state", target_identifier="src/main.py")
+    target = ContextTarget(provider_name="file", target_identifier="src/main.py")
 
     # Verify the model is frozen and rejects reassignment
     with pytest.raises(ValidationError, match="Instance is frozen"):
@@ -52,7 +52,7 @@ def test_context_target_strictness_and_frozen() -> None:
     # Verify the model correctly accepts and coerces valid strings to StrEnum
     target_from_dict = ContextTarget.model_validate(
         {
-            "provider_name": "file_state",
+            "provider_name": "file",
             "target_identifier": "src/main.py",
             "resolution_mode": "FULL_SOURCE",
         }

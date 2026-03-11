@@ -19,7 +19,7 @@ class MockModel(BaseModel):
 async def test_pydantic_provider_success() -> None:
     """Test successful resolution of a Pydantic model."""
     provider = PydanticV2Provider()
-    assert provider.name == "pydantic_v2"
+    assert provider.name == "pydantic"
     # Use a core model that is guaranteed to be in the path
     res = await provider.resolve("jitsu.models.core.AgentDirective")
 

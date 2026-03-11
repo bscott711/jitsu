@@ -1,8 +1,9 @@
 """Core domain models for the Jitsu orchestration layer."""
 
 from enum import StrEnum
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PhaseStatus(StrEnum):
@@ -29,8 +30,14 @@ class ContextTarget(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    provider_name: str
-    target_identifier: str
+    provider_name: Literal["file", "ast", "tree", "pydantic"] = Field(
+        ...,
+        description="The exact name of the provider. MUST be one of: 'file', 'ast', 'tree', 'pydantic'.",
+    )
+    target_identifier: str = Field(
+        ...,
+        description="The path or identifier for the target (e.g., 'src/main.py').",
+    )
     is_required: bool = True
     resolution_mode: TargetResolutionMode = TargetResolutionMode.AUTO
 
@@ -44,10 +51,13 @@ class AgentDirective(BaseModel):
     phase_id: str
     module_scope: str
     instructions: str
-    context_targets: list[ContextTarget] = []
-    anti_patterns: list[str] = []
-    verification_commands: list[str] = []
-    completion_criteria: list[str] = []
+    context_targets: list[ContextTarget] = Field(default=[])
+    anti_patterns: list[str] = Field(default=[])
+    verification_commands: list[str] = Field(
+        default=[],
+        description="Commands to verify the phase is complete. You MUST strictly follow the verification constraints defined in the PROJECT RULES (e.g., this MUST include 'just verify').",
+    )
+    completion_criteria: list[str] = Field(default=[])
 
 
 class PhaseReport(BaseModel):
@@ -58,6 +68,6 @@ class PhaseReport(BaseModel):
 
     phase_id: str
     status: PhaseStatus
-    artifacts_generated: list[str] = []
+    artifacts_generated: list[str] = Field(default=[])
     agent_notes: str = ""
     verification_output: str = ""

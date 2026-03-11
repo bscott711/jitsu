@@ -116,12 +116,12 @@ class ContextCompiler:
 
         # Try Pydantic if it looks like a symbol
         if "." in target_id:
-            res = await self._try_resolve("pydantic_v2", target_id)
+            res = await self._try_resolve("pydantic", target_id)
             if res:
-                return res, "pydantic_v2"
+                return res, "pydantic"
 
         # Try preferred provider if it's not one we already tried
-        if preferred_provider not in ("ast", "pydantic_v2", "file_state", "tree"):
+        if preferred_provider not in ("ast", "pydantic", "file", "tree"):
             res = await self._try_resolve(preferred_provider, target_id)
             if res:
                 return res, preferred_provider
@@ -133,9 +133,9 @@ class ContextCompiler:
             return res, "tree"
 
         # Fallback to Full Source
-        res = await self._try_resolve("file_state", target_id)
+        res = await self._try_resolve("file", target_id)
         if res:
-            return res, "file_state"
+            return res, "file"
 
         logger.error("All providers failed to resolve target: %s", target_id)
         return "", "none"
@@ -156,8 +156,8 @@ class ContextCompiler:
         """Resolve target using an explicit mode."""
         provider_name = {
             TargetResolutionMode.STRUCTURE_ONLY: "ast",
-            TargetResolutionMode.SCHEMA_ONLY: "pydantic_v2",
-            TargetResolutionMode.FULL_SOURCE: "file_state",
+            TargetResolutionMode.SCHEMA_ONLY: "pydantic",
+            TargetResolutionMode.FULL_SOURCE: "file",
         }.get(mode)
 
         if not provider_name:
@@ -179,8 +179,8 @@ class ContextCompiler:
         """Map provider name to a human-readable manifest summary."""
         return {
             "ast": "Summarized (Structural AST)",
-            "pydantic_v2": "Condensed (JSON Schema)",
-            "file_state": "Full Source",
+            "pydantic": "Condensed (JSON Schema)",
+            "file": "Full Source",
             "tree": "Visual Tree Structure",
             "git_diff": "Git Repository Diff",
         }.get(provider_name, "Included")
