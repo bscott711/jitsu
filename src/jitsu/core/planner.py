@@ -2,17 +2,15 @@
 
 import json
 import logging
-import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import get_args
 
 import anyio
-import dotenv
-import instructor
 import typer
-from openai import OpenAI
+from instructor.core.client import Instructor
 
+from jitsu.core.client import LLMClientFactory
 from jitsu.models.core import AgentDirective, ContextTarget, EpicBlueprint
 from jitsu.prompts import (
     PLANNER_BASE_PROMPT,
@@ -28,10 +26,25 @@ logger = logging.getLogger(__name__)
 class JitsuPlanner:
     """Generates a sequence of AgentDirectives using an LLM."""
 
-    def __init__(self, objective: str, relevant_files: list[str]) -> None:
-        """Initialize the planner with an objective and relevant files."""
+    def __init__(
+        self,
+        objective: str,
+        relevant_files: list[str],
+        client: Instructor | None = None,
+    ) -> None:
+        """
+        Initialize the planner with an objective, relevant files, and optional LLM client.
+
+        Args:
+            objective: The high-level goal for the plan.
+            relevant_files: List of relevant file paths to include in context.
+            client: An optional pre-constructed instructor client. If not provided,
+                    one will be created via LLMClientFactory.
+
+        """
         self.objective = objective
         self.relevant_files = relevant_files
+        self._client = client
         self._directives: list[AgentDirective] = []
 
     async def generate_plan(
@@ -42,21 +55,7 @@ class JitsuPlanner:
         verbose: bool = False,
     ) -> list[AgentDirective]:
         """Query the LLM and generate a validated list of directives using two passes."""
-        dotenv.load_dotenv()
-
-        api_key = os.environ.get("OPENROUTER_API_KEY")
-        if not api_key:
-            msg = "OPENROUTER_API_KEY environment variable is not set"
-            raise RuntimeError(msg)
-
-        # Initialize instructor with OpenAI client pointing to OpenRouter
-        client = instructor.from_openai(
-            OpenAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=api_key,
-            ),
-            mode=instructor.Mode.JSON,
-        )
+        client = self._client if self._client is not None else LLMClientFactory.create()
 
         # Extract allowed provider names for prompt engineering
         allowed_providers = ", ".join(

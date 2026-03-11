@@ -1,0 +1,110 @@
+[
+  {
+    "epic_id": "epic-core-dependency-injection",
+    "phase_id": "phase-extract-llm-factory",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "Create a new file `src/jitsu/core/client.py` containing an `LLMClientFactory` class responsible for calling `dotenv.load_dotenv()`, verifying the `OPENROUTER_API_KEY`, and returning an initialized `instructor` client. Refactor `JitsuPlanner` (in `planner.py`) and `JitsuExecutor` (in `executor.py`) to accept this client via constructor injection rather than duplicating the instantiation logic. Update `tests/core/test_planner.py` and `tests/core/test_executor.py` to inject a mocked client.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT leave any `dotenv.load_dotenv()` or `instructor.from_openai()` calls inside the planner or executor classes.",
+      "Do NOT use global variables for the client; it must be passed via dependency injection."
+    ],
+    "completion_criteria": [
+      "An `LLMClientFactory` centralizes client instantiation.",
+      "`JitsuPlanner` and `JitsuExecutor` receive their LLM client via Dependency Injection.",
+      "All core tests pass without requiring deep patching of `os.environ` or `dotenv`."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-core-dependency-injection",
+    "phase_id": "phase-centralize-provider-registry",
+    "module_scope": "src/jitsu/providers/",
+    "instructions": "Create a `ProviderRegistry` dictionary in `src/jitsu/providers/registry.py` (or export it via `__init__.py`) that maps provider string names to their respective classes (e.g., `{\"file\": FileStateProvider, ...}`). Refactor `ContextCompiler.__init__` in `src/jitsu/core/compiler.py` and `_handle_request_context` in `src/jitsu/server/mcp_server.py` to import and use this centralized registry instead of defining their own hardcoded dictionaries.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT manually construct dictionaries mapping strings to provider classes inside `compiler.py` or `mcp_server.py`.",
+      "Do NOT cause circular imports between the Core/Server layers and the Provider layer."
+    ],
+    "completion_criteria": [
+      "A centralized `ProviderRegistry` acts as the single source of truth for available providers.",
+      "`ContextCompiler` and the MCP Server dynamically load from this registry.",
+      "The codebase successfully adheres to the Open/Closed Principle for adding new providers."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-core-dependency-injection",
+    "phase_id": "phase-extract-command-runner",
+    "module_scope": "src/jitsu/core/runner.py",
+    "instructions": "Create a `CommandRunner` utility in `src/jitsu/core/runner.py` (or `jitsu.utils`) to encapsulate all `subprocess.run` calls. Ensure it uses `shutil.which(\"just\")` to dynamically resolve the `just` binary. Refactor `JitsuExecutor.execute_directive` and the MCP server's `_handle_git_commit` in `src/jitsu/server/mcp_server.py` (which currently hardcodes `/opt/homebrew/bin/just`) to utilize this new `CommandRunner`.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT use hardcoded paths like `/opt/homebrew/bin/just` anywhere in the codebase.",
+      "Do NOT leave direct `subprocess.run` calls in the executor or server modules."
+    ],
+    "completion_criteria": [
+      "`CommandRunner` successfully isolates all OS-level subprocess executions.",
+      "The MCP Server no longer crashes on non-MacOS environments due to hardcoded Homebrew paths.",
+      "Execution and server tests pass using the new runner."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

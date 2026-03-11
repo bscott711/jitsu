@@ -22,8 +22,6 @@ async def test_planner_initialization() -> None:
 @pytest.mark.asyncio
 async def test_planner_plan_generation_success() -> None:
     """Test that the planner successfully generates a plan using two passes."""
-    planner = JitsuPlanner(objective="Test", relevant_files=["src/main.py"])
-
     blueprint = EpicBlueprint(
         epic_id="e1",
         phases=[PhaseBlueprint(phase_id="p1", description="test phase")],
@@ -43,11 +41,9 @@ async def test_planner_plan_generation_success() -> None:
 
     on_progress_mock = MagicMock()
 
+    planner = JitsuPlanner(objective="Test", relevant_files=["src/main.py"], client=mock_client)
+
     with (
-        patch("jitsu.core.planner.instructor.from_openai", return_value=mock_client),
-        patch("jitsu.core.planner.OpenAI"),
-        patch("jitsu.core.planner.dotenv.load_dotenv"),
-        patch("jitsu.core.planner.os.environ.get", return_value="fake-key"),
         patch("jitsu.core.planner.anyio.Path.exists", return_value=True),
         patch("jitsu.core.planner.anyio.Path.read_text", return_value="system prompt"),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
@@ -81,8 +77,8 @@ async def test_planner_missing_api_key() -> None:
     planner = JitsuPlanner(objective="Test", relevant_files=[])
 
     with (
-        patch("jitsu.core.planner.dotenv.load_dotenv"),
-        patch("jitsu.core.planner.os.environ.get", return_value=None),
+        patch("jitsu.core.client.dotenv.load_dotenv"),
+        patch("jitsu.core.client.os.environ.get", return_value=None),
         pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"),
     ):
         await planner.generate_plan()
@@ -91,16 +87,12 @@ async def test_planner_missing_api_key() -> None:
 @pytest.mark.asyncio
 async def test_planner_generation_failure() -> None:
     """Test that the planner allows generation exceptions to bubble up."""
-    planner = JitsuPlanner(objective="Test", relevant_files=[])
-
     mock_client = MagicMock()
     mock_client.chat.completions.create.side_effect = Exception("API error")
 
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+
     with (
-        patch("jitsu.core.planner.instructor.from_openai", return_value=mock_client),
-        patch("jitsu.core.planner.OpenAI"),
-        patch("jitsu.core.planner.dotenv.load_dotenv"),
-        patch("jitsu.core.planner.os.environ.get", return_value="fake-key"),
         patch("jitsu.core.planner.anyio.Path.exists", return_value=True),
         patch("jitsu.core.planner.anyio.Path.read_text", return_value="system prompt"),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
@@ -112,17 +104,13 @@ async def test_planner_generation_failure() -> None:
 @pytest.mark.asyncio
 async def test_planner_generation_fallback_prompt() -> None:
     """Test that the planner uses the fallback prompt if the prompt file is missing."""
-    planner = JitsuPlanner(objective="Test", relevant_files=[])
-
     blueprint = EpicBlueprint(epic_id="e1", phases=[])
     mock_client = MagicMock()
     mock_client.chat.completions.create.return_value = blueprint
 
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+
     with (
-        patch("jitsu.core.planner.instructor.from_openai", return_value=mock_client),
-        patch("jitsu.core.planner.OpenAI"),
-        patch("jitsu.core.planner.dotenv.load_dotenv"),
-        patch("jitsu.core.planner.os.environ.get", return_value="fake-key"),
         patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
     ):
@@ -159,8 +147,6 @@ async def test_planner_save_plan(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_planner_generate_plan_verbose() -> None:
     """Test that the planner outputs debug info when verbose is True."""
-    planner = JitsuPlanner(objective="Test", relevant_files=[])
-
     blueprint = EpicBlueprint(
         epic_id="e1",
         phases=[PhaseBlueprint(phase_id="p1", description="test phase")],
@@ -176,11 +162,9 @@ async def test_planner_generate_plan_verbose() -> None:
     mock_client = MagicMock()
     mock_client.chat.completions.create.side_effect = [blueprint, directive]
 
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+
     with (
-        patch("jitsu.core.planner.instructor.from_openai", return_value=mock_client),
-        patch("jitsu.core.planner.OpenAI"),
-        patch("jitsu.core.planner.dotenv.load_dotenv"),
-        patch("jitsu.core.planner.os.environ.get", return_value="fake-key"),
         patch("jitsu.core.planner.anyio.Path.exists", return_value=True),
         patch("jitsu.core.planner.anyio.Path.read_text", return_value="system prompt"),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),

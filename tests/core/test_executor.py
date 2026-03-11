@@ -27,22 +27,18 @@ def mock_directive() -> AgentDirective:
 
 
 def test_executor_initialization() -> None:
-    """Test executor initialization."""
-    with (
-        patch("jitsu.core.executor.dotenv.load_dotenv"),
-        patch("jitsu.core.executor.os.environ.get", return_value="fake-key"),
-        patch("jitsu.core.executor.OpenAI"),
-        patch("jitsu.core.executor.instructor.from_openai"),
-    ):
-        executor = JitsuExecutor()
-        assert executor.model == "openai/gpt-oss-120b:free"
+    """Test executor initialization with injected client."""
+    mock_client = MagicMock()
+    executor = JitsuExecutor(client=mock_client)
+    assert executor.model == "openai/gpt-oss-120b:free"
+    assert executor.client is mock_client
 
 
 def test_executor_missing_api_key() -> None:
-    """Test executor raises error if API key is missing."""
+    """Test executor raises error if API key is missing (via LLMClientFactory)."""
     with (
-        patch("jitsu.core.executor.dotenv.load_dotenv"),
-        patch("jitsu.core.executor.os.environ.get", return_value=None),
+        patch("jitsu.core.client.dotenv.load_dotenv"),
+        patch("jitsu.core.client.os.environ.get", return_value=None),
         pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"),
     ):
         JitsuExecutor()
@@ -58,15 +54,9 @@ def test_executor_execute_success(mock_directive: AgentDirective, tmp_path: Path
     mock_client.chat.completions.create.return_value = result
 
     # Mock subprocess success
-    with (
-        patch("jitsu.core.executor.dotenv.load_dotenv"),
-        patch("jitsu.core.executor.os.environ.get", return_value="fake-key"),
-        patch("jitsu.core.executor.OpenAI"),
-        patch("jitsu.core.executor.instructor.from_openai", return_value=mock_client),
-        patch("subprocess.run") as mock_run,
-    ):
+    with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
-        executor = JitsuExecutor()
+        executor = JitsuExecutor(client=mock_client)
         success = executor.execute_directive(mock_directive, "compiler output")
 
     assert success is True
@@ -95,19 +85,13 @@ def test_executor_execute_retry_success(mock_directive: AgentDirective, tmp_path
     mock_client.chat.completions.create.return_value = result
 
     # Mock subprocess failure then success
-    with (
-        patch("jitsu.core.executor.dotenv.load_dotenv"),
-        patch("jitsu.core.executor.os.environ.get", return_value="fake-key"),
-        patch("jitsu.core.executor.OpenAI"),
-        patch("jitsu.core.executor.instructor.from_openai", return_value=mock_client),
-        patch("subprocess.run") as mock_run,
-    ):
+    with patch("subprocess.run") as mock_run:
         # 1st run fails, 2nd run succeeds
         mock_run.side_effect = [
             MagicMock(returncode=1, stderr="Syntax Error"),
             MagicMock(returncode=0),
         ]
-        executor = JitsuExecutor()
+        executor = JitsuExecutor(client=mock_client)
         success = executor.execute_directive(mock_directive, "compiler output")
 
     assert success is True
@@ -130,15 +114,9 @@ def test_executor_execute_failure(mock_directive: AgentDirective, tmp_path: Path
     mock_client.chat.completions.create.return_value = result
 
     # Mock subprocess always failure
-    with (
-        patch("jitsu.core.executor.dotenv.load_dotenv"),
-        patch("jitsu.core.executor.os.environ.get", return_value="fake-key"),
-        patch("jitsu.core.executor.OpenAI"),
-        patch("jitsu.core.executor.instructor.from_openai", return_value=mock_client),
-        patch("subprocess.run") as mock_run,
-    ):
+    with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=1, stderr="Linter Error")
-        executor = JitsuExecutor()
+        executor = JitsuExecutor(client=mock_client)
         success = executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
@@ -153,14 +131,8 @@ def test_executor_llm_exception(mock_directive: AgentDirective) -> None:
     mock_client = MagicMock()
     mock_client.chat.completions.create.side_effect = Exception("API down")
 
-    with (
-        patch("jitsu.core.executor.dotenv.load_dotenv"),
-        patch("jitsu.core.executor.os.environ.get", return_value="fake-key"),
-        patch("jitsu.core.executor.OpenAI"),
-        patch("jitsu.core.executor.instructor.from_openai", return_value=mock_client),
-        patch("subprocess.run"),
-    ):
-        executor = JitsuExecutor()
+    with patch("subprocess.run"):
+        executor = JitsuExecutor(client=mock_client)
         success = executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
@@ -176,14 +148,8 @@ def test_executor_openai_api_error(mock_directive: AgentDirective) -> None:
     error = openai.APIStatusError("Limit hit", response=mock_response, body=None)
     mock_client.chat.completions.create.side_effect = error
 
-    with (
-        patch("jitsu.core.executor.dotenv.load_dotenv"),
-        patch("jitsu.core.executor.os.environ.get", return_value="fake-key"),
-        patch("jitsu.core.executor.OpenAI"),
-        patch("jitsu.core.executor.instructor.from_openai", return_value=mock_client),
-        patch("typer.secho") as mock_secho,
-    ):
-        executor = JitsuExecutor()
+    with patch("typer.secho") as mock_secho:
+        executor = JitsuExecutor(client=mock_client)
         success = executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
@@ -199,14 +165,8 @@ def test_executor_instructor_retry_error(mock_directive: AgentDirective) -> None
         "Failed", last_completion=None, n_attempts=3, total_usage=0
     )
 
-    with (
-        patch("jitsu.core.executor.dotenv.load_dotenv"),
-        patch("jitsu.core.executor.os.environ.get", return_value="fake-key"),
-        patch("jitsu.core.executor.OpenAI"),
-        patch("jitsu.core.executor.instructor.from_openai", return_value=mock_client),
-        patch("typer.secho") as mock_secho,
-    ):
-        executor = JitsuExecutor()
+    with patch("typer.secho") as mock_secho:
+        executor = JitsuExecutor(client=mock_client)
         success = executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False

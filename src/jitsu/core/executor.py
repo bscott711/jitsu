@@ -1,18 +1,16 @@
 """Autonomous execution engine for Jitsu directives."""
 
 import logging
-import os
 import shlex
 import subprocess
 from pathlib import Path
 
-import dotenv
-import instructor
 import openai
 import typer
+from instructor.core.client import Instructor
 from instructor.core.exceptions import InstructorRetryException
-from openai import OpenAI
 
+from jitsu.core.client import LLMClientFactory
 from jitsu.models.core import AgentDirective
 from jitsu.models.execution import ExecutionResult
 from jitsu.prompts import EXECUTOR_SYSTEM_PROMPT
@@ -23,22 +21,22 @@ logger = logging.getLogger(__name__)
 class JitsuExecutor:
     """Executes AgentDirectives autonomously using an LLM."""
 
-    def __init__(self, model: str = "openai/gpt-oss-120b:free") -> None:
-        """Initialize the executor with a model name."""
-        self.model = model
-        dotenv.load_dotenv()
-        api_key = os.environ.get("OPENROUTER_API_KEY")
-        if not api_key:
-            msg = "OPENROUTER_API_KEY environment variable is not set"
-            raise RuntimeError(msg)
+    def __init__(
+        self,
+        model: str = "openai/gpt-oss-120b:free",
+        client: Instructor | None = None,
+    ) -> None:
+        """
+        Initialize the executor with a model name and optional LLM client.
 
-        self.client = instructor.from_openai(
-            OpenAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=api_key,
-            ),
-            mode=instructor.Mode.JSON,
-        )
+        Args:
+            model: The model name to use for LLM calls.
+            client: An optional pre-constructed instructor client. If not provided,
+                    one will be created via LLMClientFactory.
+
+        """
+        self.model = model
+        self.client = client if client is not None else LLMClientFactory.create()
 
     def execute_directive(self, directive: AgentDirective, compiler_output: str) -> bool:
         """Execute a single directive with retries on verification failure."""
