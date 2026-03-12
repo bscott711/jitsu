@@ -250,15 +250,16 @@ def test_executor_run_verification_structure(mock_runner: MagicMock) -> None:
     executor = JitsuExecutor(runner=mock_runner)
     mock_runner.run.return_value = MagicMock(returncode=1, stderr="Linter Error")
 
-    success, summary, trimmed, failed_cmd, failing_file = executor._run_verification(["npm test"])  # noqa: SLF001
+    success, details = executor._run_verification(["npm test"])  # noqa: SLF001
 
     assert success is False
-    assert "npm test" in summary
-    assert "1 errors" in summary
-    assert "exit code 1" in summary
-    assert "Linter Error" in trimmed
-    assert failed_cmd == "npm test"
-    assert failing_file is None
+    assert details is not None
+    assert "npm test" in details.summary
+    assert "1 errors" in details.summary
+    assert "exit code 1" in details.summary
+    assert "Linter Error" in details.trimmed
+    assert details.failed_cmd == "npm test"
+    assert details.failing_file is None
 
 
 def test_executor_parse_failure_count() -> None:
@@ -468,3 +469,21 @@ async def test_executor_recovery_ignores_external_failing_file(
     # Should NOT have called resolve for the external file
     for call in executor.ast_provider.resolve.call_args_list:
         assert "/usr/lib" not in call.args[0]
+
+
+@pytest.mark.asyncio
+async def test_executor_execute_failure_no_details(
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
+) -> None:
+    """Test that directive execution handles missing details gracefully (coverage)."""
+    mock_client = MagicMock()
+    result = ExecutionResult(thoughts="Fixed it", edits=[])
+    mock_client.chat.completions.create.return_value = result
+
+    executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
+    # Mock _run_verification to return False, None
+    executor._run_verification = MagicMock(return_value=(False, None))  # noqa: SLF001
+
+    success = await executor.execute_directive(mock_directive, "compiler output")
+
+    assert success is False

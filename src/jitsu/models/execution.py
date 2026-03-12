@@ -19,3 +19,14 @@ class ExecutionResult(BaseModel):
 
     thoughts: str
     edits: list[FileEdit]
+
+
+class VerificationFailureDetails(BaseModel):
+    """Details about a verification failure."""
+
+    model_config = ConfigDict(frozen=True)
+
+    summary: str
+    trimmed: str
+    failed_cmd: str
+    failing_file: str | None = None

@@ -12,7 +12,7 @@ from instructor.core.exceptions import InstructorRetryException
 from jitsu.core.client import LLMClientFactory
 from jitsu.core.runner import CommandRunner
 from jitsu.models.core import AgentDirective
-from jitsu.models.execution import ExecutionResult, FileEdit
+from jitsu.models.execution import ExecutionResult, FileEdit, VerificationFailureDetails
 from jitsu.prompts import (
     EXECUTOR_RECOVERY_PROMPT,
     EXECUTOR_SYSTEM_PROMPT,
@@ -109,7 +109,9 @@ class JitsuExecutor:
                 return int(match.group(1))
         return 1  # Default to 1 if we can't find a count
 
-    def _run_verification(self, commands: list[str]) -> tuple[bool, str, str, str, str | None]:
+    def _run_verification(
+        self, commands: list[str]
+    ) -> tuple[bool, VerificationFailureDetails | None]:
         """Execute verification commands and aggregate errors."""
         for cmd in commands:
             logger.info("Running verification: %s", cmd)
@@ -120,10 +122,16 @@ class JitsuExecutor:
                     f"Command '{cmd}' failed with {fail_count} errors (exit code {res.returncode})"
                 )
                 trimmed_block, failing_file = self._extract_first_failure_block(res.stderr)
-                return False, summary, trimmed_block, cmd, failing_file
+                details = VerificationFailureDetails(
+                    summary=summary,
+                    trimmed=trimmed_block,
+                    failed_cmd=cmd,
+                    failing_file=failing_file,
+                )
+                return False, details
 
         logger.info("Verification passed!")
-        return True, "", "", "", None
+        return True, None
 
     async def execute_directive(self, directive: AgentDirective, compiler_output: str) -> bool:
         """Execute a single directive with retries on verification failure."""
@@ -159,15 +167,16 @@ class JitsuExecutor:
 
                 self._apply_edits(result.edits)
 
-                success, summary, trimmed, _failed_cmd, failing_file = self._run_verification(
-                    directive.verification_commands
-                )
+                success, details = self._run_verification(directive.verification_commands)
                 if success:
                     return True
 
-                prev_fail_count = self._check_monotonicity(summary, prev_fail_count)
+                if details is None:
+                    return False
+
+                prev_fail_count = self._check_monotonicity(details.summary, prev_fail_count)
                 base_user_message = await self._augment_recovery_message(
-                    base_user_message, summary, trimmed, result.edits, _failed_cmd, failing_file
+                    base_user_message, details, result.edits
                 )
 
                 attempts += 1
@@ -233,40 +242,41 @@ class JitsuExecutor:
             raise MonotonicityError(msg)
         return fail_count
 
-    async def _augment_recovery_message(  # noqa: PLR0913
+    async def _augment_recovery_message(
         self,
         base_message: str,
-        summary: str,
-        trimmed: str,
+        details: VerificationFailureDetails,
         edits: list[FileEdit],
-        failed_cmd: str,
-        failing_file: str | None = None,
     ) -> str:
         """Append recovery hint, failure details, and AST context to the user message."""
         payload = (
             EXECUTOR_RECOVERY_PROMPT
             + "\n\n"
             + VERIFICATION_SUMMARY_RULE.format(
-                summary=summary, failed_cmd=failed_cmd, trimmed_block=trimmed
+                summary=details.summary,
+                failed_cmd=details.failed_cmd,
+                trimmed_block=details.trimmed,
             )
         )
 
         # Collect all relevant files for AST resolution
         files_to_resolve = {edit.filepath for edit in edits if edit.filepath.endswith(".py")}
 
-        if failing_file and failing_file.endswith(".py"):
+        if details.failing_file and details.failing_file.endswith(".py"):
             # Ensure failing file is within workspace root before allowing resolution
-            failing_path = Path(failing_file)
+            failing_path = Path(details.failing_file)
             is_internal = True
             if failing_path.is_absolute():
                 try:
                     failing_path.relative_to(self.workspace_root)
                 except ValueError:
                     is_internal = False
-                    logger.warning("Failing file %s is outside workspace root", failing_file)
+                    logger.warning(
+                        "Failing file %s is outside workspace root", details.failing_file
+                    )
 
             if is_internal:
-                files_to_resolve.add(failing_file)
+                files_to_resolve.add(details.failing_file)
 
         for filepath in sorted(files_to_resolve):
             ast_ctx = await self.ast_provider.resolve(filepath)
