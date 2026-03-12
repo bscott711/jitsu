@@ -23,3 +23,9 @@ TAG_CONTEXT_MANIFEST
 TAG_CONTEXT_DETAIL
 TAG_PRIORITY_RECAP
 TAG_TASK_SPEC
+# GitProvider (Sandbox Workflow)
+get_current_branch
+create_and_checkout_branch
+checkout_branch
+merge_branch
+delete_branch

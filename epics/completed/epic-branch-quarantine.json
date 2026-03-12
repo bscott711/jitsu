@@ -1,0 +1,65 @@
+[
+  {
+    "epic_id": "epic-branch-quarantine",
+    "phase_id": "phase-1-git-provider",
+    "module_scope": "src/jitsu/providers/git.py",
+    "instructions": "Update GitProvider to support the sandbox workflow. Add methods: `get_current_branch() -> str`, `create_and_checkout_branch(name: str)`, `checkout_branch(name: str)`, `merge_branch(source: str, target: str)`, and `delete_branch(name: str)`. Use subprocess.run with capture_output=True and check=True. Raise a custom GitError if they fail. Ensure strict type hints.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/providers/git.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": ["Returning None instead of raising errors", "Using os.system"],
+    "verification_commands": ["just verify"],
+    "completion_criteria": ["GitProvider has all 5 new methods", "Pyright passes strict typing"]
+  },
+  {
+    "epic_id": "epic-branch-quarantine",
+    "phase_id": "phase-2-orchestrator-state",
+    "module_scope": "src/jitsu/core/orchestrator.py",
+    "instructions": "Update the Orchestrator to use the new GitProvider methods. 1. In the `start` method, save the current branch to `self._original_branch` and create/checkout `jitsu-run/<epic_id>`. 2. In the `finish` (success) method, checkout the original branch, merge the sandbox branch, and delete the sandbox branch. 3. If the orchestrator hits a STUCK state (failure), commit the WIP changes to the sandbox with message 'chore(jitsu): HALTED - Max retries exhausted', checkout the original branch, and use typer.secho(..., err=True) to warn the user.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "pydantic",
+        "target_identifier": "src/jitsu/providers/git.py",
+        "is_required": true,
+        "resolution_mode": "AUTO"
+      }
+    ],
+    "anti_patterns": ["Printing to stdout", "Failing to type self._original_branch"],
+    "verification_commands": ["just verify"],
+    "completion_criteria": ["Orchestrator manages the branch lifecycle", "STUCK state triggers quarantine"]
+  },
+  {
+    "epic_id": "epic-branch-quarantine",
+    "phase_id": "phase-3-testing",
+    "module_scope": "tests/core/test_orchestrator.py",
+    "instructions": "Update the orchestrator tests to cover the new branch and quarantine logic. Mock the GitProvider methods so no actual git commands are run during the test suite. Assert that the happy path calls create, checkout, merge, and delete. Assert that the STUCK path calls commit, checkout, and writes to stderr.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "AUTO"
+      }
+    ],
+    "anti_patterns": ["Running real git commands in tests", "Leaving coverage under 100%"],
+    "verification_commands": ["just verify"],
+    "completion_criteria": ["Tests pass", "100% coverage maintained"]
+  }
+]
