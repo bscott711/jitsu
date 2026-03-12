@@ -179,7 +179,7 @@ async def test_request_context_unknown_provider() -> None:
 async def test_request_context_mocked_ast() -> None:
     """Test correctly routing an AST request with mocked provider."""
     # Patch the class in ProviderRegistry so when it instantiates, we control it
-    with patch("jitsu.server.mcp_server.ProviderRegistry", {"ast": MagicMock()}) as mock_registry:
+    with patch("jitsu.server.handlers.ProviderRegistry", {"ast": MagicMock()}) as mock_registry:
         mock_cls = mock_registry["ast"]
         mock_instance = mock_cls.return_value
         mock_instance.resolve = AsyncMock(return_value="## AST OUTPUT")
@@ -198,7 +198,7 @@ async def test_request_context_mocked_ast() -> None:
 async def test_request_context_mocked_pydantic() -> None:
     """Test correctly routing a Pydantic request with mocked provider."""
     with patch(
-        "jitsu.server.mcp_server.ProviderRegistry", {"pydantic": MagicMock()}
+        "jitsu.server.handlers.ProviderRegistry", {"pydantic": MagicMock()}
     ) as mock_registry:
         mock_cls = mock_registry["pydantic"]
         mock_instance = mock_cls.return_value
@@ -233,7 +233,7 @@ async def test_run_server(mock_run: MagicMock, mock_stdio: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_get_planning_context() -> None:
     """Test getting planning context (hits lines 215-227)."""
-    with patch("jitsu.server.mcp_server.DirectoryTreeProvider") as mock_tree_cls:
+    with patch("jitsu.server.handlers.DirectoryTreeProvider") as mock_tree_cls:
         mock_tree = mock_tree_cls.return_value
         mock_tree.resolve = AsyncMock(return_value="### Tree\n- src")
 
@@ -253,7 +253,7 @@ async def test_get_planning_context() -> None:
 @pytest.mark.asyncio
 async def test_get_planning_context_no_rules() -> None:
     """Test getting planning context when .jitsurules is missing."""
-    with patch("jitsu.server.mcp_server.DirectoryTreeProvider") as mock_tree_cls:
+    with patch("jitsu.server.handlers.DirectoryTreeProvider") as mock_tree_cls:
         mock_tree = mock_tree_cls.return_value
         mock_tree.resolve = AsyncMock(return_value="### Tree")
 
@@ -307,7 +307,7 @@ async def test_submit_epic_internal_error() -> None:
     """Test submit_epic with internal error (hits line 249)."""
     # Use a real dict but force validation to fail with a non-Pydantic error
     with patch(
-        "jitsu.server.mcp_server.AgentDirective.model_validate", side_effect=Exception("BOOM")
+        "jitsu.server.handlers.AgentDirective.model_validate", side_effect=Exception("BOOM")
     ):
         result = await handle_call_tool("jitsu_submit_epic", {"directives": [{"good": "data"}]})
         assert "Internal Error: BOOM" in result[0].text
@@ -317,7 +317,7 @@ async def test_submit_epic_internal_error() -> None:
 async def test_git_status() -> None:
     """Test the jitsu_git_status tool."""
     mock_status = "M src/main.py"
-    with patch("jitsu.server.mcp_server.GitProvider") as mock_cls:
+    with patch("jitsu.server.handlers.GitProvider") as mock_cls:
         mock_instance = mock_cls.return_value
         mock_instance.resolve = AsyncMock(
             return_value=f"### Git Status\n```text\n{mock_status}\n```"
@@ -332,7 +332,7 @@ async def test_git_status() -> None:
 @pytest.mark.asyncio
 async def test_git_commit_success() -> None:
     """Test successful jitsu_git_commit."""
-    with patch("jitsu.server.mcp_server.CommandRunner.run_args") as mock_run:
+    with patch("jitsu.server.handlers.CommandRunner.run_args") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
         result = await handle_call_tool(
             "jitsu_git_commit", {"message": "feat: add git tools", "sync": True}
@@ -362,7 +362,7 @@ async def test_git_commit_error() -> None:
     """Test jitsu_git_commit with git error."""
     error = subprocess.CalledProcessError(returncode=1, cmd="just commit")
     error.stderr = "git error"
-    with patch("jitsu.server.mcp_server.CommandRunner.run_args", side_effect=error):
+    with patch("jitsu.server.handlers.CommandRunner.run_args", side_effect=error):
         result = await handle_call_tool("jitsu_git_commit", {"message": "feat: test"})
         assert "Error: Git command failed" in result[0].text
         assert "git error" in result[0].text
