@@ -1,0 +1,110 @@
+[
+  {
+    "epic_id": "EPIC-PROMPT-INTEGRATION",
+    "phase_id": "PHASE-01-COMPILER-WIRING",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "Audit `src/jitsu/core/compiler.py`. Ensure that the U-Curve compilation strictly imports and uses the `TAG_...` constants (e.g., `TAG_INSTRUCTIONS`, `TAG_CONTEXT_MANIFEST`) from `src/jitsu/prompts.py` rather than hardcoding the XML strings. Update `tests/core/test_compiler.py` to assert that the compiled string includes these imported constants.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/prompts.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_compiler.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not alter the values in `prompts.py`. Only update the consumer files to import them."
+    ],
+    "completion_criteria": [
+      "`compiler.py` dynamically uses the prompt constants.",
+      "100% test coverage maintained."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "EPIC-PROMPT-INTEGRATION",
+    "phase_id": "PHASE-02-EXECUTOR-WIRING",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "Audit `src/jitsu/core/executor.py`. Ensure it imports and utilizes `EXECUTOR_SYSTEM_PROMPT`, `EXECUTOR_RECOVERY_PROMPT`, `VERIFICATION_SUMMARY_RULE`, and `VERIFICATION_RULE` from `src/jitsu/prompts.py` when constructing LLM calls or recovery messages. Remove any duplicate or inline prompt definitions within the executor itself. Update `tests/core/test_executor.py` to mock or assert the presence of these imported strings.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/prompts.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not accidentally overwrite the system prompt with the recovery prompt. They serve different purposes."
+    ],
+    "completion_criteria": [
+      "The Executor relies entirely on `prompts.py` for its LLM instructions.",
+      "Tests verify the correct prompts are injected during normal and recovery modes."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "EPIC-PROMPT-INTEGRATION",
+    "phase_id": "PHASE-03-PLANNER-WIRING",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "Audit the planning module (e.g., `src/jitsu/core/planner.py` or the orchestrator equivalent). Ensure it strictly imports and uses `PLANNER_BASE_PROMPT`, `PLANNER_MACRO_PROMPT`, and `PLANNER_MICRO_PROMPT` from `src/jitsu/prompts.py`. Guarantee that the 'Staff Engineer' persona is correctly passed as the system/base message. Update the relevant test file to ensure these prompts are utilized.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/prompts.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not leave any legacy 'helpful assistant' strings in the core logic."
+    ],
+    "completion_criteria": [
+      "The Planner architecture is entirely driven by the newly hardened prompts.",
+      "Tests pass and coverage remains at 100%."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

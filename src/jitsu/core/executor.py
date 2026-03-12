@@ -167,7 +167,7 @@ class JitsuExecutor:
 
                 prev_fail_count = self._check_monotonicity(summary, prev_fail_count)
                 base_user_message = await self._augment_recovery_message(
-                    base_user_message, summary, trimmed, result.edits, failing_file
+                    base_user_message, summary, trimmed, result.edits, _failed_cmd, failing_file
                 )
 
                 attempts += 1
@@ -233,19 +233,22 @@ class JitsuExecutor:
             raise MonotonicityError(msg)
         return fail_count
 
-    async def _augment_recovery_message(
+    async def _augment_recovery_message(  # noqa: PLR0913
         self,
         base_message: str,
         summary: str,
         trimmed: str,
         edits: list[FileEdit],
+        failed_cmd: str,
         failing_file: str | None = None,
     ) -> str:
         """Append recovery hint, failure details, and AST context to the user message."""
         payload = (
             EXECUTOR_RECOVERY_PROMPT
             + "\n\n"
-            + VERIFICATION_SUMMARY_RULE.format(summary=summary, trimmed_block=trimmed)
+            + VERIFICATION_SUMMARY_RULE.format(
+                summary=summary, failed_cmd=failed_cmd, trimmed_block=trimmed
+            )
         )
 
         # Collect all relevant files for AST resolution
