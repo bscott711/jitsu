@@ -1,0 +1,306 @@
+"""Tests for the ToolHandlers class."""
+
+import subprocess
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from mcp.types import TextContent
+
+from jitsu.core.compiler import ContextCompiler
+from jitsu.core.state import JitsuStateManager
+from jitsu.models.core import AgentDirective
+from jitsu.server.handlers import ToolHandlers
+
+EXPECTED_TOOL_COUNT = 8
+
+
+@pytest.fixture
+def state_manager() -> JitsuStateManager:
+    """Provide a fresh StateManager."""
+    return JitsuStateManager()
+
+
+@pytest.fixture
+def context_compiler() -> ContextCompiler:
+    """Provide a fresh ContextCompiler."""
+    return ContextCompiler()
+
+
+@pytest.fixture
+def handlers(state_manager: JitsuStateManager, context_compiler: ContextCompiler) -> ToolHandlers:
+    """Provide ToolHandlers with its dependencies."""
+    return ToolHandlers(state_manager=state_manager, context_compiler=context_compiler)
+
+
+@pytest.mark.asyncio
+async def test_handle_get_next_phase_empty(handlers: ToolHandlers) -> None:
+    """Test getting a phase when the queue is empty."""
+    result = await handlers.handle_get_next_phase()
+    assert isinstance(result[0], TextContent)
+    assert result[0].text == "No pending phases in the queue."
+
+
+@pytest.mark.asyncio
+async def test_handle_get_next_phase_with_data(
+    handlers: ToolHandlers, state_manager: JitsuStateManager
+) -> None:
+    """Test getting a phase when data exists in the queue."""
+    directive = AgentDirective(
+        epic_id="epic-1",
+        phase_id="phase-1",
+        module_scope="src/test",
+        instructions="Do a thing",
+    )
+    state_manager.queue_directive(directive)
+
+    result = await handlers.handle_get_next_phase()
+    assert isinstance(result[0], TextContent)
+    assert "phase-1" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_report_status_success(
+    handlers: ToolHandlers, state_manager: JitsuStateManager
+) -> None:
+    """Test reporting a successful status."""
+    directive = AgentDirective(
+        epic_id="epic-1",
+        phase_id="phase-success",
+        module_scope="src/test",
+        instructions="Test",
+    )
+    state_manager.queue_directive(directive)
+    state_manager.get_next_directive()
+
+    result = handlers.handle_report_status({"phase_id": "phase-success", "status": "SUCCESS"})
+    assert isinstance(result[0], TextContent)
+    assert "ACK. 0 phases remaining." in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_report_status_other(handlers: ToolHandlers) -> None:
+    """Test reporting a non-success status or success with no epic_id."""
+    result = handlers.handle_report_status({"phase_id": "phase-1", "status": "FAILED"})
+    assert isinstance(result[0], TextContent)
+    assert "Successfully recorded status FAILED" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_report_status_missing_args(handlers: ToolHandlers) -> None:
+    """Test reporting status with missing arguments."""
+    result = handlers.handle_report_status(None)
+    assert isinstance(result[0], TextContent)
+    assert "Error: Missing arguments." in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_report_status_invalid(handlers: ToolHandlers) -> None:
+    """Test reporting an invalid status."""
+    result = handlers.handle_report_status({"phase_id": "phase-1", "status": "INVALID_STATUS"})
+    assert isinstance(result[0], TextContent)
+    assert "Validation Error" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_inspect_queue_empty(handlers: ToolHandlers) -> None:
+    """Test inspecting an empty queue."""
+    result = handlers.handle_inspect_queue()
+    assert isinstance(result[0], TextContent)
+    assert "The queue is currently empty." in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_inspect_queue(
+    handlers: ToolHandlers, state_manager: JitsuStateManager
+) -> None:
+    """Test inspecting the queue."""
+    directive = AgentDirective(
+        epic_id="epic-inspect",
+        phase_id="phase-inspect",
+        module_scope="src/test",
+        instructions="Test",
+    )
+    state_manager.queue_directive(directive)
+
+    result = handlers.handle_inspect_queue()
+    assert isinstance(result[0], TextContent)
+    assert "phase-inspect" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_request_context_success(handlers: ToolHandlers) -> None:
+    """Test successful JIT context request."""
+    # We'll use a real file to test the FileStateProvider
+    result = await handlers.handle_request_context(
+        {"target_identifier": "pyproject.toml", "provider_name": "file"}
+    )
+    assert isinstance(result[0], TextContent)
+    assert "not found" in result[0].text or "[" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_request_context_missing_args(handlers: ToolHandlers) -> None:
+    """Test context request with missing arguments."""
+    result = await handlers.handle_request_context({})
+    assert isinstance(result[0], TextContent)
+    assert "Error: Missing target_identifier" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_request_context_unknown_provider(handlers: ToolHandlers) -> None:
+    """Test context request with an unknown provider."""
+    result = await handlers.handle_request_context(
+        {"target_identifier": "test", "provider_name": "unknown"}
+    )
+    assert isinstance(result[0], TextContent)
+    assert "Error: Unknown provider 'unknown'" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_get_planning_context(handlers: ToolHandlers) -> None:
+    """Test getting planning context."""
+    with patch("jitsu.server.handlers.DirectoryTreeProvider") as mock_tree_cls:
+        mock_tree = mock_tree_cls.return_value
+        mock_tree.resolve = AsyncMock(return_value="### Tree\n- src")
+
+        with (
+            patch("anyio.Path.exists", AsyncMock(return_value=True)),
+            patch("anyio.Path.read_text", AsyncMock(return_value="RULE 1")),
+        ):
+            result = await handlers.handle_get_planning_context({})
+            assert isinstance(result[0], TextContent)
+            assert "### Tree" in result[0].text
+            assert "RULE 1" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_get_planning_context_no_rules(handlers: ToolHandlers) -> None:
+    """Test getting planning context without .jitsurules."""
+    with patch("jitsu.server.handlers.DirectoryTreeProvider") as mock_tree_cls:
+        mock_tree = mock_tree_cls.return_value
+        mock_tree.resolve = AsyncMock(return_value="### Tree")
+        with patch("anyio.Path.exists", AsyncMock(return_value=False)):
+            result = await handlers.handle_get_planning_context({})
+            assert "(Not found)" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_submit_epic_success(
+    handlers: ToolHandlers, state_manager: JitsuStateManager
+) -> None:
+    """Test successfully submitting an epic."""
+    directive_data = {
+        "epic_id": "epic-new",
+        "phase_id": "phase-new",
+        "module_scope": "src",
+        "instructions": "Go",
+    }
+
+    result = handlers.handle_submit_epic({"directives": [directive_data]})
+    assert "Successfully queued 1 phases." in result[0].text
+    assert state_manager.pending_count == 1
+
+
+@pytest.mark.asyncio
+async def test_handle_submit_epic_errors(handlers: ToolHandlers) -> None:
+    """Test handle_submit_epic error paths."""
+    # Missing args
+    result = handlers.handle_submit_epic({})
+    assert "Missing 'directives' argument" in result[0].text
+
+    # Not a list
+    result = handlers.handle_submit_epic({"directives": "not a list"})
+    assert "'directives' must be a list" in result[0].text
+
+    # Validation Error
+    result = handlers.handle_submit_epic({"directives": [{"bad": "data"}]})
+    assert "Validation Error" in result[0].text
+
+    # Internal Error
+    with patch(
+        "jitsu.server.handlers.AgentDirective.model_validate", side_effect=RuntimeError("BOOM")
+    ):
+        result = handlers.handle_submit_epic({"directives": [{"good": "data"}]})
+        assert "Internal Error: BOOM" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_git_status(handlers: ToolHandlers) -> None:
+    """Test the git_status handler."""
+    mock_status = "M src/main.py"
+    with patch("jitsu.server.handlers.GitProvider") as mock_cls:
+        mock_instance = mock_cls.return_value
+        mock_instance.resolve = AsyncMock(
+            return_value=f"### Git Status\n```text\n{mock_status}\n```"
+        )
+
+        result = await handlers.handle_git_status()
+        assert isinstance(result[0], TextContent)
+        assert mock_status in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_git_commit_success(handlers: ToolHandlers) -> None:
+    """Test successful git_commit."""
+    with patch("jitsu.server.handlers.CommandRunner.run_args") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        result = handlers.handle_git_commit({"message": "feat: add git tools", "sync": True})
+        assert isinstance(result[0], TextContent)
+        assert "Successfully committed and pushed" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_git_commit_errors(handlers: ToolHandlers) -> None:
+    """Test git_commit error paths."""
+    # Missing message
+    result = handlers.handle_git_commit({})
+    assert "Missing 'message' argument" in result[0].text
+
+    # CalledProcessError
+    error = subprocess.CalledProcessError(returncode=1, cmd="just commit")
+    error.stderr = "git error"
+    with patch("jitsu.server.handlers.CommandRunner.run_args", side_effect=error):
+        result = handlers.handle_git_commit({"message": "feat: test"})
+        assert "Error: Git command failed" in result[0].text
+        assert "git error" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_git_commit_invalid_message(handlers: ToolHandlers) -> None:
+    """Test git_commit with invalid conventional commit message."""
+    result = handlers.handle_git_commit({"message": "bad message"})
+    assert isinstance(result[0], TextContent)
+    assert "MUST follow Conventional Commits" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_register_all(handlers: ToolHandlers) -> None:
+    """Test that register_all calls registry.register the correct number of times."""
+    mock_registry = MagicMock()
+    handlers.register_all(mock_registry)
+    assert mock_registry.register.call_count == EXPECTED_TOOL_COUNT
+
+
+@pytest.mark.asyncio
+async def test_handle_report_status_stuck(
+    handlers: ToolHandlers, state_manager: JitsuStateManager
+) -> None:
+    """Test reporting a STUCK status halts the epic."""
+    directive = AgentDirective(
+        epic_id="epic-1",
+        phase_id="phase-stuck",
+        module_scope="src",
+        instructions="Test",
+    )
+    state_manager.queue_directive(directive)
+    state_manager.queue_directive(
+        AgentDirective(epic_id="epic-1", phase_id="p2", module_scope="s", instructions="i")
+    )
+    expected_pending = 2
+    assert state_manager.pending_count == expected_pending
+
+    # The tool returns a list of TextContent
+    result = handlers.handle_report_status({"phase_id": "phase-stuck", "status": "STUCK"})
+    assert isinstance(result[0], TextContent)
+    assert "Epic HALTED" in result[0].text
+    assert state_manager.pending_count == 0

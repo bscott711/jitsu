@@ -1,0 +1,79 @@
+[
+  {
+    "epic_id": "epic-cli-api-refinement",
+    "phase_id": "phase-public-network-client",
+    "module_scope": "src/jitsu/server/client.py",
+    "instructions": "1. In `src/jitsu/server/client.py`, rename the function `async def _send_payload` to `async def send_payload` (remove the leading underscore). 2. In `src/jitsu/cli/main.py`, update the import to use `send_payload` and update all `anyio.run(_send_payload, ...)` calls to `anyio.run(send_payload, ...)`. 3. Remove any `# noqa: SLF001` comments associated with these network calls. 4. In `tests/cli/test_main.py`, search for any `@patch` decorators or mocks targeting `_send_payload` and update them to target `send_payload`.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/client.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT change the logic inside the send_payload function, only its name.",
+      "Do NOT leave the string '_send_payload' anywhere in the test file mocks.",
+      "Do NOT leave `# noqa: SLF001` comments in `main.py` for network calls."
+    ],
+    "completion_criteria": [
+      "The function `_send_payload` no longer exists; it is purely `send_payload`.",
+      "`main.py` and `test_main.py` strictly use the new public `send_payload` name."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-cli-api-refinement",
+    "phase_id": "phase-public-template-loader",
+    "module_scope": "src/jitsu/templates/loader.py",
+    "instructions": "1. In `src/jitsu/templates/loader.py`, ensure the `TemplateLoader` class exposes only public methods (e.g., rename `_load_template` to `load_template`, remove leading underscores). 2. In `src/jitsu/cli/main.py` inside the `init()` command, update the instantiated `TemplateLoader` to call these new public methods without underscores. 3. Delete every remaining `# noqa: SLF001` string in `main.py` and `tests/cli/test_main.py`. 4. Update any test mocks in `tests/cli/test_main.py` to reflect the public method names of the `TemplateLoader`.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/templates/loader.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT leave any method starting with `_` inside `TemplateLoader` if it is called by `main.py`.",
+      "Do NOT leave a single `# noqa: SLF001` marker anywhere in `main.py` or `test_main.py`.",
+      "Do NOT rewrite the actual file I/O logic in the template loader."
+    ],
+    "completion_criteria": [
+      "`TemplateLoader` relies exclusively on a public API.",
+      "Zero `# noqa: SLF001` markers remain in the codebase.",
+      "All tests pass."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

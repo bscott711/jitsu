@@ -1,16 +1,17 @@
 """JIT Context Compiler for weaving directives and codebase state."""
 
-from jitsu.models.core import AgentDirective, TargetResolutionMode
-from jitsu.providers import (
-    ASTProvider,
-    BaseProvider,
-    DirectoryTreeProvider,
-    EnvVarProvider,
-    FileStateProvider,
-    GitProvider,
-    MarkdownASTProvider,
-    PydanticProvider,
+from pathlib import Path
+
+from jitsu.models.core import AgentDirective, ContextTarget, TargetResolutionMode
+from jitsu.prompts import (
+    TAG_CONTEXT_DETAIL,
+    TAG_CONTEXT_MANIFEST,
+    TAG_INSTRUCTIONS,
+    TAG_PRIORITY_RECAP,
+    TAG_TASK_SPEC,
+    VERIFICATION_RULE,
 )
+from jitsu.providers import BaseProvider, ProviderRegistry
 from jitsu.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -19,29 +20,17 @@ logger = get_logger(__name__)
 class ContextCompiler:
     """Compiles AgentDirectives into highly-contextualized Markdown prompts."""
 
-    def __init__(self) -> None:
+    def __init__(self, workspace_root: Path | None = None) -> None:
         """Initialize the compiler with registered providers."""
-        file_provider = FileStateProvider()
-        pydantic_provider = PydanticProvider()
-        ast_provider = ASTProvider()
-        tree_provider = DirectoryTreeProvider()
-        git_provider = GitProvider()
-        env_provider = EnvVarProvider()
-        markdown_provider = MarkdownASTProvider()
-
-        self._providers: dict[str, BaseProvider] = {
-            file_provider.name: file_provider,
-            pydantic_provider.name: pydantic_provider,
-            ast_provider.name: ast_provider,
-            tree_provider.name: tree_provider,
-            git_provider.name: git_provider,
-            env_provider.name: env_provider,
-            markdown_provider.name: markdown_provider,
+        self.workspace_root = workspace_root or Path.cwd()
+        self.providers: dict[str, BaseProvider] = {
+            name: cls(self.workspace_root) for name, cls in ProviderRegistry.items()
         }
 
-    async def compile_directive(self, directive: AgentDirective) -> str:
-        """Weave the directive and live context into a single Markdown payload."""
-        payload_parts = [
+    @staticmethod
+    def _build_preamble(directive: AgentDirective) -> list[str]:
+        """Build the static markdown headers and instructions."""
+        parts = [
             f"# Jitsu Phase Directive: {directive.phase_id}",
             f"**Epic:** {directive.epic_id}",
             f"**Module Scope:** {directive.module_scope}",
@@ -50,69 +39,83 @@ class ContextCompiler:
         ]
 
         if directive.anti_patterns:
-            payload_parts.append("\n## Anti-Patterns (STRICTLY FORBIDDEN)")
-            payload_parts.extend([f"- {pattern}" for pattern in directive.anti_patterns])
+            parts.append("\n## Anti-Patterns (STRICTLY FORBIDDEN)")
+            parts.extend([f"- {pattern}" for pattern in directive.anti_patterns])
 
-        # Inject Definition of Done (DoD)
-        payload_parts.append("\n## Definition of Done")
-
+        parts.append("\n## Definition of Done")
         if directive.completion_criteria:
-            payload_parts.append("### Completion Criteria")
-            payload_parts.extend(
-                [f"- [ ] {criterion}" for criterion in directive.completion_criteria]
-            )
+            parts.append("### Completion Criteria")
+            parts.extend([f"- [ ] {criterion}" for criterion in directive.completion_criteria])
 
-        payload_parts.append("### Verification")
-
+        parts.append("### Verification")
         if directive.verification_commands:
-            payload_parts.append("You MUST run the following commands to verify your work:")
-            payload_parts.extend(
-                [f"```bash\n{cmd}\n```" for cmd in directive.verification_commands]
-            )
+            parts.append("You MUST run the following commands to verify your work:")
+            parts.extend([f"```bash\n{cmd}\n```" for cmd in directive.verification_commands])
         else:
-            payload_parts.append("*No specific verification commands required for this phase.*")
+            parts.append("*No specific verification commands required for this phase.*")
 
-        payload_parts.append("\n## JIT Context")
-        manifest_lines: list[str] = []
+        return parts
 
-        if not directive.context_targets:
-            payload_parts.append("*No specific context targets requested for this phase.*")
-        else:
-            for target in directive.context_targets:
-                # AST-First Policy for AUTO mode
-                if target.resolution_mode == TargetResolutionMode.AUTO:
-                    context_data, provider_used = await self._resolve_auto(
-                        target.target_identifier, target.provider_name
-                    )
-                else:
-                    context_data, provider_used = await self._resolve_explicit(
-                        target.target_identifier, target.resolution_mode
-                    )
+    async def _resolve_targets(self, targets: list[ContextTarget]) -> tuple[list[str], list[str]]:
+        """Process context targets and build the manifest."""
+        parts: list[str] = []
+        manifest: list[str] = []
 
-                if provider_used == "none":
-                    msg = f"**Warning:** Unknown provider '{target.provider_name}' or resolution failed for '{target.target_identifier}'."
-                    if target.is_required:
-                        payload_parts.append(f"### [FAILED] {target.target_identifier}\n{msg}")
-                    manifest_lines.append(f"- `{target.target_identifier}`: **FAILED**")
-                    continue
-
-                payload_parts.append(context_data)
-                payload_parts.append("---")
-
-                # Summarize for the manifest
-                summary = self._get_manifest_summary(provider_used)
-                manifest_lines.append(
-                    f"- `{target.target_identifier}`: **{summary}** ({provider_used})"
+        for target in targets:
+            if target.resolution_mode == TargetResolutionMode.AUTO:
+                context_data, provider_used = await self.resolve_auto(
+                    target.target_identifier, target.provider_name
+                )
+            else:
+                context_data, provider_used = await self.resolve_explicit(
+                    target.target_identifier, target.resolution_mode
                 )
 
-        # Emit Compiled Context Manifest
-        if manifest_lines:
-            payload_parts.append("\n## Compiled Context Manifest")
-            payload_parts.extend(manifest_lines)
+            if provider_used == "none":
+                msg = f"**Warning:** Unknown provider '{target.provider_name}' or resolution failed for '{target.target_identifier}'."
+                if target.is_required:
+                    parts.append(f"### [FAILED] {target.target_identifier}\n{msg}")
+                manifest.append(f"- `{target.target_identifier}`: **FAILED**")
+                continue
 
-        return "\n".join(payload_parts)
+            parts.extend([context_data, "---"])
+            summary = self._get_manifest_summary(provider_used)
+            manifest.append(f"- `{target.target_identifier}`: **{summary}** ({provider_used})")
 
-    async def _resolve_auto(self, target_id: str, preferred_provider: str) -> tuple[str, str]:
+        return parts, manifest
+
+    async def compile_directive(self, directive: AgentDirective) -> str:
+        """Weave the directive and live context into a single U-Curve XML payload."""
+        # 1. Instructions
+        preamble_parts = self._build_preamble(directive)
+        instructions_content = "\n".join(preamble_parts)
+
+        # 2 & 3. Context
+        target_parts = []
+        manifest_lines = []
+        if directive.context_targets:
+            target_parts, manifest_lines = await self._resolve_targets(directive.context_targets)
+
+        manifest_content = "\n".join(manifest_lines) if manifest_lines else "No context targets."
+        detail_content = "\n".join(target_parts) if target_parts else "No context details."
+
+        # Compile U-Curve Payload
+        payload = [
+            f"{TAG_INSTRUCTIONS}\n{instructions_content}\n{TAG_INSTRUCTIONS.replace('<', '</')}",
+            f"{TAG_CONTEXT_MANIFEST}\n{manifest_content}\n{TAG_CONTEXT_MANIFEST.replace('<', '</')}",
+            f"{TAG_CONTEXT_DETAIL}\n{detail_content}\n{TAG_CONTEXT_DETAIL.replace('<', '</')}",
+            f"{TAG_PRIORITY_RECAP}\n{VERIFICATION_RULE}\n{TAG_PRIORITY_RECAP.replace('<', '</')}",
+            (
+                f"{TAG_TASK_SPEC}\n"
+                "Please provide the file edits to fulfill the directive above while "
+                "adhering to all constraints.\n"
+                f"{TAG_TASK_SPEC.replace('<', '</')}"
+            ),
+        ]
+
+        return "\n\n".join(payload)
+
+    async def resolve_auto(self, target_id: str, preferred_provider: str) -> tuple[str, str]:
         """Attempt to resolve target: AST -> Pydantic -> Preferred -> FileState."""
         # Policy: Try AST first for Python structural logic
         if target_id.endswith(".py") or "/" in target_id:
@@ -148,7 +151,7 @@ class ContextCompiler:
 
     async def _try_resolve(self, provider_name: str, target_id: str) -> str | None:
         """Attempt to resolve with a specific provider, returning None on failure."""
-        provider = self._providers.get(provider_name)
+        provider = self.providers.get(provider_name)
         if not provider:
             return None
         res = await provider.resolve(target_id)
@@ -156,9 +159,7 @@ class ContextCompiler:
             return None
         return res
 
-    async def _resolve_explicit(
-        self, target_id: str, mode: TargetResolutionMode
-    ) -> tuple[str, str]:
+    async def resolve_explicit(self, target_id: str, mode: TargetResolutionMode) -> tuple[str, str]:
         """Resolve target using an explicit mode."""
         provider_name = {
             TargetResolutionMode.STRUCTURE_ONLY: "ast",
@@ -170,7 +171,7 @@ class ContextCompiler:
             logger.error("Unknown resolution mode provided: %s", mode)
             return "", "none"
 
-        provider = self._providers.get(provider_name)
+        provider = self.providers.get(provider_name)
         if not provider:
             logger.error("Provider '%s' not found for mode '%s'", provider_name, mode)
             return "", "none"

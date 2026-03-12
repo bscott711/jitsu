@@ -1,0 +1,54 @@
+[
+  {
+    "epic_id": "EPIC-AUDIT-V2-SUMMARY",
+    "phase_id": "PHASE-1-EXECUTIVE-SYNTHESIS",
+    "module_scope": "docs/audit_v2/",
+    "instructions": "Synthesize the five provided module audit reports into a single `executive_summary.md` file saved in `docs/audit_v2/`. Highlight the 100% pass rate for static typing (Pyright), linting (Ruff), and cognitive complexity (Complexipy). Note that the Vulture dead-code warnings are expected framework false-positives (Pydantic fields, Typer callbacks, MCP handlers). Finally, explicitly document the two remaining technical debt items (`# noqa: BLE001` in `orchestrator.py` and `handlers.py`) as targets for the next sprint.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/audit_v2/cli_audit_report.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/audit_v2/core_audit_report.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/audit_v2/providers_audit_report.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/audit_v2/server_audit_report.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/audit_v2/models_audit_report.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not recommend fixing the Vulture dead code warnings; they are false positives.",
+      "STRICTLY FORBIDDEN: Do not modify any Python source code.",
+      "STRICTLY FORBIDDEN: Do not include raw CLI output in the executive summary."
+    ],
+    "completion_criteria": [
+      "An `executive_summary.md` file is generated in `docs/audit_v2/`.",
+      "The summary evaluates the health of the 4 strict DDD layers.",
+      "The summary isolates the two BLE001 ignores as the only remaining tech debt."
+    ],
+    "verification_commands": [
+      "test -f docs/audit_v2/executive_summary.md",
+      "cat docs/audit_v2/executive_summary.md"
+    ]
+  }
+]

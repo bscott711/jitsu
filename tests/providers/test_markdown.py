@@ -11,14 +11,14 @@ from jitsu.providers.markdown import MarkdownASTProvider
 @pytest.mark.asyncio
 async def test_markdown_provider_name() -> None:
     """Test the provider name."""
-    provider = MarkdownASTProvider()
+    provider = MarkdownASTProvider(Path.cwd())
     assert provider.name == "markdown_ast"
 
 
 @pytest.mark.asyncio
 async def test_markdown_provider_resolve_structural_elements(tmp_path: Path) -> None:
     """Test resolving a markdown file, collecting only headings and code delimiters."""
-    provider = MarkdownASTProvider()
+    provider = MarkdownASTProvider(tmp_path)
     md_content = (
         "# Title\n"
         "Some description text.\n"
@@ -44,8 +44,7 @@ async def test_markdown_provider_resolve_structural_elements(tmp_path: Path) -> 
     md_file = tmp_path / "test.md"
     md_file.write_text(md_content, encoding="utf-8")
 
-    with patch("jitsu.providers.markdown.root", return_value=tmp_path):
-        result = await provider.resolve("test.md")
+    result = await provider.resolve("test.md")
 
     # Should be present
     assert "# Title" in result
@@ -67,12 +66,11 @@ async def test_markdown_provider_resolve_structural_elements(tmp_path: Path) -> 
 @pytest.mark.asyncio
 async def test_markdown_provider_empty_file(tmp_path: Path) -> None:
     """Test resolving an empty markdown file."""
-    provider = MarkdownASTProvider()
+    provider = MarkdownASTProvider(tmp_path)
     md_file = tmp_path / "empty.md"
     md_file.write_text("", encoding="utf-8")
 
-    with patch("jitsu.providers.markdown.root", return_value=tmp_path):
-        result = await provider.resolve("empty.md")
+    result = await provider.resolve("empty.md")
 
     assert "No headings or code blocks found" in result
 
@@ -80,10 +78,9 @@ async def test_markdown_provider_empty_file(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_markdown_provider_missing_file(tmp_path: Path) -> None:
     """Test resolving a missing file."""
-    provider = MarkdownASTProvider()
+    provider = MarkdownASTProvider(tmp_path)
 
-    with patch("jitsu.providers.markdown.root", return_value=tmp_path):
-        result = await provider.resolve("missing.md")
+    result = await provider.resolve("missing.md")
 
     assert "[FAILED]" in result
     assert "File not found" in result
@@ -92,13 +89,12 @@ async def test_markdown_provider_missing_file(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_markdown_provider_read_method(tmp_path: Path) -> None:
     """Test the explicit read() method returns a list of lines."""
-    provider = MarkdownASTProvider()
+    provider = MarkdownASTProvider(tmp_path)
     md_content = "# H1\nText\n```js\n```"
     md_file = tmp_path / "read_test.md"
     md_file.write_text(md_content, encoding="utf-8")
 
-    with patch("jitsu.providers.markdown.root", return_value=tmp_path):
-        lines = provider.read("read_test.md")
+    lines = provider.read("read_test.md")
 
     assert lines == ["# H1", "```js", "```"]
 
@@ -106,12 +102,11 @@ async def test_markdown_provider_read_method(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_markdown_provider_directory_target(tmp_path: Path) -> None:
     """Test resolving a directory instead of a file."""
-    provider = MarkdownASTProvider()
+    provider = MarkdownASTProvider(tmp_path)
     dir_path = tmp_path / "subdir"
     dir_path.mkdir()
 
-    with patch("jitsu.providers.markdown.root", return_value=tmp_path):
-        result = await provider.resolve("subdir")
+    result = await provider.resolve("subdir")
 
     assert "No headings or code blocks found" in result
 
@@ -119,12 +114,11 @@ async def test_markdown_provider_directory_target(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_markdown_provider_read_exception(tmp_path: Path) -> None:
     """Test handling of read exceptions."""
-    provider = MarkdownASTProvider()
+    provider = MarkdownASTProvider(tmp_path)
     md_file = tmp_path / "error.md"
     md_file.write_text("# Title", encoding="utf-8")
 
     with (
-        patch("jitsu.providers.markdown.root", return_value=tmp_path),
         patch("pathlib.Path.open", side_effect=PermissionError("Mock Error")),
     ):
         lines = provider.read("error.md")
@@ -135,11 +129,10 @@ async def test_markdown_provider_read_exception(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_markdown_provider_whitespace_file(tmp_path: Path) -> None:
     """Test resolving a file with only whitespace."""
-    provider = MarkdownASTProvider()
+    provider = MarkdownASTProvider(tmp_path)
     md_file = tmp_path / "whitespace.md"
     md_file.write_text("   \n  \t  \n", encoding="utf-8")
 
-    with patch("jitsu.providers.markdown.root", return_value=tmp_path):
-        result = await provider.resolve("whitespace.md")
+    result = await provider.resolve("whitespace.md")
 
     assert "No headings or code blocks found" in result

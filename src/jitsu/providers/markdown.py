@@ -1,7 +1,6 @@
 """Markdown AST context provider for Jitsu."""
 
 from jitsu.providers.base import BaseProvider
-from jitsu.utils import root
 
 
 class MarkdownASTProvider(BaseProvider):
@@ -17,6 +16,20 @@ class MarkdownASTProvider(BaseProvider):
         """The unique name of this provider."""
         return "markdown_ast"
 
+    @staticmethod
+    def _is_structural(line: str) -> bool:
+        """Check if a line is a valid heading or code block delimiter."""
+        stripped = line.strip()
+
+        # Heading: starts with one or more # followed by a space
+        if stripped.startswith("#"):
+            parts = stripped.split(" ", 1)
+            if len(parts) > 1 and all(c == "#" for c in parts[0]):
+                return True
+
+        # Code block delimiter: starts with exactly three backticks
+        return stripped.startswith("```") and not stripped.startswith("````")
+
     def read(self, target: str) -> list[str]:
         """
         Read the markdown file and collect headings and code block delimiters.
@@ -28,26 +41,15 @@ class MarkdownASTProvider(BaseProvider):
             list[str]: The collected lines.
 
         """
-        target_path = root() / target
+        target_path = self.workspace_root / target
         if not target_path.exists() or not target_path.is_file():
             return []
 
         ast_lines: list[str] = []
         try:
             with target_path.open("r", encoding="utf-8") as f:
-                for line in f:
-                    stripped = line.strip()
-                    # Heading: starts with one or more # followed by a space
-                    if stripped.startswith("#"):
-                        parts = stripped.split(" ", 1)
-                        if len(parts) > 1 and all(c == "#" for c in parts[0]):
-                            ast_lines.append(line.rstrip())
-                            continue
-
-                    # Code block delimiter: starts with exactly three backticks
-                    if stripped.startswith("```") and not stripped.startswith("````"):
-                        ast_lines.append(line.rstrip())
-        except Exception:  # noqa: BLE001
+                ast_lines.extend(line.rstrip() for line in f if self._is_structural(line))
+        except (OSError, UnicodeDecodeError):
             return []
 
         return ast_lines
@@ -66,7 +68,7 @@ class MarkdownASTProvider(BaseProvider):
         ast_lines = self.read(target)
 
         if not ast_lines:
-            target_path = root() / target
+            target_path = self.workspace_root / target
             if not target_path.exists():
                 return f"### [FAILED] {target}\nFile not found."
             return f"### {target} (Markdown AST)\n*No headings or code blocks found.*"

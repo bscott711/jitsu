@@ -4,7 +4,6 @@ import typing
 from pathlib import Path
 
 from jitsu.providers.base import BaseProvider
-from jitsu.utils import root
 
 
 class DirectoryTreeProvider(BaseProvider):
@@ -43,7 +42,7 @@ class DirectoryTreeProvider(BaseProvider):
         """
         target_str = str(target).strip()
         # Handle the case where target is empty or "."
-        target_path = root() / target_str
+        target_path = self.workspace_root / target_str
 
         if not target_path.exists():
             return f"ERROR: Directory '{target_str}' does not exist in the current workspace."
@@ -58,10 +57,16 @@ class DirectoryTreeProvider(BaseProvider):
             lines = [root_label]
             lines.extend(self._generate_tree_lines(target_path))
             tree_content = "\n".join(lines)
-        except Exception as e:  # noqa: BLE001
+        except OSError as e:
             return f"ERROR: Failed to build directory tree for '{target_str}': {e}"
         else:
             return f"### Directory Tree: {target_str}\n```text\n{tree_content}\n```"
+
+    def _get_sorted_items(self, dir_path: Path) -> list[Path]:
+        """Fetch and sort directory items, ignoring exclusions."""
+        items = [item for item in dir_path.iterdir() if item.name not in self.EXCLUDE]
+        items.sort(key=lambda x: (not x.is_dir(), x.name.lower()))
+        return items
 
     def _generate_tree_lines(
         self, dir_path: Path, prefix: str = ""
@@ -78,13 +83,9 @@ class DirectoryTreeProvider(BaseProvider):
 
         """
         try:
-            # Collect and sort children: directories first, then files alphabetically
-            # Filtering out excluded directories
-            items = [item for item in dir_path.iterdir() if item.name not in self.EXCLUDE]
-
-            items.sort(key=lambda x: (not x.is_dir(), x.name.lower()))
-
+            items = self._get_sorted_items(dir_path)
             count = len(items)
+
             for i, item in enumerate(items):
                 is_last = i == count - 1
                 connector = "└── " if is_last else "├── "
@@ -99,5 +100,5 @@ class DirectoryTreeProvider(BaseProvider):
 
         except PermissionError:
             yield f"{prefix} [Permission Denied]"
-        except Exception as e:  # noqa: BLE001
+        except OSError as e:
             yield f"{prefix} [Error: {e}]"

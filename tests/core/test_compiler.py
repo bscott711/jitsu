@@ -1,12 +1,19 @@
 """Tests for the Context Compiler engine."""
 
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from pydantic import ValidationError
 
 from jitsu.core.compiler import ContextCompiler
 from jitsu.models.core import AgentDirective, ContextTarget, TargetResolutionMode
+from jitsu.prompts import (
+    TAG_CONTEXT_DETAIL,
+    TAG_CONTEXT_MANIFEST,
+    TAG_INSTRUCTIONS,
+    TAG_PRIORITY_RECAP,
+    TAG_TASK_SPEC,
+)
 from jitsu.providers import DirectoryTreeProvider
 
 
@@ -21,7 +28,7 @@ async def test_compile_empty_targets() -> None:
         instructions="do stuff",
     )
     res = await compiler.compile_directive(directive)
-    assert "No specific context targets requested" in res
+    assert "No context targets." in res
     assert "do stuff" in res
 
 
@@ -42,28 +49,6 @@ async def test_compile_with_anti_patterns() -> None:
 
 
 @pytest.mark.asyncio
-async def test_compile_unknown_provider_required() -> None:
-    """Test that unknown providers are rejected at instantiation time."""
-    with pytest.raises(ValidationError):
-        ContextTarget(
-            provider_name="fake_provider",  # type: ignore
-            target_identifier="test_target",
-            is_required=True,
-        )
-
-
-@pytest.mark.asyncio
-async def test_compile_unknown_provider_optional() -> None:
-    """Test that unknown preferred providers are rejected at instantiation time."""
-    with pytest.raises(ValidationError):
-        ContextTarget(
-            provider_name="fake_provider",  # type: ignore
-            target_identifier="test_target",
-            is_required=False,
-        )
-
-
-@pytest.mark.asyncio
 async def test_compile_valid_provider() -> None:
     """Test compiling with a successfully resolved target."""
     compiler = ContextCompiler()
@@ -71,7 +56,7 @@ async def test_compile_valid_provider() -> None:
     # We use AsyncMock because the compiler expects resolve() to be awaitable
     mock_provider = AsyncMock()
     mock_provider.resolve.return_value = "MOCK_FILE_CONTENT"
-    compiler._providers["file"] = mock_provider  # noqa: SLF001
+    compiler.providers["file"] = mock_provider
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -96,7 +81,7 @@ async def test_compile_auto_ast_preference() -> None:
     compiler = ContextCompiler()
     mock_ast = AsyncMock()
     mock_ast.resolve.return_value = "AST_OUTPUT"
-    compiler._providers["ast"] = mock_ast  # noqa: SLF001
+    compiler.providers["ast"] = mock_ast
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -123,11 +108,11 @@ async def test_compile_auto_fallback_to_file_on_ast_failure() -> None:
     compiler = ContextCompiler()
     mock_ast = AsyncMock()
     mock_ast.resolve.return_value = "### [FAILED] AST error"
-    compiler._providers["ast"] = mock_ast  # noqa: SLF001
+    compiler.providers["ast"] = mock_ast
 
     mock_file = AsyncMock()
     mock_file.resolve.return_value = "FILE_CONTENT"
-    compiler._providers["file"] = mock_file  # noqa: SLF001
+    compiler.providers["file"] = mock_file
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -167,7 +152,7 @@ async def test_compile_context_manifest_inclusion() -> None:
         ],
     )
     res = await compiler.compile_directive(directive)
-    assert "## Compiled Context Manifest" in res
+    assert TAG_CONTEXT_MANIFEST in res
     assert "- `README.md`: **Full Source** (file)" in res
 
 
@@ -177,7 +162,7 @@ async def test_compile_auto_pydantic_trigger() -> None:
     compiler = ContextCompiler()
     mock_pydantic = AsyncMock()
     mock_pydantic.resolve.return_value = "SCHEMA_OUTPUT"
-    compiler._providers["pydantic"] = mock_pydantic  # noqa: SLF001
+    compiler.providers["pydantic"] = mock_pydantic
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -203,7 +188,7 @@ async def test_explicit_mode_failure_string_in_manifest() -> None:
     compiler = ContextCompiler()
     mock_file = AsyncMock()
     mock_file.resolve.return_value = "ERROR: something happened"
-    compiler._providers["file"] = mock_file  # noqa: SLF001
+    compiler.providers["file"] = mock_file
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -229,7 +214,7 @@ async def test_compile_explicit_schema_mode() -> None:
     compiler = ContextCompiler()
     mock_pydantic = AsyncMock()
     mock_pydantic.resolve.return_value = "SCHEMA_JSON"
-    compiler._providers["pydantic"] = mock_pydantic  # noqa: SLF001
+    compiler.providers["pydantic"] = mock_pydantic
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -253,7 +238,7 @@ async def test_compile_explicit_schema_mode() -> None:
 async def test_explicit_mode_missing_provider_failure() -> None:
     """Test explicit mode failure when provider is missing."""
     compiler = ContextCompiler()
-    del compiler._providers["ast"]  # noqa: SLF001
+    del compiler.providers["ast"]
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -276,8 +261,7 @@ async def test_explicit_mode_missing_provider_failure() -> None:
 async def test_unknown_resolution_mode_internal() -> None:
     """Test internal _resolve_explicit with invalid mode."""
     compiler = ContextCompiler()
-    # Use type: ignore to bypass enum check for testing
-    res, provider = await compiler._resolve_explicit("target", "INVALID")  # type: ignore # noqa: SLF001
+    res, provider = await compiler.resolve_explicit("target", cast("Any", "INVALID"))
     assert res == ""
     assert provider == "none"
 
@@ -328,7 +312,7 @@ async def test_compiler_resolve_auto_tree_fallback() -> None:
     # We mock the tree provider to return a success string.
     # We pass a target without '.py' or '.' so AST and Pydantic skip it.
     with patch.object(DirectoryTreeProvider, "resolve", return_value="### Directory Tree"):
-        res, provider = await compiler._resolve_auto("my_directory", "file")  # noqa: SLF001
+        res, provider = await compiler.resolve_auto("my_directory", "file")
 
         assert provider == "tree"
         assert "### Directory Tree" in res
@@ -342,7 +326,7 @@ async def test_compiler_resolve_auto_unknown_preferred() -> None:
     with patch("jitsu.core.compiler.logger.warning") as mock_logger:
         # Pass a completely unknown provider name
         # It will fail all resolution and drop to the bottom, returning "none"
-        await compiler._resolve_auto("fake_target", "hallucinated_provider")  # noqa: SLF001
+        await compiler.resolve_auto("fake_target", "hallucinated_provider")
 
         mock_logger.assert_called_with("Unknown provider '%s' requested", "hallucinated_provider")
 
@@ -353,10 +337,39 @@ async def test_compiler_resolve_auto_git_diff_as_preferred() -> None:
     compiler = ContextCompiler()
     mock_git = AsyncMock()
     mock_git.resolve.return_value = "### Git Diff: HEAD"
-    compiler._providers["git_diff"] = mock_git  # noqa: SLF001
+    compiler.providers["git_diff"] = mock_git
 
-    res, provider = await compiler._resolve_auto("HEAD", "git_diff")  # noqa: SLF001
+    res, provider = await compiler.resolve_auto("HEAD", "git_diff")
 
     assert provider == "git_diff"
     assert "### Git Diff: HEAD" in res
     mock_git.resolve.assert_called_once_with("HEAD")
+
+
+@pytest.mark.asyncio
+async def test_compile_u_curve_ordering() -> None:
+    """Test that the compiler follows the exact U-Curve XML ordering."""
+    compiler = ContextCompiler()
+    directive = AgentDirective(
+        epic_id="epic-1",
+        phase_id="phase-1",
+        module_scope="test",
+        instructions="do stuff",
+    )
+    res = await compiler.compile_directive(directive)
+
+    # Assert exact tag presence
+    assert TAG_INSTRUCTIONS in res
+    assert TAG_CONTEXT_MANIFEST in res
+    assert TAG_CONTEXT_DETAIL in res
+    assert TAG_PRIORITY_RECAP in res
+    assert TAG_TASK_SPEC in res
+
+    # Assert mathematical ordering (index-based)
+    idx_instr = res.index(TAG_INSTRUCTIONS)
+    idx_manifest = res.index(TAG_CONTEXT_MANIFEST)
+    idx_detail = res.index(TAG_CONTEXT_DETAIL)
+    idx_recap = res.index(TAG_PRIORITY_RECAP)
+    idx_task = res.index(TAG_TASK_SPEC)
+
+    assert idx_instr < idx_manifest < idx_detail < idx_recap < idx_task

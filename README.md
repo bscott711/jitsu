@@ -1,82 +1,52 @@
 # **Jitsu (実)**
 
-## **AST-First, Self-Orchestrating JIT Context for AI IDE Agents**
+## **Autonomous, AST-Aware, Self-Healing AI Engineering Agent**
 
-**Jitsu** (実 / "Truth") is a powerful orchestration layer designed to eliminate **Prompt Debt** and **Context Drift** in AI-capable IDEs (such as Antigravity, Cursor, or Windsurf). It shifts the workload from the agent's limited context window to a high-performance Python engine that serves the absolute "ground truth" of your codebase **Just-In-Time (JIT)**.
+**Jitsu** (実 / "Truth") is an orchestration layer designed to eliminate **Prompt Debt**, **Context Drift**, and **LLM Laziness** in AI-driven software engineering. It shifts context preparation from the agent's limited window to a high-performance Python engine, serving the absolute "ground truth" of your codebase **Just-In-Time (JIT)**.
 
----
+### **✨ v0.2.0 Architecture Highlights**
 
-## **Why Jitsu?**
+Jitsu operates as a deterministic, engineer with a built-in safety net:
 
-Jitsu transitions AI agents from passive code generators to **self-orchestrating collaborators**:
+* **U-Curve Context Compilation:** Mathematically optimized prompt construction that forces critical instructions to the edges of the context window, eliminating the LLM "Lost in the Middle" syndrome.  
+* **AST-Aware Recovery Loop:** If a test fails, Jitsu doesn't just guess why. It surgically extracts the traceback, resolves the Abstract Syntax Tree (AST) of the failing file, and injects it into a recovery prompt for a zero-hallucination fix.  
+* **Pydantic Gatekeepers:** Ironclad output validation instantly rejects LLM laziness (e.g., \# rest of code here or ...), forcing the model to generate 100% complete, executable code before it ever touches your disk.  
+* **Zero-Bypass Engineering:** Jitsu strictly adheres to a "Zero-Regression" policy, enforcing 100% test coverage with zero \# noqa or \# type: ignore linting bypasses.
 
-- **AST-First Context**: Jitsu prioritizes structural AST "skeletons" (signatures, docstrings, constants) over raw source code, stripping away implementation noise to save up to **90% of tokens**.
-- **Self-Orchestration**: Agents are no longer just task-takers. With tools like `jitsu_get_planning_context` and `jitsu_submit_epic`, agents can plan their own work, breaking down complex objectives into validated execution phases.
-- **Strict Typed Directives**: Instructions are delivered as validated Pydantic models with explicit "Definitions of Done," verification commands, and strictly forbidden anti-patterns.
-- **Managed Git Lifecycle**: All changes are governed by a "Just-based Git Lifecycle" (`jitsu_git_commit`), ensuring that every change is verified and committed following [Conventional Commits](https://www.conventionalcommits.org/).
-- **Progressive Disclosure**: Agents can pull context on-demand as they discover dependencies, rather than being overwhelmed by a massive, static prompt.
+## **🚀 Quick Start**
 
----
+### **Installation**
 
-## **Core Technology**
-
-- **Layered Architecture**: A 4-layer stack covering everything from strict domain models to a self-orchestrating MCP server.
-- **Intelligent Fallback**: The `ContextCompiler` automatically falls back from AST to Pydantic schemas, directory trees, or full source based on the requested target.
-- **Model Context Protocol (MCP)**: Native integration with the industry-standard protocol for connecting AI models to local tools and data.
-
----
-
-## **Installation**
-
-Jitsu is optimized for use with `uv`. For global access, we recommend:
+Jitsu is optimized for uv:
 
 ```bash
 uv tool install jitsu
 ```
 
-For local development:
+### **Core Workflows**
 
-```bash
-git clone https://github.com/bscott711/jitsu
-cd jitsu
-uv pip install -e .
-```
+**1\. Autonomous Execution (New in v0.2.0)**  
+Let Jitsu act as a fully autonomous agent. It will plan the Epic, compile the context, execute the edits, and run the verification loops itself.  
+jitsu auto "Refactor the core orchestrator to use the new State Manager"
 
----
+**2\. The IDE Integration (MCP)**  
+If you prefer to drive via an MCP-compatible IDE (Antigravity, Cursor, etc.):
 
-## **The Jitsu Workflow**
+1. **Serve**: uv run jitsu serve  
+2. **Plan & Submit**: Draft an epic.json and run uv run jitsu submit epic.json  
+3. **Orchestrate**: Use your IDE to pull phases via the jitsu\_get\_next\_phase tool.
 
-1. **Serve**: Start the MCP server securely in the background (or hook into your IDE config):
+## **📖 Documentation**
 
-   ```bash
-   uv run jitsu serve
-   ```
+For a deep dive into Jitsu's architecture and capabilities, visit our [**Wiki**](docs/index.md).
 
-2. **Plan**: Draft an `epic.json` file detailing your phases, module scopes, and validation logic.
-3. **Submit**: Push the epic seamlessly to the active server over IPC:
+* [**Architecture Overview**](docs/index.md#4-layer-architecture): The execution stack (Planner \-\> Context Compiler \-\> Executor \-\> Storage).  
+* [**CLI Reference**](docs/CLI%20Reference.md): Typer CLI usage for auto, init, serve, and submit.  
+* [**MCP Tools**](docs/MCP%20Tools%20Reference.md): Reference for the default orchestrator tools.
 
-   ```bash
-   uv run jitsu submit path/to/epic.json
-   ```
+## **🛠️ Development**
 
-4. **Pull**: The agent calls `jitsu_get_next_phase()` to receive its first atomic directive.
-5. **Execute & Verify**: The agent implements changes and requests Progressive Disclosure via `jitsu_request_context` when needed. It then runs `just verify` to ensure quality.
-6. **Commit**: The agent uses `jitsu_git_commit` to stage and commit the verified work.
-7. **Report**: The agent calls `jitsu_report_status()` to mark the phase as complete and move to the next.
-
----
-
-## **Documentation**
-
-- [**Jitsu Architecture Overview**](docs/Jitsu%20Architecture%20Overview.md): Deep dive into the 1.0 multi-layered design and the autonomous loop.
-- [**CLI Command Reference**](docs/CLI%20Reference.md): Explore the Typer CLI `init`, `serve`, `submit`, and `queue` commands.
-- [**MCP Tools Reference**](docs/MCP%20Tools%20Reference.md): Reference for the 8 default tools shipped with the Jitsu orchestrator.
-
----
-
-## **Development**
-
-Jitsu is built with a "Zero-Regression" policy, maintained via strict verification:
+Jitsu is built with a strictly enforced "Zero-Regression" policy:  
 
 ```bash
 just verify

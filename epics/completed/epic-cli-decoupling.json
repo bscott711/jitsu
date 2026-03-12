@@ -1,0 +1,100 @@
+[
+  {
+    "epic_id": "epic-cli-decoupling",
+    "phase_id": "phase-extract-epic-storage",
+    "module_scope": "src/jitsu/core/storage.py",
+    "instructions": "Create `src/jitsu/core/storage.py` containing an `EpicStorage` class to encapsulate all JSON file I/O operations (loading epics, writing completed phases, managing the `completed_dir` archiving). Refactor the `run`, `auto`, and `submit` commands in `src/jitsu/cli/main.py` to use `EpicStorage` instead of bare `Path(...).read_text()` or `out.rename(...)`. Update `tests/cli/test_main.py` to patch this new storage layer.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT leave any bare `open()` or `Path().read_text()` calls handling JSON files inside the CLI module.",
+      "Do NOT alter the actual schema or lifecycle of the Epic, only where the disk I/O occurs."
+    ],
+    "completion_criteria": [
+      "`EpicStorage` fully encapsulates file I/O for epic tracking and archiving.",
+      "`main.py` uses dependency injected or instantiated `EpicStorage`.",
+      "All CLI tests pass."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-cli-decoupling",
+    "phase_id": "phase-extract-orchestrator-loop",
+    "module_scope": "src/jitsu/core/orchestrator.py",
+    "instructions": "Create `src/jitsu/core/orchestrator.py` containing a `JitsuOrchestrator` class. Move the complex `_run_planner`, `_execute_phases`, and `_run_autonomous_loop` logic from `src/jitsu/cli/main.py` into this new class. The orchestrator should accept `JitsuPlanner` and `JitsuExecutor` via dependency injection. Clean up the boolean trap (`# noqa: FBT001, FBT002`) and import outside top-level (`# noqa: PLC0415`) violations that were inside these functions.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT leave orchestration logic or LLM error handling loops inside `main.py`.",
+      "Do NOT carry over `# noqa` suppression flags into the new orchestrator module. Fix the underlying issues."
+    ],
+    "completion_criteria": [
+      "`src/jitsu/core/orchestrator.py` contains all autonomous loop and execution logic.",
+      "The CLI `plan`, `run`, and `auto` commands strictly instantiate and call the `JitsuOrchestrator`.",
+      "Boolean trap and lazy import violations are eliminated."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-cli-decoupling",
+    "phase_id": "phase-extract-network-and-templates",
+    "module_scope": "src/jitsu/",
+    "instructions": "First, move the raw TCP `_send_payload` logic from `cli/main.py` into a new `src/jitsu/server/client.py` file. Second, resolve the templates audit by creating `src/jitsu/templates/loader.py` with a `TemplateLoader` utility to abstract the `importlib.resources.files` boilerplate, and refactor the `init()` command in `cli/main.py` to use it. Finally, remove the blind exception catching (`# noqa: BLE001`) in the CLI `serve()` command, catching specific `OSError` or `anyio` exceptions instead.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/templates/__init__.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT leave `anyio` raw socket connection logic inside `cli/main.py`.",
+      "Do NOT leave `importlib.resources` boilerplate inside `cli/main.py`.",
+      "Do NOT leave any `# noqa: BLE001` markers in the CLI."
+    ],
+    "completion_criteria": [
+      "Network client logic is encapsulated in `src/jitsu/server/client.py`.",
+      "Template loading is encapsulated in `src/jitsu/templates/loader.py`.",
+      "The CLI layer is now purely a Typer routing layer with zero architectural violations.",
+      "All tests pass."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

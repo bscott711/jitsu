@@ -1,0 +1,540 @@
+"""Tests for the JitsuOrchestrator."""
+
+import json
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import anyio
+import httpx
+import openai
+import pytest
+import typer
+from instructor.core.exceptions import InstructorRetryException
+
+from jitsu.core.executor import MonotonicityError
+from jitsu.core.orchestrator import JitsuOrchestrator
+from jitsu.core.storage import EpicStorage
+from jitsu.models.core import AgentDirective
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_phases_success(tmp_path: Path) -> None:
+    """Test JitsuOrchestrator.execute_phases on success."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive = AsyncMock(return_value=True)
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    with (
+        patch("shutil.which", return_value="/usr/bin/just"),
+        patch("anyio.run_process", new_callable=AsyncMock) as mock_rp,
+    ):
+        mock_rp.return_value = MagicMock(returncode=0)
+        await orchestrator.execute_phases([directive], compiler=mock_compiler)
+        mock_rp.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_phases_failure(tmp_path: Path) -> None:
+    """Test JitsuOrchestrator.execute_phases when execution fails."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive = AsyncMock(return_value=False)
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    with pytest.raises(typer.Exit) as exc:
+        await orchestrator.execute_phases([directive], compiler=mock_compiler)
+    assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_phases_just_missing(tmp_path: Path) -> None:
+    """Test JitsuOrchestrator.execute_phases when 'just' is missing."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive = AsyncMock(return_value=True)
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    with patch("shutil.which", return_value=None):
+        with pytest.raises(typer.Exit) as exc:
+            await orchestrator.execute_phases([directive], compiler=mock_compiler)
+        assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_finalize_success(tmp_path: Path) -> None:
+    """Test JitsuOrchestrator.finalize archives the epic file."""
+    out_file = tmp_path / "epic.json"
+    out_file.write_text("[]", encoding="utf-8")
+    completed_dir = tmp_path / "epics" / "completed"
+
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
+    await orchestrator.finalize(out_file)
+
+    assert (completed_dir / "epic.json").exists()
+    assert not out_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_run_autonomous_bridge(tmp_path: Path) -> None:
+    """Test JitsuOrchestrator.run_autonomous bridges to execute_phases and finalize."""
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
+
+    with (
+        patch.object(orchestrator, "execute_phases", new_callable=AsyncMock) as mock_exec,
+        patch.object(orchestrator, "finalize", new_callable=AsyncMock) as mock_final,
+    ):
+        await orchestrator.run_autonomous([], Path("test.json"))
+        mock_exec.assert_awaited_once()
+        mock_final.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_run_success(tmp_path: Path) -> None:
+    """Test execute_run completes successfully."""
+    orchestrator = JitsuOrchestrator(storage=EpicStorage(base_dir=tmp_path))
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    async def mock_plan_side_effect(
+        _objective: str, _files: list[str], out: Path, **_kwargs: object
+    ) -> list[AgentDirective]:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        await anyio.Path(out).write_text(json.dumps([directive.model_dump()]), encoding="utf-8")
+        return [directive]
+
+    with (
+        patch.object(orchestrator, "run_plan", new_callable=AsyncMock) as mock_plan,
+        patch.object(orchestrator, "send_payload", new_callable=AsyncMock) as mock_send,
+        patch.object(orchestrator.storage, "archive") as mock_archive,
+    ):
+        mock_plan.side_effect = mock_plan_side_effect
+        mock_send.return_value = "ACK"
+        mock_archive.return_value = tmp_path / "epics" / "completed" / "test.json"
+
+        await orchestrator.execute_run("test", [], model="test", verbose=False)
+
+        mock_plan.assert_awaited_once()
+        mock_send.assert_awaited_once()
+        mock_archive.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_run_server_error(tmp_path: Path) -> None:
+    """Test execute_run handles server error response."""
+    orchestrator = JitsuOrchestrator(storage=EpicStorage(base_dir=tmp_path))
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    async def mock_plan_side_effect(
+        _objective: str, _files: list[str], out: Path, **_kwargs: object
+    ) -> list[AgentDirective]:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        await anyio.Path(out).write_text(json.dumps([directive.model_dump()]), encoding="utf-8")
+        return [directive]
+
+    with (
+        patch.object(orchestrator, "run_plan", new_callable=AsyncMock) as mock_plan,
+        patch.object(orchestrator, "send_payload", new_callable=AsyncMock) as mock_send,
+    ):
+        mock_plan.side_effect = mock_plan_side_effect
+        mock_send.return_value = "ERR"
+
+        with pytest.raises(typer.Exit) as exc:
+            await orchestrator.execute_run("test", [], model="test", verbose=False)
+        assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_auto_file_success(tmp_path: Path) -> None:
+    """Test execute_auto from file."""
+    epic_file = tmp_path / "epic.json"
+    epic_file.write_text("[]", encoding="utf-8")
+
+    orchestrator = JitsuOrchestrator(storage=EpicStorage(base_dir=tmp_path))
+
+    with patch.object(orchestrator, "run_autonomous", new_callable=AsyncMock) as mock_auto:
+        await orchestrator.execute_auto(file=epic_file, model="test")
+        mock_auto.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_auto_objective_success(tmp_path: Path) -> None:
+    """Test execute_auto from objective."""
+    orchestrator = JitsuOrchestrator(storage=EpicStorage(base_dir=tmp_path))
+
+    with (
+        patch.object(orchestrator, "execute_plan", new_callable=AsyncMock) as mock_plan,
+        patch.object(orchestrator, "run_autonomous", new_callable=AsyncMock) as mock_auto,
+    ):
+        mock_plan.return_value = []
+        await orchestrator.execute_auto(objective="test", model="test")
+        mock_plan.assert_awaited_once()
+        mock_auto.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_auto_validation_error(tmp_path: Path) -> None:
+    """Test execute_auto handles validation error in file."""
+    epic_file = tmp_path / "epic.json"
+    epic_file.write_text('{"invalid": "data"}', encoding="utf-8")
+
+    orchestrator = JitsuOrchestrator(storage=EpicStorage(base_dir=tmp_path))
+
+    with pytest.raises(typer.Exit) as exc:
+        await orchestrator.execute_auto(file=epic_file, model="test")
+    assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_auto_no_objective_or_file(tmp_path: Path) -> None:
+    """Test execute_auto fails if neither objective nor file is provided."""
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
+    with pytest.raises(typer.Exit) as exc:
+        await orchestrator.execute_auto(model="test")
+    assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_send_payload_failure(tmp_path: Path) -> None:
+    """Test _send_payload handles connection refused."""
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
+    with patch("anyio.connect_tcp", side_effect=ConnectionRefusedError()):
+        with pytest.raises(typer.Exit) as exc:
+            await orchestrator.send_payload(b"test")
+        assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_send_payload_eof(tmp_path: Path) -> None:
+    """Test _send_payload handles EndOfStream."""
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
+    mock_client = AsyncMock()
+    mock_client.receive.side_effect = anyio.EndOfStream()
+
+    with patch(
+        "anyio.connect_tcp", return_value=MagicMock(__aenter__=AsyncMock(return_value=mock_client))
+    ):
+        res = await orchestrator.send_payload(b"test")
+        assert "ERR" in res
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_run_plan_success(tmp_path: Path) -> None:
+    """Test run_plan success and output generation."""
+    mock_planner = MagicMock()
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    mock_planner.generate_plan = AsyncMock(return_value=[directive])
+
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(planner=mock_planner, storage=storage)
+    out_file = tmp_path / "out.json"
+
+    res = await orchestrator.run_plan("test", [], out_file, model="test")
+    assert res == [directive]
+    mock_planner.save_plan.assert_called_once_with(out_file)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_run_plan_fallback(tmp_path: Path) -> None:
+    """Test run_plan fallback logic on 429."""
+    mock_planner = MagicMock()
+    error_response = httpx.Response(429, request=httpx.Request("POST", "url"))
+    mock_error = openai.APIStatusError("limit", response=error_response, body=None)
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    mock_planner.generate_plan.side_effect = [mock_error, AsyncMock(return_value=[directive])()]
+
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(planner=mock_planner, storage=storage)
+    out_file = tmp_path / "out.json"
+
+    await orchestrator.run_plan("test", [], out_file, model="test")
+    expected_calls = 2
+    assert mock_planner.generate_plan.call_count == expected_calls
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_run_plan_planner_failure(tmp_path: Path) -> None:
+    """Test run_plan when planner returns None/Empty."""
+    mock_planner = MagicMock()
+    mock_planner.generate_plan = AsyncMock(return_value=None)
+
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(planner=mock_planner, storage=storage)
+    out_file = tmp_path / "out.json"
+
+    with pytest.raises(typer.Exit) as exc:
+        await orchestrator.run_plan("test", [], out_file, model="test")
+    assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_run_plan_general_exception(tmp_path: Path) -> None:
+    """Test run_plan handles general exceptions via _handle_planner_error."""
+    mock_planner = MagicMock()
+    mock_planner.generate_plan.side_effect = RuntimeError("fail")
+
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(planner=mock_planner, storage=storage)
+    out_file = tmp_path / "out.json"
+
+    with pytest.raises(typer.Exit) as exc:
+        await orchestrator.run_plan("test", [], out_file, model="test")
+    assert exc.value.exit_code == 1
+
+
+def test_orchestrator_handle_planner_error_instructor() -> None:
+    """Test handle_planner_error with InstructorRetryException."""
+    e = InstructorRetryException("fail", n_attempts=1, total_usage=0)
+    with pytest.raises(typer.Exit) as exc:
+        JitsuOrchestrator.handle_planner_error(e)
+    assert exc.value.exit_code == 1
+
+
+def test_orchestrator_handle_planner_error_api_status() -> None:
+    """Test handle_planner_error with APIStatusError."""
+    error_response = httpx.Response(500, request=httpx.Request("POST", "url"))
+    e = openai.APIStatusError("fail", response=error_response, body=None)
+    with pytest.raises(typer.Exit) as exc:
+        JitsuOrchestrator.handle_planner_error(e)
+    assert exc.value.exit_code == 1
+
+
+def test_orchestrator_handle_planner_error_runtime() -> None:
+    """Test handle_planner_error with RuntimeError (API key)."""
+    e = RuntimeError("OPENROUTER_API_KEY")
+    with pytest.raises(typer.Exit) as exc:
+        JitsuOrchestrator.handle_planner_error(e)
+    assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_plan_async(tmp_path: Path) -> None:
+    """Test execute_plan is async and behaves correctly."""
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
+    out = tmp_path / "out.json"
+    with patch.object(orchestrator, "run_plan", new_callable=AsyncMock) as mock_run:
+        mock_run.return_value = ["dummy"]
+        res = await orchestrator.execute_plan("test", [], out, model="test")
+        assert res == ["dummy"]
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_run_plan_on_progress(tmp_path: Path) -> None:
+    """Test on_progress callback in run_plan."""
+    progress_msgs = []
+
+    def on_progress(msg: str) -> None:
+        progress_msgs.append(msg)
+
+    mock_planner = MagicMock()
+    mock_planner.generate_plan = AsyncMock(
+        return_value=[AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")]
+    )
+
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(planner=mock_planner, on_progress=on_progress, storage=storage)
+    out_file = tmp_path / "out.json"
+
+    await orchestrator.run_plan("test", [], out_file, model="test")
+    _, kwargs = mock_planner.generate_plan.call_args
+    on_prog_cb = kwargs["on_progress"]
+    on_prog_cb("test message")
+    assert "test message" in progress_msgs
+
+
+def test_orchestrator_handle_planner_error_verbose() -> None:
+    """Test handle_planner_error with verbose=True."""
+    e = ValueError("fail")
+    e.__cause__ = RuntimeError("cause")
+    with pytest.raises(typer.Exit) as exc, patch("typer.secho"):
+        JitsuOrchestrator.handle_planner_error(e, verbose=True)
+    assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_run_os_error(tmp_path: Path) -> None:
+    """Test execute_run handles OSError during file read."""
+    orchestrator = JitsuOrchestrator(storage=EpicStorage(base_dir=tmp_path))
+    with (
+        patch.object(orchestrator, "execute_plan", new_callable=AsyncMock),
+        patch.object(
+            EpicStorage,
+            "read_bytes",
+            side_effect=OSError("Read error"),
+        ),
+    ):
+        with pytest.raises(typer.Exit) as exc:
+            await orchestrator.execute_run("test", [], model="test")
+        assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_run_plan_fallback_fail(tmp_path: Path) -> None:
+    """Test run_plan fallback failure when already using fallback model."""
+    mock_planner = MagicMock()
+    error_response = httpx.Response(429, request=httpx.Request("POST", "url"))
+    mock_error = openai.APIStatusError("limit", response=error_response, body=None)
+
+    # If starting with gpt-oss-120b and it fails, it should raise immediately
+    mock_planner.generate_plan.side_effect = mock_error
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(planner=mock_planner, storage=storage)
+    out_file = tmp_path / "out.json"
+
+    with pytest.raises(typer.Exit) as exc:
+        await orchestrator.run_plan("test", [], out_file, model="openai/gpt-oss-120b:free")
+    assert exc.value.exit_code == 1
+    assert mock_planner.generate_plan.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_auto_os_error_direct(tmp_path: Path) -> None:
+    """Cover OSError in execute_auto loading file."""
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
+    epic_file = tmp_path / "epic.json"
+    epic_file.touch()
+
+    # Bypass run_sync to trigger OSError directly in the same thread if possible
+    with patch("jitsu.core.orchestrator.run_sync", side_effect=OSError("Read fail")):
+        with pytest.raises(typer.Exit) as exc:
+            await orchestrator.execute_auto(file=epic_file, model="test")
+        assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_send_payload_direct(tmp_path: Path) -> None:
+    """Cover the decode line in _send_payload."""
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
+    mock_client = MagicMock()
+    mock_client.receive = AsyncMock(return_value=b"RESPONSE")
+    mock_client.send = AsyncMock()
+    mock_client.send_eof = AsyncMock()
+
+    with patch(
+        "jitsu.core.orchestrator.anyio.connect_tcp",
+        return_value=MagicMock(__aenter__=AsyncMock(return_value=mock_client)),
+    ):
+        res = await orchestrator.send_payload(b"CMD")
+        assert res == "RESPONSE"
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_phases_stuck(tmp_path: Path) -> None:
+    """Test JitsuOrchestrator.execute_phases when executor raises MonotonicityError."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive = AsyncMock(side_effect=MonotonicityError("Stuck"))
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    out_file = tmp_path / "epic.json"
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    with pytest.raises(typer.Exit) as exc:
+        await orchestrator.execute_phases([directive], compiler=mock_compiler, out=out_file)
+    assert exc.value.exit_code == 1
+
+    # Assert disk write (state file)
+    state_file = out_file.with_suffix(".state")
+    assert state_file.exists()
+    content = json.loads(state_file.read_text())
+    assert content["status"] == "STUCK"
+    assert "Stuck" in content["agent_notes"]
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_phases_failed_persistence(tmp_path: Path) -> None:
+    """Test JitsuOrchestrator.execute_phases when execution fails (not stuck)."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive = AsyncMock(return_value=False)
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    out_file = tmp_path / "epic.json"
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    with pytest.raises(typer.Exit) as exc:
+        await orchestrator.execute_phases([directive], compiler=mock_compiler, out=out_file)
+    assert exc.value.exit_code == 1
+
+    # Assert disk write (state file)
+    state_file = out_file.with_suffix(".state")
+    assert state_file.exists()
+    content = json.loads(state_file.read_text())
+    assert content["status"] == "FAILED"
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_phases_commit_failure(tmp_path: Path) -> None:
+    """Test execute_phases when the commit command fails."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive = AsyncMock(return_value=True)
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    with (
+        patch("shutil.which", return_value="/usr/bin/just"),
+        patch("anyio.run_process", new_callable=AsyncMock) as mock_rp,
+        patch("typer.secho"),
+    ):
+        # Only one call to run_process (for commit)
+        mock_rp.return_value = MagicMock(returncode=1, stderr=b"Commit error")
+        with pytest.raises(typer.Exit) as exc:
+            await orchestrator.execute_phases([directive], compiler=mock_compiler)
+        assert exc.value.exit_code == 1
+
+
+def test_handle_planner_error_instructor_verbose_direct() -> None:
+    """Cover the verbose CAUSE branch for InstructorRetryException."""
+    cause = ValueError("OriginalCause")
+    e = InstructorRetryException("fail", n_attempts=1, total_usage=0)
+    e.__cause__ = cause
+
+    with patch("typer.secho") as mock_secho, pytest.raises(typer.Exit):
+        JitsuOrchestrator.handle_planner_error(e, verbose=True)
+
+    calls = [str(c[0][0]) for c in mock_secho.call_args_list]
+    assert any("CAUSE" in c for c in calls)
+    assert any("OriginalCause" in c for c in calls)
+
+
+def test_handle_planner_error_general_verbose_direct() -> None:
+    """Cover the verbose CAUSE branch for general Exception."""
+    cause = RuntimeError("GeneralCause")
+    e = Exception("GeneralError")
+    e.__cause__ = cause
+
+    with patch("typer.secho") as mock_secho, pytest.raises(typer.Exit):
+        JitsuOrchestrator.handle_planner_error(e, verbose=True)
+
+    calls = [str(c[0][0]) for c in mock_secho.call_args_list]
+    assert any("DEBUG" in c for c in calls)
+    assert any("CAUSE" in c for c in calls)
+    assert any("GeneralCause" in c for c in calls)

@@ -1,24 +1,17 @@
 """Tests for the Pydantic V2 provider."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from pydantic import BaseModel
 
 from jitsu.providers.pydantic import PydanticProvider
-
-
-class MockModel(BaseModel):
-    """A simple mock model for testing."""
-
-    name: str
-    age: int = 42
 
 
 @pytest.mark.asyncio
 async def test_pydantic_provider_success() -> None:
     """Test successful resolution of a Pydantic model."""
-    provider = PydanticProvider()
+    provider = PydanticProvider(Path.cwd())
     assert provider.name == "pydantic"
     # Use a core model that is guaranteed to be in the path
     res = await provider.resolve("jitsu.models.core.AgentDirective")
@@ -32,7 +25,7 @@ async def test_pydantic_provider_success() -> None:
 @pytest.mark.asyncio
 async def test_pydantic_provider_invalid_target() -> None:
     """Test resolution with an invalid target string."""
-    provider = PydanticProvider()
+    provider = PydanticProvider(Path.cwd())
     res = await provider.resolve("InvalidTargetNoDots")
     assert "**ERROR:** Invalid Pydantic target" in res
 
@@ -40,7 +33,7 @@ async def test_pydantic_provider_invalid_target() -> None:
 @pytest.mark.asyncio
 async def test_pydantic_provider_module_not_found() -> None:
     """Test resolution when the module does not exist."""
-    provider = PydanticProvider()
+    provider = PydanticProvider(Path.cwd())
     res = await provider.resolve("non_existent_package_123.MyModel")
     assert "**ERROR:** Could not import module" in res
 
@@ -48,7 +41,7 @@ async def test_pydantic_provider_module_not_found() -> None:
 @pytest.mark.asyncio
 async def test_pydantic_provider_class_not_found() -> None:
     """Test resolution when the class does not exist in the module."""
-    provider = PydanticProvider()
+    provider = PydanticProvider(Path.cwd())
     res = await provider.resolve("jitsu.models.core.NonExistentClass")
     assert "**ERROR:** Class 'NonExistentClass' not found" in res
 
@@ -56,7 +49,7 @@ async def test_pydantic_provider_class_not_found() -> None:
 @pytest.mark.asyncio
 async def test_pydantic_provider_not_a_basemodel() -> None:
     """Test resolution when the target is not a Pydantic BaseModel."""
-    provider = PydanticProvider()
+    provider = PydanticProvider(Path.cwd())
     # BaseProvider is an abc.ABC, not a pydantic.BaseModel
     res = await provider.resolve("jitsu.providers.base.BaseProvider")
     assert "is not a Pydantic V2 'BaseModel'" in res
@@ -65,7 +58,7 @@ async def test_pydantic_provider_not_a_basemodel() -> None:
 @pytest.mark.asyncio
 async def test_pydantic_provider_unexpected_error() -> None:
     """Test resolution when an unexpected error occurs."""
-    provider = PydanticProvider()
+    provider = PydanticProvider(Path.cwd())
     with patch("importlib.import_module", side_effect=RuntimeError("Unexpected!")):
         res = await provider.resolve("jitsu.models.core.AgentDirective")
         assert "**ERROR:** An unexpected error occurred" in res

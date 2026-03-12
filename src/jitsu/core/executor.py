@@ -1,69 +1,156 @@
 """Autonomous execution engine for Jitsu directives."""
 
 import logging
-import os
-import shlex
-import subprocess
+import re
 from pathlib import Path
 
-import dotenv
-import instructor
 import openai
 import typer
+from instructor.core.client import Instructor
 from instructor.core.exceptions import InstructorRetryException
-from openai import OpenAI
 
+from jitsu.core.client import LLMClientFactory
+from jitsu.core.runner import CommandRunner
 from jitsu.models.core import AgentDirective
-from jitsu.models.execution import ExecutionResult
+from jitsu.models.execution import ExecutionResult, FileEdit, VerificationFailureDetails
+from jitsu.prompts import (
+    EXECUTOR_RECOVERY_PROMPT,
+    EXECUTOR_SYSTEM_PROMPT,
+    VERIFICATION_SUMMARY_RULE,
+)
+from jitsu.providers.ast import ASTProvider
 
 logger = logging.getLogger(__name__)
+
+
+class MonotonicityError(Exception):
+    """Raised when the agent fails to improve or makes the situation worse."""
 
 
 class JitsuExecutor:
     """Executes AgentDirectives autonomously using an LLM."""
 
-    def __init__(self, model: str = "openai/gpt-oss-120b:free") -> None:
-        """Initialize the executor with a model name."""
+    def __init__(
+        self,
+        model: str = "openai/gpt-oss-120b:free",
+        client: Instructor | None = None,
+        runner: CommandRunner | None = None,
+        workspace_root: Path | None = None,
+    ) -> None:
+        """
+        Initialize the executor with a model name and optional LLM client.
+
+        Args:
+            model: The model name to use for LLM calls.
+            client: An optional pre-constructed instructor client. If not provided,
+                    one will be created via LLMClientFactory.
+            runner: An optional CommandRunner instance. If not provided,
+                    a default CommandRunner is used.
+            workspace_root: The root directory of the workspace.
+
+        """
         self.model = model
-        dotenv.load_dotenv()
-        api_key = os.environ.get("OPENROUTER_API_KEY")
-        if not api_key:
-            msg = "OPENROUTER_API_KEY environment variable is not set"
-            raise RuntimeError(msg)
+        self.client = client if client is not None else LLMClientFactory.create()
+        self.runner = runner if runner is not None else CommandRunner()
+        self.workspace_root = workspace_root or Path.cwd()
+        self.ast_provider = ASTProvider(self.workspace_root)
 
-        self.client = instructor.from_openai(
-            OpenAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=api_key,
-            ),
-            mode=instructor.Mode.JSON,
-        )
+    @staticmethod
+    def _apply_edits(edits: list[FileEdit]) -> None:
+        """Safely write file edits to disk."""
+        for edit in edits:
+            filepath = Path(edit.filepath).resolve()
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text(edit.content)
+            logger.info("Updated file: %s", edit.filepath)
 
-    def execute_directive(self, directive: AgentDirective, compiler_output: str) -> bool:
+    @staticmethod
+    def extract_first_failure_block(stderr: str) -> tuple[str, str | None]:
+        """Isolate the first actionable error block and parse the failing file path."""
+        # 1. Pytest style
+        # Look for ____ test_name ____ ... block
+        pytest_match = re.search(r"_{4,}\s+(.*?)\s+_{4,}(.*?)(?=\n_{4,}|$)", stderr, re.DOTALL)
+        if pytest_match:
+            block = pytest_match.group(0).strip()
+            # Extract file path from pytest block (usually at the end of the block)
+            # e.g., "tests/core/test_executor.py:302: AssertionError"
+            file_match = re.search(r"^([\w\.\-/]+\.py):(\d+):", block, re.MULTILINE)
+            if file_match:
+                return block, file_match.group(1)
+            return block, None
+
+        # 2. Ruff/Pyright/Generic file:line style
+        # e.g., src/jitsu/core/executor.py:92:9: error: ...
+        generic_match = re.search(r"^([\w\.\-/]+\.py):(\d+):(?:\d+:)?\s+(.*)", stderr, re.MULTILINE)
+        if generic_match:
+            # For generic errors, just take the first few lines around the error
+            lines = stderr.splitlines()
+            for i, line in enumerate(lines):
+                if generic_match.group(0) in line:
+                    return "\n".join(lines[i : i + 10]), generic_match.group(1)
+
+        # Fallback to 20 lines if all else fails
+        lines = stderr.splitlines()
+        return "\n".join(lines[:20]), None
+
+    @staticmethod
+    def parse_failure_count(stderr: str) -> int:
+        """Attempt to extract an error/failure count from command output."""
+        # pytest: "1 failed", ruff: "Found 4 errors", etc.
+        patterns = [
+            r"(\d+) failed",
+            r"Found (\d+) error",
+            r"(\d+) error(?:s)? found",
+            r"(\d+) errors",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, stderr, re.IGNORECASE)
+            if match:
+                return int(match.group(1))
+        return 1  # Default to 1 if we can't find a count
+
+    def run_verification(
+        self, commands: list[str]
+    ) -> tuple[bool, VerificationFailureDetails | None]:
+        """Execute verification commands and aggregate errors."""
+        for cmd in commands:
+            logger.info("Running verification: %s", cmd)
+            res = self.runner.run(cmd)
+            if res.returncode != 0:
+                fail_count = self.parse_failure_count(res.stderr)
+                summary = (
+                    f"Command '{cmd}' failed with {fail_count} errors (exit code {res.returncode})"
+                )
+                trimmed_block, failing_file = self.extract_first_failure_block(res.stderr)
+                details = VerificationFailureDetails(
+                    summary=summary,
+                    trimmed=trimmed_block,
+                    failed_cmd=cmd,
+                    failing_file=failing_file,
+                )
+                return False, details
+
+        logger.info("Verification passed!")
+        return True, None
+
+    async def execute_directive(self, directive: AgentDirective, compiler_output: str) -> bool:
         """Execute a single directive with retries on verification failure."""
         max_retries = 3
         attempts = 0
-        last_error = ""
+        prev_fail_count = float("inf")
+
+        system_prompt = EXECUTOR_SYSTEM_PROMPT
+
+        base_user_message = (
+            f"Directive: {directive.instructions}\n"
+            f"Scope: {directive.module_scope}\n"
+            f"Anti-Patterns: {', '.join(directive.anti_patterns)}\n\n"
+            f"Completion Criteria: {', '.join(directive.completion_criteria)}\n\n"
+            f"Context:\n{compiler_output}\n"
+        )
 
         while attempts <= max_retries:
-            # 1. Call LLM to get ExecutionResult
-            system_prompt = (
-                "You are an autonomous coding agent. "
-                "Given a directive and the relevant context, you must propose file edits "
-                "to fulfill the task. Your output must be valid JSON matching the ExecutionResult schema.\n\n"
-                f"Scope: {directive.module_scope}\n"
-                f"Anti-Patterns: {', '.join(directive.anti_patterns)}\n"
-            )
-
-            user_message = (
-                f"Directive: {directive.instructions}\n\n"
-                f"Completion Criteria: {', '.join(directive.completion_criteria)}\n\n"
-                f"Context:\n{compiler_output}\n"
-            )
-
-            if last_error:
-                user_message += f"\n\nPREVIOUS VERIFICATION FAILURE:\n{last_error}\n"
-                user_message += "Please fix the errors above."
+            user_message = base_user_message
 
             try:
                 result = self.client.chat.completions.create(
@@ -75,35 +162,23 @@ class JitsuExecutor:
                     ],
                 )
 
-                # 2. Apply edits
-                for edit in result.edits:
-                    filepath = Path(edit.filepath).resolve()
-                    filepath.parent.mkdir(parents=True, exist_ok=True)
-                    filepath.write_text(edit.content)
-                    logger.info("Updated file: %s", edit.filepath)
+                if attempts > 0:
+                    self.enforce_scope(result.edits, directive.module_scope)
 
-                # 3. Run verification
-                verification_success = True
-                all_stderr: list[str] = []
-                for cmd in directive.verification_commands:
-                    logger.info("Running verification: %s", cmd)
-                    res = subprocess.run(
-                        shlex.split(cmd),
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                    )
-                    if res.returncode != 0:
-                        verification_success = False
-                        all_stderr.append(
-                            f"Command '{cmd}' failed with exit code {res.returncode}:\n{res.stderr}"
-                        )
+                self._apply_edits(result.edits)
 
-                if verification_success:
-                    logger.info("Verification passed!")
+                success, details = self.run_verification(directive.verification_commands)
+                if success:
                     return True
 
-                last_error = "\n".join(all_stderr)
+                if details is None:
+                    return False
+
+                prev_fail_count = self._check_monotonicity(details.summary, prev_fail_count)
+                base_user_message = await self._augment_recovery_message(
+                    base_user_message, details, result.edits
+                )
+
                 attempts += 1
                 logger.warning(
                     "Verification failed (Attempt %d/%d). Retrying...",
@@ -125,9 +200,86 @@ class JitsuExecutor:
                     err=True,
                 )
                 return False
+            except MonotonicityError:
+                raise
             except Exception as e:
                 logger.exception("Error during execution step")
-                last_error = f"Execution error: {e!s}"
+                base_user_message += f"\n\nExecution error: {e!s}\n"
                 attempts += 1
 
         return False
+
+    def enforce_scope(self, edits: list[FileEdit], module_scope: str) -> None:
+        """Ensure all edits are within the allowed module scope."""
+        for edit in edits:
+            path = Path(edit.filepath)
+            # If absolute, try making it relative to workspace_root
+            if path.is_absolute():
+                try:
+                    path = path.relative_to(self.workspace_root)
+                except ValueError:
+                    # Not under workspace_root, definitely out of scope
+                    msg = f"FileEdit path '{edit.filepath}' is outside workspace_root."
+                    raise MonotonicityError(msg) from None
+
+            if not path.as_posix().startswith(module_scope):
+                msg = (
+                    f"FileEdit path '{edit.filepath}' is outside module_scope "
+                    f"'{module_scope}' during retry."
+                )
+                raise MonotonicityError(msg)
+
+    def _check_monotonicity(self, summary: str, prev_fail_count: float) -> int:
+        """Verify that the error count has improved, otherwise raise MonotonicityError."""
+        fail_match = re.search(r"(\d+) errors", summary)
+        fail_count = int(fail_match.group(1)) if fail_match else 1
+
+        if fail_count >= prev_fail_count:
+            msg = (
+                f"Retry failed to improve error count (Current: {fail_count}, "
+                f"Prev: {prev_fail_count}). Aborting."
+            )
+            raise MonotonicityError(msg)
+        return fail_count
+
+    async def _augment_recovery_message(
+        self,
+        base_message: str,
+        details: VerificationFailureDetails,
+        edits: list[FileEdit],
+    ) -> str:
+        """Append recovery hint, failure details, and AST context to the user message."""
+        payload = (
+            EXECUTOR_RECOVERY_PROMPT
+            + "\n\n"
+            + VERIFICATION_SUMMARY_RULE.format(
+                summary=details.summary,
+                failed_cmd=details.failed_cmd,
+                trimmed_block=details.trimmed,
+            )
+        )
+
+        # Collect all relevant files for AST resolution
+        files_to_resolve = {edit.filepath for edit in edits if edit.filepath.endswith(".py")}
+
+        if details.failing_file and details.failing_file.endswith(".py"):
+            # Ensure failing file is within workspace root before allowing resolution
+            failing_path = Path(details.failing_file)
+            is_internal = True
+            if failing_path.is_absolute():
+                try:
+                    failing_path.relative_to(self.workspace_root)
+                except ValueError:
+                    is_internal = False
+                    logger.warning(
+                        "Failing file %s is outside workspace root", details.failing_file
+                    )
+
+            if is_internal:
+                files_to_resolve.add(details.failing_file)
+
+        for filepath in sorted(files_to_resolve):
+            ast_ctx = await self.ast_provider.resolve(filepath)
+            payload += f"\n\n{ast_ctx}"
+
+        return base_message + f"\n\n{payload}\nPlease fix the errors above."

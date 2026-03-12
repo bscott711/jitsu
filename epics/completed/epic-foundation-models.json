@@ -1,0 +1,60 @@
+[
+  {
+    "epic_id": "epic-foundation-models",
+    "phase_id": "phase-refactor-context-target-literal",
+    "module_scope": "src/jitsu/models/core.py",
+    "instructions": "Refactor `ContextTarget.provider_name` to remove the hardcoded `Literal` of provider strings. Replace it with a standard `str` type to adhere to the Open/Closed Principle, allowing new providers to be registered without modifying the core model. Ensure any relevant tests in `tests/models/test_core.py` are updated to reflect this change.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/models/test_core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT import anything from `jitsu.providers`, `jitsu.server`, or `jitsu.cli` into `jitsu.models` to maintain strict Layer 1 isolation.",
+      "Do NOT add `# noqa` or `# pragma` markers.",
+      "Do NOT remove `ConfigDict(frozen=True)` from the models."
+    ],
+    "completion_criteria": [
+      "The `ContextTarget.provider_name` field no longer uses a hardcoded `Literal` of all providers.",
+      "Models remain strictly decoupled from other layers.",
+      "All tests pass."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-foundation-models",
+    "phase_id": "phase-clean-pydantic-descriptions",
+    "module_scope": "src/jitsu/models/core.py",
+    "instructions": "Remove LLM prompt engineering instructions from the `description` fields of Pydantic models in Layer 1. Specifically, update `AgentDirective.verification_commands` to solely describe the data type (e.g., 'Commands to verify the phase is complete.') and remove the hardcoded rule prompting.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT change the underlying data types, generic type structures, or default values of the models.",
+      "Do NOT introduce any external dependencies for validation."
+    ],
+    "completion_criteria": [
+      "Pydantic field descriptions contain only pure schema documentation.",
+      "All LLM prompt engineering instructions are successfully stripped from the models."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

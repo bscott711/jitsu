@@ -1,5 +1,7 @@
 """Unit tests for the Jitsu Provider base interface."""
 
+from pathlib import Path
+
 import pytest
 
 from jitsu.providers.base import BaseProvider
@@ -20,13 +22,15 @@ class DummyProvider(BaseProvider):
 
 def test_cannot_instantiate_base_provider() -> None:
     """Ensure BaseProvider cannot be instantiated directly."""
+    # We bypass the static check to test runtime enforcement
+    abstract_cls: type = BaseProvider
     with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-        BaseProvider()  # type: ignore
+        abstract_cls(Path.cwd())
 
 
 async def test_dummy_provider_implementation() -> None:
     """Test that a valid subclass correctly implements the interface."""
-    provider = DummyProvider()
+    provider = DummyProvider(Path.cwd())
 
     # Test the property
     assert provider.name == "dummy_provider"

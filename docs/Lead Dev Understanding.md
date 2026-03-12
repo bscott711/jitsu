@@ -4,7 +4,7 @@ As the lead dev, here is my explicit understanding of our system, architecture, 
 
 ## The Core Mission
 
-We are building an inversion of control for AI agents (Cursor, Windsurf). Currently, agents suffer from "Context Drift"—they rely on static .md files that immediately become outdated as the codebase changes, leading to hallucinations and infinite error loops.
+We are building an inversion of control for AI agents (Antigravity, Cursor, Windsurf). Currently, agents suffer from "Context Drift"—they rely on static .md files that immediately become outdated as the codebase changes, leading to hallucinations and infinite error loops.
 Jitsu solves this by forcing the agent to connect via the Model Context Protocol (MCP) and ask for its next phase. We dynamically compile the "ground truth" of the codebase (AST, schemas, exact file states) and serve it Just-In-Time (JIT) directly into the agent's context window.
 
 ## Architectural Layers (Strict Domain-Driven Design)

@@ -1,7 +1,6 @@
 """Core domain models for the Jitsu orchestration layer."""
 
 from enum import StrEnum
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -48,11 +47,9 @@ class ContextTarget(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    provider_name: Literal["file", "ast", "tree", "pydantic", "env_var", "git", "markdown_ast"] = (
-        Field(
-            ...,
-            description="The exact name of the provider. MUST be one of: 'file', 'ast', 'tree', 'pydantic', 'env_var', 'git', 'markdown_ast'.",
-        )
+    provider_name: str = Field(
+        ...,
+        description="The exact name of the provider (e.g., 'file', 'ast', 'pydantic', etc.).",
     )
     target_identifier: str = Field(
         ...,
@@ -75,7 +72,7 @@ class AgentDirective(BaseModel):
     anti_patterns: list[str] = Field(default=[])
     verification_commands: list[str] = Field(
         default=[],
-        description="Commands to verify the phase is complete. You MUST strictly follow the verification constraints defined in the PROJECT RULES (e.g., this MUST include 'just verify').",
+        description="Commands to verify the phase is complete.",
     )
     completion_criteria: list[str] = Field(default=[])
 

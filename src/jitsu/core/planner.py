@@ -2,18 +2,22 @@
 
 import json
 import logging
-import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import get_args
 
 import anyio
-import dotenv
-import instructor
 import typer
-from openai import OpenAI
+from instructor.core.client import Instructor
 
+from jitsu.core.client import LLMClientFactory
 from jitsu.models.core import AgentDirective, ContextTarget, EpicBlueprint
+from jitsu.prompts import (
+    PLANNER_BASE_PROMPT,
+    PLANNER_MACRO_PROMPT,
+    PLANNER_MICRO_PROMPT,
+    VERIFICATION_RULE,
+)
 from jitsu.providers.tree import DirectoryTreeProvider
 
 logger = logging.getLogger(__name__)
@@ -22,11 +26,26 @@ logger = logging.getLogger(__name__)
 class JitsuPlanner:
     """Generates a sequence of AgentDirectives using an LLM."""
 
-    def __init__(self, objective: str, relevant_files: list[str]) -> None:
-        """Initialize the planner with an objective and relevant files."""
+    def __init__(
+        self,
+        objective: str,
+        relevant_files: list[str],
+        client: Instructor | None = None,
+    ) -> None:
+        """
+        Initialize the planner with an objective, relevant files, and optional LLM client.
+
+        Args:
+            objective: The high-level goal for the plan.
+            relevant_files: List of relevant file paths to include in context.
+            client: An optional pre-constructed instructor client. If not provided,
+                    one will be created via LLMClientFactory.
+
+        """
         self.objective = objective
         self.relevant_files = relevant_files
-        self._directives: list[AgentDirective] = []
+        self._client = client
+        self.directives: list[AgentDirective] = []
 
     async def generate_plan(
         self,
@@ -36,33 +55,14 @@ class JitsuPlanner:
         verbose: bool = False,
     ) -> list[AgentDirective]:
         """Query the LLM and generate a validated list of directives using two passes."""
-        dotenv.load_dotenv()
-
-        api_key = os.environ.get("OPENROUTER_API_KEY")
-        if not api_key:
-            msg = "OPENROUTER_API_KEY environment variable is not set"
-            raise RuntimeError(msg)
-
-        # Initialize instructor with OpenAI client pointing to OpenRouter
-        client = instructor.from_openai(
-            OpenAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=api_key,
-            ),
-            mode=instructor.Mode.JSON,
-        )
+        client = self._client if self._client is not None else LLMClientFactory.create()
 
         # Extract allowed provider names for prompt engineering
         allowed_providers = ", ".join(
             get_args(ContextTarget.model_fields["provider_name"].annotation)
         )
 
-        # Read the core orchestrator prompt
-        prompt_path = anyio.Path("docs/jitsu_orchestrator_prompt.md")
-        if await prompt_path.exists():
-            base_system_prompt = await prompt_path.read_text()
-        else:
-            base_system_prompt = "You are a helpful assistant."
+        base_system_prompt = PLANNER_BASE_PROMPT
 
         # Dynamically inject the project-specific rules
         rules_path = anyio.Path(".jitsurules")
@@ -71,8 +71,8 @@ class JitsuPlanner:
             base_system_prompt += f"\n\nPROJECT RULES (.jitsurules):\n{rules_text}"
 
         # Get repository skeleton
-        tree_provider = DirectoryTreeProvider()
-        skeleton = await tree_provider.resolve(str(Path.cwd()))
+        tree_provider = DirectoryTreeProvider(Path.cwd())
+        skeleton = await tree_provider.resolve(".")
 
         # Build the user message
         files_str = "\n".join(f"- {f}" for f in self.relevant_files)
@@ -86,13 +86,7 @@ class JitsuPlanner:
         if on_progress:
             on_progress("Drafting Epic Blueprint...")
 
-        blueprint_system_prompt = base_system_prompt + (
-            "\n\nCRITICAL MACRO RULE: You are drafting a high-level blueprint ONLY. "
-            "You must return a SINGLE EpicBlueprint object. "
-            "Each phase inside the blueprint MUST contain ONLY a `phase_id` and a 1-sentence `description`. "
-            "Do NOT generate full instructions, module_scopes, context_targets, or any other fields yet. "
-            "We will elaborate on those in a separate pass."
-        )
+        blueprint_system_prompt = base_system_prompt + PLANNER_MACRO_PROMPT
 
         blueprint = client.chat.completions.create(
             model=model,
@@ -108,20 +102,20 @@ class JitsuPlanner:
             typer.secho(blueprint.model_dump_json(indent=2), fg=typer.colors.YELLOW, err=True)
 
         # Pass 2: Micro - Elaborate each phase
-        self._directives = []
+        self.directives: list[AgentDirective] = []
         for i, phase in enumerate(blueprint.phases):
             if on_progress:
                 on_progress(f"Elaborating Phase {i + 1} of {len(blueprint.phases)}...")
 
-            phase_system_prompt = base_system_prompt + (
-                f"\n\nYou are elaborating a specific Phase for the Epic '{blueprint.epic_id}'.\n"
-                f"Phase ID: {phase.phase_id}\n"
-                f"Phase Description: {phase.description}\n"
-                f"You MUST generate a single AgentDirective object that fulfills this phase's goals.\n\n"
-                f"CRITICAL SCHEMA RULE: For any context_targets, you MUST ONLY use the following registered provider_names: [{allowed_providers}]. "
-                "Do NOT use the provider you are currently building as a target."
-                "CRITICAL GENERATION RULE: To prevent model degeneration, NEVER generate "
-                "more than 5 items in ANY list or array (e.g., completion_criteria, anti_patterns).\n"
+            phase_system_prompt = (
+                base_system_prompt
+                + PLANNER_MICRO_PROMPT.format(
+                    epic_id=blueprint.epic_id,
+                    phase_id=phase.phase_id,
+                    phase_description=phase.description,
+                    allowed_providers=allowed_providers,
+                )
+                + f"\n{VERIFICATION_RULE}\n"
             )
 
             directive = client.chat.completions.create(
@@ -142,9 +136,9 @@ class JitsuPlanner:
                 )
                 typer.secho(directive.model_dump_json(indent=2), fg=typer.colors.CYAN, err=True)
 
-            self._directives.append(directive)
+            self.directives.append(directive)
 
-        return self._directives
+        return self.directives
 
     def save_plan(self, path: str | Path) -> None:
         """Save the generated plan to disk as a JSON file."""
@@ -154,5 +148,5 @@ class JitsuPlanner:
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Pydantic v2 model_dump for the list
-        json_data = [d.model_dump() for d in self._directives]
+        json_data = [d.model_dump() for d in self.directives]
         file_path.write_text(json.dumps(json_data, indent=2))

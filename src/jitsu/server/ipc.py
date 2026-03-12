@@ -21,6 +21,37 @@ class IPCServer:
         self.state_manager = state_manager
         self.port = port
 
+    async def _handle_command(self, client: SocketStream, payload: str) -> bool:
+        """Handle raw string commands. Returns True if handled, False otherwise."""
+        if payload == "QUEUE_LS":
+            pending = self.state_manager.get_pending_phases()
+            if not pending:
+                await client.send(b"Queue is empty.")
+            else:
+                lines = [f"Phase: {p['phase_id']} (Epic: {p['epic_id']})" for p in pending]
+                await client.send("\n".join(lines).encode())
+            return True
+
+        if payload == "QUEUE_CLEAR":
+            self.state_manager.clear_queue()
+            await client.send(b"ACK. Queue cleared.")
+            return True
+
+        return False
+
+    async def _process_json_payload(self, client: SocketStream, payload: str) -> None:
+        """Parse JSON and queue incoming directives."""
+        epics_data = json.loads(payload)
+        count = 0
+
+        for item in epics_data:
+            directive = AgentDirective.model_validate(item)
+            self.state_manager.queue_directive(directive)
+            count += 1
+
+        logger.info("IPC: Successfully received and queued %d phase(s).", count)
+        await client.send(f"ACK: Queued {count} phase(s).".encode())
+
     async def handle_client(self, client: SocketStream) -> None:
         """Handle incoming connections and parse the epic payload."""
         async with client:
@@ -31,31 +62,10 @@ class IPCServer:
 
                 payload = b"".join(chunks).decode("utf-8").strip()
 
-                if payload == "QUEUE_LS":
-                    pending = self.state_manager.get_pending_phases()
-                    if not pending:
-                        await client.send(b"Queue is empty.")
-                    else:
-                        lines = [f"Phase: {p['phase_id']} (Epic: {p['epic_id']})" for p in pending]
-                        await client.send("\n".join(lines).encode())
+                if await self._handle_command(client, payload):
                     return
 
-                if payload == "QUEUE_CLEAR":
-                    self.state_manager.clear_queue()
-                    await client.send(b"ACK. Queue cleared.")
-                    return
-
-                epics_data = json.loads(payload)
-                count = 0
-
-                for item in epics_data:
-                    directive = AgentDirective.model_validate(item)
-                    self.state_manager.queue_directive(directive)
-                    count += 1
-
-                # G004 Fix: Lazy string interpolation
-                logger.info("IPC: Successfully received and queued %d phase(s).", count)
-                await client.send(f"ACK: Queued {count} phase(s).".encode())
+                await self._process_json_payload(client, payload)
 
             except json.JSONDecodeError as e:
                 logger.exception("IPC Error: Received invalid JSON payload.")

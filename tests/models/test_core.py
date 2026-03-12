@@ -122,7 +122,7 @@ def test_agent_directive_strictness_and_frozen() -> None:
     )
     # Test frozen
     with pytest.raises(ValidationError):
-        directive.epic_id = "epic-002"  # type: ignore
+        directive.epic_id = "epic-002"
 
 
 def test_phase_report_strictness_and_frozen() -> None:
@@ -133,4 +133,4 @@ def test_phase_report_strictness_and_frozen() -> None:
     )
     # Test frozen
     with pytest.raises(ValidationError):
-        report.status = PhaseStatus.FAILED  # type: ignore
+        report.status = PhaseStatus.FAILED

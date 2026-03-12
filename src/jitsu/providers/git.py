@@ -1,5 +1,6 @@
 """Git context provider for Jitsu."""
 
+import shutil
 import subprocess
 
 from jitsu.providers.base import BaseProvider
@@ -25,8 +26,9 @@ class GitProvider(BaseProvider):
 
         """
         try:
+            git_path = shutil.which("git") or "git"
             result = subprocess.run(
-                ["/usr/bin/git", *args],
+                [git_path, *args],
                 capture_output=True,
                 text=True,
                 check=True,

@@ -70,7 +70,8 @@ def test_state_manager_remaining_count() -> None:
     manager.queue_directive(d2)
     manager.queue_directive(d3)
 
-    assert manager.get_remaining_count("epic-1") == 2  # noqa: PLR2004
+    expected_remaining = 2
+    assert manager.get_remaining_count("epic-1") == expected_remaining
     assert manager.get_remaining_count("epic-2") == 1
 
     manager.get_next_directive()  # remove p1
@@ -92,3 +93,19 @@ def test_state_manager_pending_phases() -> None:
     assert len(pending) == 1
     assert pending[0]["phase_id"] == "phase-1"
     assert pending[0]["epic_id"] == "epic-1"
+
+
+def test_state_manager_on_stuck() -> None:
+    """Test that on_stuck records the report and clears the queue."""
+    manager = JitsuStateManager()
+    d1 = AgentDirective(epic_id="epic-1", phase_id="p1", module_scope="s", instructions="i")
+    d2 = AgentDirective(epic_id="epic-1", phase_id="p2", module_scope="s", instructions="i")
+    manager.queue_directive(d1)
+    manager.queue_directive(d2)
+
+    report = PhaseReport(phase_id="p1", status=PhaseStatus.STUCK, agent_notes="Stuck")
+    manager.on_stuck(report)
+
+    assert manager.pending_count == 0
+    assert len(manager.completed_reports) == 1
+    assert manager.completed_reports[0].status == PhaseStatus.STUCK

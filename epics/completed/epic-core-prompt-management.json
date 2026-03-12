@@ -1,0 +1,83 @@
+[
+  {
+    "epic_id": "epic-core-prompt-management",
+    "phase_id": "phase-create-centralized-prompts",
+    "module_scope": "src/jitsu/prompts.py",
+    "instructions": "Create a new module `src/jitsu/prompts.py` to act as the centralized repository for all system prompts. First, restore the lost verification rule as a constant (e.g., `VERIFICATION_RULE = \"You MUST strictly follow the verification constraints defined in the PROJECT RULES (e.g., this MUST include 'just verify').\"`). Next, extract the hardcoded system prompts currently residing in `src/jitsu/core/executor.py` (around line 757) and `src/jitsu/core/planner.py` (around lines 910, 934, and 961) into well-named string constants in this new file.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT leave any hardcoded system prompt strings inside the executor or planner classes.",
+      "Do NOT import anything from `jitsu.server` or `jitsu.cli` into this new prompts module."
+    ],
+    "completion_criteria": [
+      "A new `src/jitsu/prompts.py` file exists and contains all system prompts, including the restored verification rule.",
+      "No hardcoded prompt strings remain in `executor.py` or `planner.py`.",
+      "All tests pass."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-core-prompt-management",
+    "phase_id": "phase-inject-prompts-into-core",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "Refactor `JitsuPlanner` and `JitsuExecutor` to import and utilize the newly created constants from `src/jitsu/prompts.py`. Ensure that the restored `VERIFICATION_RULE` is dynamically appended to the appropriate phase generation prompt within `JitsuPlanner`. Update the corresponding test files (`tests/core/test_planner.py` and `tests/core/test_executor.py`) to mock or assert against these new constants where necessary.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/prompts.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT change the logical flow of how the planner or executor calls the LLM.",
+      "Do NOT introduce any hidden global states during the refactor."
+    ],
+    "completion_criteria": [
+      "`JitsuPlanner` and `JitsuExecutor` successfully import and use the constants from `src/jitsu/prompts.py`.",
+      "Test coverage remains at 100% and all tests pass."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

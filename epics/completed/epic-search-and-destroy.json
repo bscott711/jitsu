@@ -1,0 +1,50 @@
+[
+  {
+    "epic_id": "EPIC-SEARCH-AND-DESTROY",
+    "phase_id": "PHASE-01-EXECUTOR-REFACTOR",
+    "module_scope": "src/jitsu/",
+    "instructions": "Remove the `# noqa: PLR0913` bypass from `_augment_recovery_message` in `src/jitsu/core/executor.py`. To resolve the underlying 'too many arguments' error natively, group the verification-related parameters (`summary`, `trimmed`, `failed_cmd`, `failing_file`) into a new Pydantic model or standard Dataclass named `VerificationFailureDetails` (or similar) within the appropriate models file. Update the method signature and all calling locations to pass this single object. Update tests accordingly.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not add any new `# noqa` or `# type: ignore` comments to bypass the refactor."
+    ],
+    "completion_criteria": [
+      "The `# noqa: PLR0913` comment is completely removed.",
+      "The method signature has 5 or fewer arguments.",
+      "The test suite passes and coverage remains at 100%."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "EPIC-SEARCH-AND-DESTROY",
+    "phase_id": "PHASE-02-GLOBAL-PURGE",
+    "module_scope": "src/jitsu/",
+    "instructions": "Perform a global sweep of the `src/jitsu/` directory and `tests/` directory. Find and remove EVERY SINGLE instance of `# noqa` or `# type: ignore`. You must fix the underlying code to naturally pass the Ruff and Pyright linters. If a line is too long, wrap it properly. If a type is ambiguous, use an explicit type cast or `assert`. Ensure the codebase relies on zero linting bypasses.",
+    "context_targets": [],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not change the underlying logic or behavior of the application; only change the structural syntax to satisfy the linters."
+    ],
+    "completion_criteria": [
+      "Zero `# noqa` or `# type: ignore` strings exist anywhere in the repository.",
+      "The `just verify` command passes flawlessly."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]
