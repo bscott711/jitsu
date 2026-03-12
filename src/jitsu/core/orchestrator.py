@@ -18,6 +18,7 @@ from jitsu.core.planner import JitsuPlanner
 from jitsu.core.state import JitsuStateManager
 from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective, PhaseReport, PhaseStatus
+from jitsu.providers.git import GitError, GitProvider
 
 
 class JitsuOrchestrator:
@@ -49,6 +50,8 @@ class JitsuOrchestrator:
         self.storage = storage or EpicStorage()
         self.state_manager = state_manager or JitsuStateManager()
         self.on_progress = on_progress
+        self._original_branch: str | None = None
+        self._sandbox_branch: str | None = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -351,6 +354,7 @@ class JitsuOrchestrator:
                     bold=True,
                     err=True,
                 )
+                await self._handle_quarantine()
                 raise typer.Exit(1) from e
 
             if not success:
@@ -369,6 +373,7 @@ class JitsuOrchestrator:
                     bold=True,
                     err=True,
                 )
+                await self._handle_quarantine()
                 raise typer.Exit(1)
 
             typer.secho(
@@ -395,14 +400,19 @@ class JitsuOrchestrator:
                 )
                 raise typer.Exit(1)
 
-    async def finalize(self, out: Path) -> None:
+    async def finish(self, out: Path) -> None:
         """
-        Archive the epic file to the completed directory.
+        Archive the epic file and cleanup sandbox branch.
 
         Args:
             out: The epic JSON file to archive.
 
         """
+        if self._original_branch and self._sandbox_branch:
+            git = GitProvider(self.executor.workspace_root)
+            git.merge_branch(self._sandbox_branch, self._original_branch)
+            git.delete_branch(self._sandbox_branch)
+
         dest = await run_sync(self.storage.archive, out)
 
         typer.secho(
@@ -421,13 +431,50 @@ class JitsuOrchestrator:
             out: The epic JSON file to archive on completion.
 
         """
+        if directives:
+            git = GitProvider(self.executor.workspace_root)
+            self._original_branch = git.get_current_branch()
+            self._sandbox_branch = f"jitsu-run/{directives[0].epic_id}"
+
+            typer.secho(
+                f"🌿 Creating sandbox branch: {self._sandbox_branch}",
+                fg=typer.colors.CYAN,
+                err=True,
+            )
+            git.create_and_checkout_branch(self._sandbox_branch)
+
         typer.secho(
             f"🏃 Step 2: Executing {len(directives)} phase(s) autonomously...",
             fg=typer.colors.CYAN,
             err=True,
         )
         await self.execute_phases(directives, out=out)
-        await self.finalize(out)
+        await self.finish(out)
+
+    async def _handle_quarantine(self) -> None:
+        """Commit WIP to sandbox and restore original branch."""
+        if not self._original_branch or not self._sandbox_branch:
+            return
+
+        git = GitProvider(self.executor.workspace_root)
+        try:
+            # Commit WIP
+            just_path = shutil.which("just")
+            if just_path:
+                await anyio.run_process(
+                    [just_path, "commit", "chore(jitsu): HALTED - Max retries exhausted"],
+                    check=False,
+                )
+
+            git.checkout_branch(self._original_branch)
+            typer.secho(
+                f"⚠️ Epic HALTED. Workspace restored to '{self._original_branch}'. WIP preserved in '{self._sandbox_branch}'.",
+                fg=typer.colors.YELLOW,
+                bold=True,
+                err=True,
+            )
+        except (GitError, OSError) as e:
+            typer.secho(f"⚠️ Quarantine failed: {e}", fg=typer.colors.RED, err=True)
 
     # ------------------------------------------------------------------
     # Internal helpers

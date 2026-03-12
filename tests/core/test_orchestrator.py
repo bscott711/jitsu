@@ -15,6 +15,7 @@ from jitsu.core.executor import MonotonicityError
 from jitsu.core.orchestrator import JitsuOrchestrator
 from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective
+from jitsu.providers.git import GitError
 
 
 @pytest.mark.asyncio
@@ -50,7 +51,10 @@ async def test_orchestrator_execute_phases_failure(tmp_path: Path) -> None:
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
 
-    with pytest.raises(typer.Exit) as exc:
+    with (
+        patch.object(orchestrator, "_handle_quarantine", new_callable=AsyncMock),
+        pytest.raises(typer.Exit) as exc,
+    ):
         await orchestrator.execute_phases([directive], compiler=mock_compiler)
     assert exc.value.exit_code == 1
 
@@ -74,15 +78,22 @@ async def test_orchestrator_execute_phases_just_missing(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_finalize_success(tmp_path: Path) -> None:
-    """Test JitsuOrchestrator.finalize archives the epic file."""
+async def test_orchestrator_finish_success(tmp_path: Path) -> None:
+    """Test JitsuOrchestrator.finish archives the epic file and cleans up branches."""
     out_file = tmp_path / "epic.json"
     out_file.write_text("[]", encoding="utf-8")
     completed_dir = tmp_path / "epics" / "completed"
 
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(storage=storage)
-    await orchestrator.finalize(out_file)
+    orchestrator._original_branch = "main"  # noqa: SLF001
+    orchestrator._sandbox_branch = "jitsu-run/e1"  # noqa: SLF001
+
+    with patch("jitsu.core.orchestrator.GitProvider") as mock_git_cls:
+        mock_git = mock_git_cls.return_value
+        await orchestrator.finish(out_file)
+        mock_git.merge_branch.assert_called_once_with("jitsu-run/e1", "main")
+        mock_git.delete_branch.assert_called_once_with("jitsu-run/e1")
 
     assert (completed_dir / "epic.json").exists()
     assert not out_file.exists()
@@ -90,17 +101,22 @@ async def test_orchestrator_finalize_success(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_orchestrator_run_autonomous_bridge(tmp_path: Path) -> None:
-    """Test JitsuOrchestrator.run_autonomous bridges to execute_phases and finalize."""
+    """Test JitsuOrchestrator.run_autonomous bridges to execute_phases and finish."""
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(storage=storage)
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
 
     with (
+        patch("jitsu.core.orchestrator.GitProvider") as mock_git_cls,
         patch.object(orchestrator, "execute_phases", new_callable=AsyncMock) as mock_exec,
-        patch.object(orchestrator, "finalize", new_callable=AsyncMock) as mock_final,
+        patch.object(orchestrator, "finish", new_callable=AsyncMock) as mock_final,
     ):
-        await orchestrator.run_autonomous([], Path("test.json"))
+        mock_git = mock_git_cls.return_value
+        mock_git.get_current_branch.return_value = "main"
+        await orchestrator.run_autonomous([directive], Path("test.json"))
         mock_exec.assert_awaited_once()
         mock_final.assert_awaited_once()
+        mock_git.create_and_checkout_branch.assert_called_once_with("jitsu-run/e")
 
 
 @pytest.mark.asyncio
@@ -451,9 +467,13 @@ async def test_orchestrator_execute_phases_stuck(tmp_path: Path) -> None:
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
 
-    with pytest.raises(typer.Exit) as exc:
-        await orchestrator.execute_phases([directive], compiler=mock_compiler, out=out_file)
-    assert exc.value.exit_code == 1
+    with (
+        patch.object(orchestrator, "_handle_quarantine", new_callable=AsyncMock) as mock_quarantine,
+    ):
+        with pytest.raises(typer.Exit) as exc:
+            await orchestrator.execute_phases([directive], compiler=mock_compiler, out=out_file)
+        assert exc.value.exit_code == 1
+        mock_quarantine.assert_awaited_once()
 
     # Assert disk write (state file)
     state_file = out_file.with_suffix(".state")
@@ -476,9 +496,13 @@ async def test_orchestrator_execute_phases_failed_persistence(tmp_path: Path) ->
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
 
-    with pytest.raises(typer.Exit) as exc:
-        await orchestrator.execute_phases([directive], compiler=mock_compiler, out=out_file)
-    assert exc.value.exit_code == 1
+    with (
+        patch.object(orchestrator, "_handle_quarantine", new_callable=AsyncMock) as mock_quarantine,
+    ):
+        with pytest.raises(typer.Exit) as exc:
+            await orchestrator.execute_phases([directive], compiler=mock_compiler, out=out_file)
+        assert exc.value.exit_code == 1
+        mock_quarantine.assert_awaited_once()
 
     # Assert disk write (state file)
     state_file = out_file.with_suffix(".state")
@@ -538,3 +562,49 @@ def test_handle_planner_error_general_verbose_direct() -> None:
     assert any("DEBUG" in c for c in calls)
     assert any("CAUSE" in c for c in calls)
     assert any("GeneralCause" in c for c in calls)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_handle_quarantine_success(tmp_path: Path) -> None:
+    """Test _handle_quarantine commits and restores branch."""
+    orchestrator = JitsuOrchestrator(storage=EpicStorage(base_dir=tmp_path))
+    orchestrator._original_branch = "main"  # noqa: SLF001
+    orchestrator._sandbox_branch = "jitsu-run/e1"  # noqa: SLF001
+
+    with (
+        patch("jitsu.core.orchestrator.GitProvider") as mock_git_cls,
+        patch("shutil.which", return_value="/usr/bin/just"),
+        patch("anyio.run_process", new_callable=AsyncMock) as mock_rp,
+    ):
+        mock_git = mock_git_cls.return_value
+        await orchestrator._handle_quarantine()  # noqa: SLF001
+
+        mock_rp.assert_awaited_once()
+        assert "commit" in mock_rp.call_args[0][0]
+        assert "HALTED" in mock_rp.call_args[0][0][2]
+        mock_git.checkout_branch.assert_called_once_with("main")
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_handle_quarantine_no_branches() -> None:
+    """Cover the branch-check guard in _handle_quarantine."""
+    orchestrator = JitsuOrchestrator()
+    # No branches set
+    await orchestrator._handle_quarantine()  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_handle_quarantine_git_failure() -> None:
+    """Cover the exception catch in _handle_quarantine."""
+    orchestrator = JitsuOrchestrator()
+    orchestrator._original_branch = "main"  # noqa: SLF001
+    orchestrator._sandbox_branch = "jitsu-run/e1"  # noqa: SLF001
+
+    with (
+        patch("jitsu.core.orchestrator.GitProvider") as mock_git_cls,
+        patch("shutil.which", return_value="/usr/bin/just"),
+        patch("anyio.run_process", new_callable=AsyncMock),
+    ):
+        mock_git = mock_git_cls.return_value
+        mock_git.checkout_branch.side_effect = GitError("fail")
+        await orchestrator._handle_quarantine()  # noqa: SLF001
