@@ -127,7 +127,7 @@ class ToolHandlers:
             ]
         except ValidationError as e:
             return [types.TextContent(type="text", text=f"Validation Error: {e!s}")]
-        except Exception as e:  # noqa: BLE001
+        except RuntimeError as e:
             return [types.TextContent(type="text", text=f"Internal Error: {e!s}")]
 
     async def handle_git_status(self) -> list[types.TextContent]:

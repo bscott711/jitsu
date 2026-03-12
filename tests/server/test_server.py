@@ -307,7 +307,7 @@ async def test_submit_epic_internal_error() -> None:
     """Test submit_epic with internal error (hits line 249)."""
     # Use a real dict but force validation to fail with a non-Pydantic error
     with patch(
-        "jitsu.server.handlers.AgentDirective.model_validate", side_effect=Exception("BOOM")
+        "jitsu.server.handlers.AgentDirective.model_validate", side_effect=RuntimeError("BOOM")
     ):
         result = await handle_call_tool("jitsu_submit_epic", {"directives": [{"good": "data"}]})
         assert "Internal Error: BOOM" in result[0].text

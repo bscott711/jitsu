@@ -287,7 +287,7 @@ async def test_orchestrator_run_plan_planner_failure(tmp_path: Path) -> None:
 async def test_orchestrator_run_plan_general_exception(tmp_path: Path) -> None:
     """Test run_plan handles general exceptions via _handle_planner_error."""
     mock_planner = MagicMock()
-    mock_planner.generate_plan.side_effect = ValueError("fail")
+    mock_planner.generate_plan.side_effect = RuntimeError("fail")
 
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(planner=mock_planner, storage=storage)

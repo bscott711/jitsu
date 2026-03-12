@@ -1,0 +1,34 @@
+[
+  {
+    "epic_id": "EPIC-TECH-DEBT-ZERO",
+    "phase_id": "PHASE-1-ERADICATE-BLE001",
+    "module_scope": "src/jitsu/",
+    "instructions": "Eradicate the final two pieces of technical debt in the codebase. Analyze the `try` blocks associated with the blind exceptions at `src/jitsu/core/orchestrator.py` (around line 113) and `src/jitsu/server/handlers.py` (around line 130). Replace `except Exception as e:` with the explicit exceptions that can actually be raised by the enclosed code (e.g., `ValueError`, `KeyError`, `OSError`). Remove the `# noqa: BLE001` comments completely.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/handlers.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not replace `Exception` with another broad catch like `BaseException`.",
+      "STRICTLY FORBIDDEN: Do not add new `# noqa` or `# type: ignore` comments to bypass the linter."
+    ],
+    "completion_criteria": [
+      "The blind `except Exception` blocks are replaced with targeted exception handling.",
+      "The `# noqa: BLE001` comments are deleted.",
+      "The codebase passes all linting checks."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]

@@ -110,7 +110,7 @@ class JitsuOrchestrator:
                 else:
                     raise
 
-        except Exception as e:  # noqa: BLE001
+        except (RuntimeError, openai.APIStatusError, InstructorRetryException) as e:
             self._handle_planner_error(e, verbose=verbose)
 
         if not directives:

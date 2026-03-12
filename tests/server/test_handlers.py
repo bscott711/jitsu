@@ -218,7 +218,7 @@ async def test_handle_submit_epic_errors(handlers: ToolHandlers) -> None:
 
     # Internal Error
     with patch(
-        "jitsu.server.handlers.AgentDirective.model_validate", side_effect=Exception("BOOM")
+        "jitsu.server.handlers.AgentDirective.model_validate", side_effect=RuntimeError("BOOM")
     ):
         result = handlers.handle_submit_epic({"directives": [{"good": "data"}]})
         assert "Internal Error: BOOM" in result[0].text
