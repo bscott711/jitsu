@@ -1250,7 +1250,7 @@ wheels = [
 
 [[package]]
 name = "jitsu"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
@@ -1290,7 +1290,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "complexipy", specifier = ">=5.2.0" },
+    { name = "complexipy" },
     { name = "deptry" },
     { name = "import-linter" },
     { name = "pre-commit" },
@@ -1300,7 +1300,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
-    { name = "vulture", specifier = ">=2.15" },
+    { name = "vulture" },
 ]
 
 [[package]]
