@@ -69,7 +69,7 @@ def hunt_for_ignores(module_path: Path) -> str:
     return "\n".join(hits)
 
 
-def main() -> None:  # pragma: no cover
+def main() -> None:
     """Execute the audit report generation."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -115,5 +115,5 @@ def main() -> None:  # pragma: no cover
         typer.secho(f"✅ Saved to {report_file.relative_to(PROJECT_ROOT)}", fg=typer.colors.GREEN)
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     main()

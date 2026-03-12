@@ -1,12 +1,15 @@
 """Tests for the jitsu.utils.audit module."""
 
+import runpy
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from jitsu.utils.audit import (
+    MODULES_TO_AUDIT,
     PROJECT_ROOT,
     _scan_file_for_ignores,
     hunt_for_ignores,
+    main,
     run_command,
 )
 
@@ -59,13 +62,6 @@ def test_scan_file_for_ignores_found(tmp_path: Path) -> None:
     test_file = tmp_path / "test.py"
     content = "print('hello')  # noqa\nx = 1  # type: ignore\ny = 2  # pyright: ignore\nz = 3\n"
     test_file.write_text(content, encoding="utf-8")
-
-    # Mocking PROJECT_ROOT to be the tmp_path so relative_to works correctly
-    # or just ensuring we can handle relative_to PROJECT_ROOT.
-    # The actual code uses PROJECT_ROOT.
-    # Let's see if we can just let it work or if we need to mock PROJECT_ROOT.
-    # Since PROJECT_ROOT is a constant in the module, it might be hard to monkeypatch
-    # if it's already imported. But we can try to patch it in the module.
 
     with patch("jitsu.utils.audit.PROJECT_ROOT", tmp_path):
         hits = _scan_file_for_ignores(test_file)
@@ -134,3 +130,75 @@ def test_hunt_for_ignores_none(tmp_path: Path) -> None:
 
     result = hunt_for_ignores(module_dir)
     assert result == "No inline ignores found! 🎉"
+
+
+def test_main_success() -> None:
+    """Test the main() function for a successful run."""
+    with (
+        patch("jitsu.utils.audit.OUTPUT_DIR") as mock_output_dir,
+        patch("jitsu.utils.audit.datetime") as mock_datetime,
+        patch("jitsu.utils.audit.run_command") as mock_run_cmd,
+        patch("jitsu.utils.audit.hunt_for_ignores") as mock_hunt,
+        patch("jitsu.utils.audit.typer.secho") as mock_secho,
+        patch("jitsu.utils.audit.PROJECT_ROOT") as mock_project_root,
+    ):
+        # Setup mocks
+        mock_datetime.now.return_value.strftime.return_value = "2026-03-12 12:00:00 UTC"
+        mock_run_cmd.return_value = "Mock command output"
+        mock_hunt.return_value = "No inline ignores found! 🎉"
+
+        # Mock project root path structure
+        mock_module = MagicMock(spec=Path)
+        mock_module.exists.return_value = True
+        mock_module.name = "core"
+        mock_project_root.__truediv__.return_value = mock_module
+
+        # Mock report file
+        mock_report_file = MagicMock(spec=Path)
+        mock_output_dir.__truediv__.return_value = mock_report_file
+        mock_report_file.relative_to.return_value = Path("docs/report.md")
+
+        main()
+
+        # Check side effects
+        mock_output_dir.mkdir.assert_called_once_with(parents=True, exist_ok=True)
+        assert mock_secho.called
+        assert mock_report_file.write_text.call_count == len(MODULES_TO_AUDIT)
+
+        # Verify content of the first call
+        args, _ = mock_report_file.write_text.call_args_list[0]
+        content = args[0]
+        assert "# V2 Audit Report: `src/jitsu/core`" in content
+        assert "2026-03-12 12:00:00 UTC" in content
+
+
+def test_main_skip_nonexistent(tmp_path: Path) -> None:
+    """Test main() skips modules that do not exist."""
+    with (
+        patch("jitsu.utils.audit.OUTPUT_DIR") as mock_output_dir,
+        patch("jitsu.utils.audit.typer.secho") as mock_secho,
+        patch("jitsu.utils.audit.PROJECT_ROOT", tmp_path),
+    ):
+        # tmp_path is empty, so no modules exist
+        main()
+
+        # Should have called secho for each skipped module
+        # MODULES_TO_AUDIT length is 3
+        assert mock_secho.call_count == len(MODULES_TO_AUDIT)
+        assert "Skipping" in mock_secho.call_args_list[0][0][0]
+        # Should not have created files
+        assert not mock_output_dir.__truediv__.called
+
+
+def test_main_block() -> None:
+    """Test the if __name__ == '__main__' block."""
+    mock_res = MagicMock()
+    mock_res.stdout = "Mock output"
+    mock_res.stderr = ""
+    with (
+        patch("pathlib.Path.mkdir"),
+        patch("pathlib.Path.write_text"),
+        patch("subprocess.run", return_value=mock_res),
+        patch("typer.secho"),
+    ):
+        runpy.run_module("jitsu.utils.audit", run_name="__main__")
