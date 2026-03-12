@@ -325,7 +325,7 @@ class JitsuOrchestrator:
                 progress.update(100)
 
             with typer.progressbar(length=100, label="Executing...") as progress:
-                success = self._executor.execute_directive(directive, prompt)
+                success = await self._executor.execute_directive(directive, prompt)
                 progress.update(100)
 
             if not success:

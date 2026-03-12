@@ -12,7 +12,12 @@ from jitsu.core.client import LLMClientFactory
 from jitsu.core.runner import CommandRunner
 from jitsu.models.core import AgentDirective
 from jitsu.models.execution import ExecutionResult, FileEdit
-from jitsu.prompts import EXECUTOR_SYSTEM_PROMPT
+from jitsu.prompts import (
+    EXECUTOR_RECOVERY_PROMPT,
+    EXECUTOR_SYSTEM_PROMPT,
+    VERIFICATION_SUMMARY_RULE,
+)
+from jitsu.providers.ast import ASTProvider
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +30,7 @@ class JitsuExecutor:
         model: str = "openai/gpt-oss-120b:free",
         client: Instructor | None = None,
         runner: CommandRunner | None = None,
+        workspace_root: Path | None = None,
     ) -> None:
         """
         Initialize the executor with a model name and optional LLM client.
@@ -35,11 +41,14 @@ class JitsuExecutor:
                     one will be created via LLMClientFactory.
             runner: An optional CommandRunner instance. If not provided,
                     a default CommandRunner is used.
+            workspace_root: The root directory of the workspace.
 
         """
         self.model = model
         self.client = client if client is not None else LLMClientFactory.create()
         self.runner = runner if runner is not None else CommandRunner()
+        self.workspace_root = workspace_root or Path.cwd()
+        self.ast_provider = ASTProvider(self.workspace_root)
 
     @staticmethod
     def _apply_edits(edits: list[FileEdit]) -> None:
@@ -69,11 +78,10 @@ class JitsuExecutor:
         logger.info("Verification passed!")
         return True, "", "", ""
 
-    def execute_directive(self, directive: AgentDirective, compiler_output: str) -> bool:
+    async def execute_directive(self, directive: AgentDirective, compiler_output: str) -> bool:
         """Execute a single directive with retries on verification failure."""
         max_retries = 3
         attempts = 0
-        last_error = ""
 
         system_prompt = EXECUTOR_SYSTEM_PROMPT.format(
             module_scope=directive.module_scope,
@@ -88,9 +96,6 @@ class JitsuExecutor:
 
         while attempts <= max_retries:
             user_message = base_user_message
-            if last_error:
-                user_message += f"\n\nPREVIOUS VERIFICATION FAILURE:\n{last_error}\n"
-                user_message += "Please fix the errors above."
 
             try:
                 result = self.client.chat.completions.create(
@@ -110,7 +115,21 @@ class JitsuExecutor:
                 if success:
                     return True
 
-                last_error = f"{summary}:\n{trimmed}"
+                # Recovery Augmentation
+                recovery_payload = (
+                    EXECUTOR_RECOVERY_PROMPT
+                    + "\n\n"
+                    + VERIFICATION_SUMMARY_RULE.format(summary=summary, trimmed_block=trimmed)
+                )
+
+                # Append AST for edited files to help the model recover if they were the cause
+                for edit in result.edits:
+                    if edit.filepath.endswith(".py"):
+                        ast_ctx = await self.ast_provider.resolve(edit.filepath)
+                        recovery_payload += f"\n\n{ast_ctx}"
+
+                base_user_message += f"\n\n{recovery_payload}\n"
+                base_user_message += "Please fix the errors above."
                 attempts += 1
                 logger.warning(
                     "Verification failed (Attempt %d/%d). Retrying...",
@@ -134,7 +153,9 @@ class JitsuExecutor:
                 return False
             except Exception as e:
                 logger.exception("Error during execution step")
-                last_error = f"Execution error: {e!s}"
+                # Even on non-verification exceptions, we might want to retry if it's transient,
+                # but here we treat it like a failure.
+                base_user_message += f"\n\nExecution error: {e!s}\n"
                 attempts += 1
 
         return False

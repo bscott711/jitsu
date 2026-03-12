@@ -1,7 +1,7 @@
 """Tests for the Jitsu Executor."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import openai
 import pytest
@@ -52,7 +52,7 @@ def test_executor_missing_api_key() -> None:
         JitsuExecutor()
 
 
-def test_executor_execute_success(
+async def test_executor_execute_success(
     mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
 ) -> None:
     """Test successful directive execution."""
@@ -67,7 +67,7 @@ def test_executor_execute_success(
     mock_runner.run.return_value = MagicMock(returncode=0)
 
     executor = JitsuExecutor(client=mock_client, runner=mock_runner)
-    success = executor.execute_directive(mock_directive, "compiler output")
+    success = await executor.execute_directive(mock_directive, "compiler output")
 
     assert success is True
     assert (tmp_path / "test.py").read_text() == "print('hello')"
@@ -86,7 +86,7 @@ def test_executor_execute_success(
     )
 
 
-def test_executor_execute_retry_success(
+async def test_executor_execute_retry_success(
     mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
 ) -> None:
     """Test successful directive execution after a retry."""
@@ -103,7 +103,7 @@ def test_executor_execute_retry_success(
     ]
 
     executor = JitsuExecutor(client=mock_client, runner=mock_runner)
-    success = executor.execute_directive(mock_directive, "compiler output")
+    success = await executor.execute_directive(mock_directive, "compiler output")
 
     assert success is True
     assert mock_client.chat.completions.create.call_count == 2  # noqa: PLR2004
@@ -112,12 +112,14 @@ def test_executor_execute_retry_success(
     second_call_user_msg = mock_client.chat.completions.create.call_args_list[1][1]["messages"][1][
         "content"
     ]
-    assert "PREVIOUS VERIFICATION FAILURE" in second_call_user_msg
+    assert "Directive: test instructions" in second_call_user_msg
+    assert "You are in recovery mode" in second_call_user_msg
+    assert "### Verification Failure" in second_call_user_msg
     assert "Command 'just verify' failed with exit code 1" in second_call_user_msg
     assert "Syntax Error" in second_call_user_msg
 
 
-def test_executor_execute_failure(
+async def test_executor_execute_failure(
     mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
 ) -> None:
     """Test directive execution failure after all retries."""
@@ -131,7 +133,7 @@ def test_executor_execute_failure(
     mock_runner.run.return_value = MagicMock(returncode=1, stderr="Linter Error")
 
     executor = JitsuExecutor(client=mock_client, runner=mock_runner)
-    success = executor.execute_directive(mock_directive, "compiler output")
+    success = await executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
     assert (
@@ -140,19 +142,23 @@ def test_executor_execute_failure(
     assert mock_runner.run.call_count == 4  # noqa: PLR2004
 
 
-def test_executor_llm_exception(mock_directive: AgentDirective, mock_runner: MagicMock) -> None:
+async def test_executor_llm_exception(
+    mock_directive: AgentDirective, mock_runner: MagicMock
+) -> None:
     """Test that LLM exceptions are handled and count as attempts."""
     mock_client = MagicMock()
     mock_client.chat.completions.create.side_effect = Exception("API down")
 
     executor = JitsuExecutor(client=mock_client, runner=mock_runner)
-    success = executor.execute_directive(mock_directive, "compiler output")
+    success = await executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
     assert mock_client.chat.completions.create.call_count == 4  # noqa: PLR2004
 
 
-def test_executor_openai_api_error(mock_directive: AgentDirective, mock_runner: MagicMock) -> None:
+async def test_executor_openai_api_error(
+    mock_directive: AgentDirective, mock_runner: MagicMock
+) -> None:
     """Test that OpenAI API errors cause immediate failure."""
     mock_client = MagicMock()
     # Create a mock error response
@@ -163,7 +169,7 @@ def test_executor_openai_api_error(mock_directive: AgentDirective, mock_runner: 
 
     with patch("typer.secho") as mock_secho:
         executor = JitsuExecutor(client=mock_client, runner=mock_runner)
-        success = executor.execute_directive(mock_directive, "compiler output")
+        success = await executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
     assert mock_client.chat.completions.create.call_count == 1
@@ -171,7 +177,7 @@ def test_executor_openai_api_error(mock_directive: AgentDirective, mock_runner: 
     assert "Execution API Error [403]" in mock_secho.call_args[0][0]
 
 
-def test_executor_instructor_retry_error(
+async def test_executor_instructor_retry_error(
     mock_directive: AgentDirective, mock_runner: MagicMock
 ) -> None:
     """Test that Instructor retry errors cause immediate failure."""
@@ -182,7 +188,7 @@ def test_executor_instructor_retry_error(
 
     with patch("typer.secho") as mock_secho:
         executor = JitsuExecutor(client=mock_client, runner=mock_runner)
-        success = executor.execute_directive(mock_directive, "compiler output")
+        success = await executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
     assert mock_client.chat.completions.create.call_count == 1
@@ -211,3 +217,38 @@ def test_executor_run_verification_structure(mock_runner: MagicMock) -> None:
     assert summary == "Command 'npm test' failed with exit code 1"
     assert trimmed == "Linter Error"
     assert failed_cmd == "npm test"
+
+
+@pytest.mark.asyncio
+async def test_executor_recovery_includes_ast(
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
+) -> None:
+    """Test that recovery prompt includes AST for edited files."""
+    mock_client = MagicMock()
+
+    # Mock LLM response with a .py file edit
+    edit = FileEdit(filepath=str(tmp_path / "failing_logic.py"), content="def fail(): pass")
+    result = ExecutionResult(thoughts="Fixed it", edits=[edit])
+    mock_client.chat.completions.create.return_value = result
+
+    # Fail first, succeed second
+    mock_runner.run.side_effect = [
+        MagicMock(returncode=1, stderr="Logic Error"),
+        MagicMock(returncode=0),
+    ]
+
+    executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
+
+    # Mock the AST provider to avoid real file parsing
+    executor.ast_provider.resolve = AsyncMock(
+        return_value="### AST Structural Outline: failing_logic.py\n```python\ndef fail(): ...\n```"
+    )
+
+    await executor.execute_directive(mock_directive, "compiler output")
+
+    assert mock_client.chat.completions.create.call_count == 2  # noqa: PLR2004
+    second_call_user_msg = mock_client.chat.completions.create.call_args_list[1][1]["messages"][1][
+        "content"
+    ]
+    assert "AST Structural Outline: failing_logic.py" in second_call_user_msg
+    assert "def fail(): ..." in second_call_user_msg

@@ -22,7 +22,7 @@ async def test_orchestrator_execute_phases_success(tmp_path: Path) -> None:
     mock_compiler = MagicMock()
     mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
     mock_executor = MagicMock()
-    mock_executor.execute_directive.return_value = True
+    mock_executor.execute_directive = AsyncMock(return_value=True)
     directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
 
     storage = EpicStorage(base_dir=tmp_path)
@@ -43,7 +43,7 @@ async def test_orchestrator_execute_phases_failure(tmp_path: Path) -> None:
     mock_compiler = MagicMock()
     mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
     mock_executor = MagicMock()
-    mock_executor.execute_directive.return_value = False
+    mock_executor.execute_directive = AsyncMock(return_value=False)
     directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
 
     storage = EpicStorage(base_dir=tmp_path)
@@ -60,7 +60,7 @@ async def test_orchestrator_execute_phases_just_missing(tmp_path: Path) -> None:
     mock_compiler = MagicMock()
     mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
     mock_executor = MagicMock()
-    mock_executor.execute_directive.return_value = True
+    mock_executor.execute_directive = AsyncMock(return_value=True)
     directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
 
     storage = EpicStorage(base_dir=tmp_path)
@@ -444,7 +444,7 @@ async def test_orchestrator_execute_phases_commit_failure(tmp_path: Path) -> Non
     mock_compiler = MagicMock()
     mock_compiler.compile_directive = AsyncMock(return_value="prompt")
     mock_executor = MagicMock()
-    mock_executor.execute_directive.return_value = True
+    mock_executor.execute_directive = AsyncMock(return_value=True)
     directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
 
     storage = EpicStorage(base_dir=tmp_path)
