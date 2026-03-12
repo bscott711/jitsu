@@ -1,0 +1,60 @@
+[
+  {
+    "epic_id": "epic-extract-handlers",
+    "phase_id": "phase-create-handler-class",
+    "module_scope": "src/jitsu/server/handlers.py",
+    "instructions": "1. Create `src/jitsu/server/handlers.py`. 2. Import necessary dependencies (types, Path, subprocess, re, etc.) that the handlers require. 3. Define a `ToolHandlers` class. 4. In `__init__`, accept `state_manager: JitsuStateManager` and `context_compiler: ContextCompiler`, saving them as instance variables. 5. Move all 8 `_handle_*` functions from `mcp_server.py` into this class as methods (e.g., `async def handle_get_next_phase(self) -> ...`). Update any references to `state_manager` and `context_compiler` to use `self.`. 6. Add a method `def register_all(self, registry: ToolRegistry) -> None:` that calls `registry.register()` for all 8 tools, mapping the exact `types.Tool` schemas from the old implementation to their new `self.handle_*` methods.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/registry.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT modify mcp_server.py in this phase. Only copy the logic.",
+      "Do NOT forget to migrate the imports needed by the handlers (like JitsuStateManager, CommandRunner, ValidationError, GitProvider, etc.) into handlers.py.",
+      "Do NOT change the tool schemas or behavior; this is a pure refactor."
+    ],
+    "completion_criteria": [
+      "`src/jitsu/server/handlers.py` is created with a fully functional `ToolHandlers` class.",
+      "All 8 tools are correctly mapped in the `register_all` method."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "epic-extract-handlers",
+    "phase_id": "phase-wire-server",
+    "module_scope": "src/jitsu/server/mcp_server.py",
+    "instructions": "1. Import `ToolHandlers` from `jitsu.server.handlers`. 2. In `mcp_server.py`, immediately below where `tool_registry` is instantiated, instantiate `handlers = ToolHandlers(state_manager, context_compiler)`. 3. Call `handlers.register_all(tool_registry)`. 4. Delete the 8 manual `tool_registry.register(...)` calls you added in the previous epic. 5. Delete all of the old `_handle_*` functions from `mcp_server.py`. 6. Clean up all orphaned imports at the top of `mcp_server.py` (e.g., `subprocess`, `re`, `CommandRunner`, `PhaseReport`, etc., which are no longer used here).",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/handlers.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT leave any dead code or unused imports in mcp_server.py. Pyright strict mode will fail if you do.",
+      "Do NOT delete the `run_server`, `handle_list_tools`, or `handle_call_tool` functions."
+    ],
+    "completion_criteria": [
+      "`mcp_server.py` is stripped of all domain execution logic.",
+      "`mcp_server.py` cleanly delegates handler registration to the `ToolHandlers` class.",
+      "No unused imports remain in `mcp_server.py`."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]
