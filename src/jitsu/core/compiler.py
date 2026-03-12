@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from jitsu.models.core import AgentDirective, TargetResolutionMode
+from jitsu.models.core import AgentDirective, ContextTarget, TargetResolutionMode
 from jitsu.providers import BaseProvider, ProviderRegistry
 from jitsu.utils.logger import get_logger
 
@@ -19,9 +19,10 @@ class ContextCompiler:
             name: cls(self.workspace_root) for name, cls in ProviderRegistry.items()
         }
 
-    async def compile_directive(self, directive: AgentDirective) -> str:
-        """Weave the directive and live context into a single Markdown payload."""
-        payload_parts = [
+    @staticmethod
+    def _build_preamble(directive: AgentDirective) -> list[str]:
+        """Build the static markdown headers and instructions."""
+        parts = [
             f"# Jitsu Phase Directive: {directive.phase_id}",
             f"**Epic:** {directive.epic_id}",
             f"**Module Scope:** {directive.module_scope}",
@@ -30,65 +31,65 @@ class ContextCompiler:
         ]
 
         if directive.anti_patterns:
-            payload_parts.append("\n## Anti-Patterns (STRICTLY FORBIDDEN)")
-            payload_parts.extend([f"- {pattern}" for pattern in directive.anti_patterns])
+            parts.append("\n## Anti-Patterns (STRICTLY FORBIDDEN)")
+            parts.extend([f"- {pattern}" for pattern in directive.anti_patterns])
 
-        # Inject Definition of Done (DoD)
-        payload_parts.append("\n## Definition of Done")
-
+        parts.append("\n## Definition of Done")
         if directive.completion_criteria:
-            payload_parts.append("### Completion Criteria")
-            payload_parts.extend(
-                [f"- [ ] {criterion}" for criterion in directive.completion_criteria]
-            )
+            parts.append("### Completion Criteria")
+            parts.extend([f"- [ ] {criterion}" for criterion in directive.completion_criteria])
 
-        payload_parts.append("### Verification")
-
+        parts.append("### Verification")
         if directive.verification_commands:
-            payload_parts.append("You MUST run the following commands to verify your work:")
-            payload_parts.extend(
-                [f"```bash\n{cmd}\n```" for cmd in directive.verification_commands]
-            )
+            parts.append("You MUST run the following commands to verify your work:")
+            parts.extend([f"```bash\n{cmd}\n```" for cmd in directive.verification_commands])
         else:
-            payload_parts.append("*No specific verification commands required for this phase.*")
+            parts.append("*No specific verification commands required for this phase.*")
 
+        return parts
+
+    async def _resolve_targets(self, targets: list[ContextTarget]) -> tuple[list[str], list[str]]:
+        """Process context targets and build the manifest."""
+        parts: list[str] = []
+        manifest: list[str] = []
+
+        for target in targets:
+            if target.resolution_mode == TargetResolutionMode.AUTO:
+                context_data, provider_used = await self._resolve_auto(
+                    target.target_identifier, target.provider_name
+                )
+            else:
+                context_data, provider_used = await self._resolve_explicit(
+                    target.target_identifier, target.resolution_mode
+                )
+
+            if provider_used == "none":
+                msg = f"**Warning:** Unknown provider '{target.provider_name}' or resolution failed for '{target.target_identifier}'."
+                if target.is_required:
+                    parts.append(f"### [FAILED] {target.target_identifier}\n{msg}")
+                manifest.append(f"- `{target.target_identifier}`: **FAILED**")
+                continue
+
+            parts.extend([context_data, "---"])
+            summary = self._get_manifest_summary(provider_used)
+            manifest.append(f"- `{target.target_identifier}`: **{summary}** ({provider_used})")
+
+        return parts, manifest
+
+    async def compile_directive(self, directive: AgentDirective) -> str:
+        """Weave the directive and live context into a single Markdown payload."""
+        payload_parts = self._build_preamble(directive)
         payload_parts.append("\n## JIT Context")
-        manifest_lines: list[str] = []
 
         if not directive.context_targets:
             payload_parts.append("*No specific context targets requested for this phase.*")
         else:
-            for target in directive.context_targets:
-                # AST-First Policy for AUTO mode
-                if target.resolution_mode == TargetResolutionMode.AUTO:
-                    context_data, provider_used = await self._resolve_auto(
-                        target.target_identifier, target.provider_name
-                    )
-                else:
-                    context_data, provider_used = await self._resolve_explicit(
-                        target.target_identifier, target.resolution_mode
-                    )
+            target_parts, manifest_lines = await self._resolve_targets(directive.context_targets)
+            payload_parts.extend(target_parts)
 
-                if provider_used == "none":
-                    msg = f"**Warning:** Unknown provider '{target.provider_name}' or resolution failed for '{target.target_identifier}'."
-                    if target.is_required:
-                        payload_parts.append(f"### [FAILED] {target.target_identifier}\n{msg}")
-                    manifest_lines.append(f"- `{target.target_identifier}`: **FAILED**")
-                    continue
-
-                payload_parts.append(context_data)
-                payload_parts.append("---")
-
-                # Summarize for the manifest
-                summary = self._get_manifest_summary(provider_used)
-                manifest_lines.append(
-                    f"- `{target.target_identifier}`: **{summary}** ({provider_used})"
-                )
-
-        # Emit Compiled Context Manifest
-        if manifest_lines:
-            payload_parts.append("\n## Compiled Context Manifest")
-            payload_parts.extend(manifest_lines)
+            if manifest_lines:
+                payload_parts.append("\n## Compiled Context Manifest")
+                payload_parts.extend(manifest_lines)
 
         return "\n".join(payload_parts)
 

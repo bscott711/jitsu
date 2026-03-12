@@ -35,6 +35,11 @@ check-deps:
 	uv run deptry src
 	uv run vulture src/ tests/ .vulture_whitelist.py
 
+# Check architectural complexity (Cyclomatic Complexity)
+check-complexity:
+	@echo "📐 Checking architectural complexity..."
+	uv run complexipy src/
+
 # Install pre-commit hooks
 install-hooks:
 	@echo "🪝 Installing git hooks..."
@@ -56,7 +61,7 @@ sync message:
 # ==========================================
 
 # THE FULL GATE: Used by the Orchestrator/Pre-Commit. Runs EVERYTHING.
-verify: format lint check-types check-deps contracts test-unit
+verify: format lint check-types check-deps contracts check-complexity test-unit
 
 # Run tests with strict 100% coverage limit (configured in pyproject.toml)
 test-unit:

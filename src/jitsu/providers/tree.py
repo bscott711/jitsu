@@ -62,6 +62,12 @@ class DirectoryTreeProvider(BaseProvider):
         else:
             return f"### Directory Tree: {target_str}\n```text\n{tree_content}\n```"
 
+    def _get_sorted_items(self, dir_path: Path) -> list[Path]:
+        """Fetch and sort directory items, ignoring exclusions."""
+        items = [item for item in dir_path.iterdir() if item.name not in self.EXCLUDE]
+        items.sort(key=lambda x: (not x.is_dir(), x.name.lower()))
+        return items
+
     def _generate_tree_lines(
         self, dir_path: Path, prefix: str = ""
     ) -> typing.Generator[str, None, None]:
@@ -77,13 +83,9 @@ class DirectoryTreeProvider(BaseProvider):
 
         """
         try:
-            # Collect and sort children: directories first, then files alphabetically
-            # Filtering out excluded directories
-            items = [item for item in dir_path.iterdir() if item.name not in self.EXCLUDE]
-
-            items.sort(key=lambda x: (not x.is_dir(), x.name.lower()))
-
+            items = self._get_sorted_items(dir_path)
             count = len(items)
+
             for i, item in enumerate(items):
                 is_last = i == count - 1
                 connector = "└── " if is_last else "├── "

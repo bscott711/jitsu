@@ -11,7 +11,7 @@ from instructor.core.exceptions import InstructorRetryException
 from jitsu.core.client import LLMClientFactory
 from jitsu.core.runner import CommandRunner
 from jitsu.models.core import AgentDirective
-from jitsu.models.execution import ExecutionResult
+from jitsu.models.execution import ExecutionResult, FileEdit
 from jitsu.prompts import EXECUTOR_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -41,25 +41,51 @@ class JitsuExecutor:
         self.client = client if client is not None else LLMClientFactory.create()
         self.runner = runner if runner is not None else CommandRunner()
 
+    @staticmethod
+    def _apply_edits(edits: list[FileEdit]) -> None:
+        """Safely write file edits to disk."""
+        for edit in edits:
+            filepath = Path(edit.filepath).resolve()
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text(edit.content)
+            logger.info("Updated file: %s", edit.filepath)
+
+    def _run_verification(self, commands: list[str]) -> tuple[bool, str]:
+        """Execute verification commands and aggregate errors."""
+        all_stderr: list[str] = []
+        for cmd in commands:
+            logger.info("Running verification: %s", cmd)
+            res = self.runner.run(cmd)
+            if res.returncode != 0:
+                all_stderr.append(
+                    f"Command '{cmd}' failed with exit code {res.returncode}:\n{res.stderr}"
+                )
+
+        if not all_stderr:
+            logger.info("Verification passed!")
+            return True, ""
+
+        return False, "\n".join(all_stderr)
+
     def execute_directive(self, directive: AgentDirective, compiler_output: str) -> bool:
         """Execute a single directive with retries on verification failure."""
         max_retries = 3
         attempts = 0
         last_error = ""
 
+        system_prompt = EXECUTOR_SYSTEM_PROMPT.format(
+            module_scope=directive.module_scope,
+            anti_patterns=", ".join(directive.anti_patterns),
+        )
+
+        base_user_message = (
+            f"Directive: {directive.instructions}\n\n"
+            f"Completion Criteria: {', '.join(directive.completion_criteria)}\n\n"
+            f"Context:\n{compiler_output}\n"
+        )
+
         while attempts <= max_retries:
-            # 1. Call LLM to get ExecutionResult
-            system_prompt = EXECUTOR_SYSTEM_PROMPT.format(
-                module_scope=directive.module_scope,
-                anti_patterns=", ".join(directive.anti_patterns),
-            )
-
-            user_message = (
-                f"Directive: {directive.instructions}\n\n"
-                f"Completion Criteria: {', '.join(directive.completion_criteria)}\n\n"
-                f"Context:\n{compiler_output}\n"
-            )
-
+            user_message = base_user_message
             if last_error:
                 user_message += f"\n\nPREVIOUS VERIFICATION FAILURE:\n{last_error}\n"
                 user_message += "Please fix the errors above."
@@ -74,30 +100,13 @@ class JitsuExecutor:
                     ],
                 )
 
-                # 2. Apply edits
-                for edit in result.edits:
-                    filepath = Path(edit.filepath).resolve()
-                    filepath.parent.mkdir(parents=True, exist_ok=True)
-                    filepath.write_text(edit.content)
-                    logger.info("Updated file: %s", edit.filepath)
+                self._apply_edits(result.edits)
 
-                # 3. Run verification
-                verification_success = True
-                all_stderr: list[str] = []
-                for cmd in directive.verification_commands:
-                    logger.info("Running verification: %s", cmd)
-                    res = self.runner.run(cmd)
-                    if res.returncode != 0:
-                        verification_success = False
-                        all_stderr.append(
-                            f"Command '{cmd}' failed with exit code {res.returncode}:\n{res.stderr}"
-                        )
-
-                if verification_success:
-                    logger.info("Verification passed!")
+                success, error_msg = self._run_verification(directive.verification_commands)
+                if success:
                     return True
 
-                last_error = "\n".join(all_stderr)
+                last_error = error_msg
                 attempts += 1
                 logger.warning(
                     "Verification failed (Attempt %d/%d). Retrying...",
