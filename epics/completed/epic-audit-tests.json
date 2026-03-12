@@ -1,0 +1,62 @@
+[
+  {
+    "epic_id": "EPIC-TEST-AUDIT",
+    "phase_id": "PHASE-1-CORE-LOGIC",
+    "module_scope": "tests/utils/",
+    "instructions": "Implement a strict `pytest` suite for the pure functions in `src/jitsu/utils/audit.py`. Target `run_command`, `_scan_file_for_ignores`, and `hunt_for_ignores`. You must use `unittest.mock.patch` for `subprocess.run` to simulate both successful and `OSError` execution states. Use `pytest`'s `tmp_path` fixture to simulate readable, unreadable (OSError/UnicodeDecodeError), and clean Python files. Do NOT test `main()` in this phase.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/utils/audit.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not execute real subprocess commands.",
+      "STRICTLY FORBIDDEN: Do not write to the actual filesystem outside of `tmp_path`.",
+      "STRICTLY FORBIDDEN: Do not use `Any` types in test signatures."
+    ],
+    "completion_criteria": [
+      "Tests cover all branching paths for `run_command` (success, stderr presence, OSError).",
+      "Tests cover all branching paths for file scanning (ignores found, clean file, OSError, UnicodeDecodeError).",
+      "Test file is completely statically typed."
+    ],
+    "verification_commands": [
+      "just verify",
+      "uv run pytest tests/utils/test_audit.py"
+    ]
+  },
+  {
+    "epic_id": "EPIC-TEST-AUDIT",
+    "phase_id": "PHASE-2-MAIN-INTEGRATION",
+    "module_scope": "tests/utils/",
+    "instructions": "Implement the remaining `pytest` suite for the `main()` function in `src/jitsu/utils/audit.py`. Mock `typer.secho` to prevent stdout pollution during test execution. Mock `datetime.now` (or use `freezegun`) to ensure deterministic timestamps. Mock `Path.mkdir` and `Path.write_text` to prevent writing to the actual `docs/` directory. Assert that all side-effects are called with the correct arguments.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/utils/audit.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/utils/test_audit.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not allow `typer.secho` or `print` to leak to stdout during test runs.",
+      "STRICTLY FORBIDDEN: Do not write test reports to the actual `docs/audit_v2` directory."
+    ],
+    "completion_criteria": [
+      "All side-effects in `main()` are fully mocked and asserted.",
+      "Test file is completely statically typed."
+    ],
+    "verification_commands": [
+      "just verify",
+      "uv run pytest tests/utils/test_audit.py --cov=src.jitsu.utils.audit --cov-report=term-missing --cov-fail-under=100"
+    ]
+  }
+]
