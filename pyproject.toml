@@ -36,6 +36,7 @@ dev = [
     "pymarkdownlnt",
     "deptry",
     "pre-commit",
+    "vulture>=2.15",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -48,6 +49,9 @@ packages = ["src/jitsu"]
 line-length = 100
 target-version = "py310"
 src = ["src", "tests"]
+exclude = [
+    ".vulture_whitelist.py",
+]
 
 [tool.ruff.lint]
 # Enable ALL rules by default, then selectively ignore
@@ -70,6 +74,7 @@ ignore = [
 # S101: Allow use of `assert` in tests
 # PGH003: Allow blanket type ignores in tests (needed to test strict validation failures)
 "tests/**/*" = ["S101", "PGH003"]
+".vulture_whitelist.py" = ["ALL"]
 
 [tool.ruff.format]
 quote-style = "double"

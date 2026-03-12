@@ -46,8 +46,7 @@ async def test_tree_provider_resolve_success(tmp_path: Path) -> None:
     provider = DirectoryTreeProvider(tmp_path)
 
     # Stub root() to return tmp_path
-    if True:
-        res = await provider.resolve(".")
+    res = await provider.resolve(".")
 
     assert "### Directory Tree: ." in res
     assert "```text" in res
@@ -73,8 +72,7 @@ async def test_tree_provider_resolve_specific_subdir(tmp_path: Path) -> None:
 
     provider = DirectoryTreeProvider(tmp_path)
 
-    if True:
-        res = await provider.resolve("dir1")
+    res = await provider.resolve("dir1")
 
     assert "### Directory Tree: dir1" in res
     assert "dir1\n└── file1.txt" in res
@@ -84,8 +82,7 @@ async def test_tree_provider_resolve_specific_subdir(tmp_path: Path) -> None:
 async def test_tree_provider_not_found(tmp_path: Path) -> None:
     """Test resolution when the directory does not exist."""
     provider = DirectoryTreeProvider(tmp_path)
-    if True:
-        res = await provider.resolve("non_existent")
+    res = await provider.resolve("non_existent")
     assert "ERROR: Directory 'non_existent' does not exist" in res
 
 
@@ -96,8 +93,7 @@ async def test_tree_provider_not_a_dir(tmp_path: Path) -> None:
     file_path.touch()
 
     provider = DirectoryTreeProvider(tmp_path)
-    if True:
-        res = await provider.resolve("file.txt")
+    res = await provider.resolve("file.txt")
     assert "ERROR: Target 'file.txt' is not a directory" in res
 
 
@@ -146,8 +142,7 @@ async def test_tree_provider_empty_dir(tmp_path: Path) -> None:
     empty_dir.mkdir()
 
     provider = DirectoryTreeProvider(tmp_path)
-    if True:
-        res = await provider.resolve("empty")
+    res = await provider.resolve("empty")
 
     assert "### Directory Tree: empty" in res
     # Just the directory name should be there

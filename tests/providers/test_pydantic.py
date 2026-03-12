@@ -4,16 +4,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from pydantic import BaseModel
 
 from jitsu.providers.pydantic import PydanticProvider
-
-
-class MockModel(BaseModel):
-    """A simple mock model for testing."""
-
-    name: str
-    age: int = 42
 
 
 @pytest.mark.asyncio
