@@ -15,6 +15,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 OUTPUT_DIR = PROJECT_ROOT / "docs" / "audit_v2"
 MODULES_TO_AUDIT = [
     "src/jitsu/core",
+    "src/jitsu/cli",
+    "src/jitsu/models",
     "src/jitsu/providers",
     "src/jitsu/server",
 ]
@@ -88,30 +90,44 @@ def main() -> None:
 
         report_content = [
             f"# V2 Audit Report: `{module}`",
-            f"> **Generated:** {timestamp}\n",
+            "",
+            f"> **Generated:** {timestamp}",
+            "",
             "## 1. Dead Code Analysis (Vulture)",
+            "",
             "```text",
             run_command(["uv", "run", "vulture", module]),
-            "```\n",
+            "```",
+            "",
             "## 2. Cognitive Complexity (Complexipy)",
+            "",
             "```text",
             run_command(["uv", "run", "complexipy", module]),
-            "```\n",
+            "```",
+            "",
             "## 3. Linting (Ruff)",
+            "",
             "```text",
             run_command(["uv", "run", "ruff", "check", module]),
-            "```\n",
+            "```",
+            "",
             "## 4. Static Typing (Pyright)",
+            "",
             "```text",
             run_command(["uv", "run", "pyright", module]),
-            "```\n",
+            "```",
+            "",
             "## 5. Technical Debt (Inline Ignores)",
+            "",
             hunt_for_ignores(module_path),
-            "\n---",
-            "\n*End of automated report.*",
+            "",
+            "---",
+            "",
+            "*End of automated report.*",
         ]
 
-        report_file.write_text("\n".join(report_content), encoding="utf-8")
+        # MD047: Add the trailing newline explicitly at the end of the joined string
+        report_file.write_text("\n".join(report_content) + "\n", encoding="utf-8")
         typer.secho(f"✅ Saved to {report_file.relative_to(PROJECT_ROOT)}", fg=typer.colors.GREEN)
 
 
