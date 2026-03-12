@@ -1,0 +1,168 @@
+[
+  {
+    "epic_id": "EPIC-RECOVERY-LOOP-V1",
+    "phase_id": "PHASE-01-RECOVERY-PROMPTS",
+    "module_scope": "src/jitsu/",
+    "instructions": "Add two new string constants to `src/jitsu/prompts.py`: `EXECUTOR_RECOVERY_PROMPT` (instructing the model to make minimal targeted fixes based on a test failure) and `VERIFICATION_SUMMARY_RULE` (formatting the error summary and truncated traceback). Ensure these align with existing prompt formatting.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/prompts.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not modify any existing prompt constants.",
+      "STRICTLY FORBIDDEN: Do not add XML constraints yet (that belongs in a future epic)."
+    ],
+    "completion_criteria": [
+      "`EXECUTOR_RECOVERY_PROMPT` and `VERIFICATION_SUMMARY_RULE` are defined as module-level string constants.",
+      "Code passes linting and type checking."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "EPIC-RECOVERY-LOOP-V1",
+    "phase_id": "PHASE-02-FAILURE-EXTRACTOR",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "In `src/jitsu/core/executor.py`, implement a private static helper `_extract_first_failure_block(full_stderr: str) -> str` that truncates massive pytest/ruff traces to just the first ~15-20 lines of the primary error. Refactor `run_verification` to return a tuple containing `(success: bool, summary: str, trimmed_block: str, failed_cmd: str)`. Update `tests/core/test_executor.py` to match the new signature and test the truncation logic.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not alter the subprocess execution logic in `run_verification`.",
+      "STRICTLY FORBIDDEN: Do not allow the test coverage to drop below 100%."
+    ],
+    "completion_criteria": [
+      "`_extract_first_failure_block` is implemented and unit tested.",
+      "`run_verification` returns the newly structured tuple.",
+      "All executor tests pass."
+    ],
+    "verification_commands": [
+      "just verify",
+      "uv run pytest tests/core/test_executor.py --cov=src.jitsu.core.executor --cov-report=term-missing"
+    ]
+  },
+  {
+    "epic_id": "EPIC-RECOVERY-LOOP-V1",
+    "phase_id": "PHASE-03-AUGMENT-NOT-REPLACE",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "Fix the 'Context Wipe Bug' in `src/jitsu/core/executor.py` inside the `execute_directive` loop. Instead of overwriting `base_user_message` upon verification failure, append the new `EXECUTOR_RECOVERY_PROMPT` and the structured error tuple from Phase 2. Use `ContextCompiler.resolve_auto` (or the local AST provider directly) to append the AST skeleton of the failing file to the augmented message. Update tests to assert `base_user_message` is preserved.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/prompts.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not overwrite `user_message = ...` in a way that destroys the original phase instructions.",
+      "STRICTLY FORBIDDEN: Do not import Layer 3 modules (like MCP tools) to resolve the context."
+    ],
+    "completion_criteria": [
+      "The agent's prompt appends the error and the original instructions remain intact on retries.",
+      "The target file's AST is included in the recovery prompt.",
+      "Test coverage remains at 100%."
+    ],
+    "verification_commands": [
+      "just verify",
+      "uv run pytest tests/core/test_executor.py"
+    ]
+  },
+  {
+    "epic_id": "EPIC-RECOVERY-LOOP-V1",
+    "phase_id": "PHASE-04-MONOTONICITY-GUARD",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "Implement the 'Monotonicity Guard' inside `execute_directive` in `src/jitsu/core/executor.py`. Parse the `summary` string from `run_verification` to extract the number of failing tests. Track `prev_fail_count` across the loop. If the retry attempt results in a `fail_count >= prev_fail_count` (the agent made things worse or failed to improve), abort the retry loop immediately and raise a custom `MonotonicityError`. Ensure `FileEdit` paths are restricted to the `module_scope` on retries.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not allow the loop to continue if the error count increases."
+    ],
+    "completion_criteria": [
+      "`MonotonicityError` is defined and raised correctly when errors regress or stagnate.",
+      "Tests successfully mock `run_verification` to simulate a regressing error count and assert the exception is raised."
+    ],
+    "verification_commands": [
+      "just verify",
+      "uv run pytest tests/core/test_executor.py"
+    ]
+  },
+  {
+    "epic_id": "EPIC-RECOVERY-LOOP-V1",
+    "phase_id": "PHASE-05-STUCK-SIGNAL",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "Wire the `MonotonicityError` and retry exhaustion paths into `src/jitsu/core/orchestrator.py` and `src/jitsu/core/state.py`. When the executor raises `MonotonicityError`, catch it in the orchestrator, update the phase status to `PhaseStatus.STUCK`, and implement a `JitsuStateManager.on_stuck` hook that halts the queue execution. Add tests to ensure a stuck phase stops further execution.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/state.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not continue processing the queue if a phase is marked STUCK."
+    ],
+    "completion_criteria": [
+      "`JitsuStateManager` correctly handles the `STUCK` state.",
+      "The Orchestrator gracefully halts and reports the failure to the user.",
+      "100% test coverage is maintained across all modified files."
+    ],
+    "verification_commands": [
+      "just verify",
+      "uv run pytest tests/core/test_orchestrator.py tests/core/test_state.py"
+    ]
+  }
+]

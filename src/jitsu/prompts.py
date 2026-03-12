@@ -27,3 +27,18 @@ You MUST generate a single AgentDirective object that fulfills this phase's goal
 CRITICAL SCHEMA RULE: For any context_targets, you MUST ONLY use the following registered provider_names: [{allowed_providers}]. Do NOT use the provider you are currently building as a target.
 CRITICAL GENERATION RULE: To prevent model degeneration, NEVER generate more than 5 items in ANY list or array (e.g., completion_criteria, anti_patterns).
 """
+
+EXECUTOR_RECOVERY_PROMPT = (
+    "You are in recovery mode. A previous attempt failed verification. "
+    "Analyze the provided failure summary and traceback, then apply the MINIMAL "
+    "targeted fix necessary to resolve the issue. Preserve the core logic of your "
+    "original implementation while addressing the specific failure reported below."
+)
+
+VERIFICATION_SUMMARY_RULE = """### Verification Failure
+{summary}
+
+#### Truncated Traceback
+```
+{trimmed_block}
+```"""

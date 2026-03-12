@@ -14,3 +14,7 @@ thoughts
 
 # Pytest Fixtures
 clear_state
+
+# Prompts
+EXECUTOR_RECOVERY_PROMPT
+VERIFICATION_SUMMARY_RULE
