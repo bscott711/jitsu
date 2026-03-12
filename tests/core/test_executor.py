@@ -157,7 +157,7 @@ async def test_executor_llm_exception(
     success = await executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
-    expected_attempts = 4
+    expected_attempts = 6
     assert mock_client.chat.completions.create.call_count == expected_attempts
 
 

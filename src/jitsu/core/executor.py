@@ -133,9 +133,13 @@ class JitsuExecutor:
         logger.info("Verification passed!")
         return True, None
 
-    async def execute_directive(self, directive: AgentDirective, compiler_output: str) -> bool:
+    async def execute_directive(
+        self,
+        directive: AgentDirective,
+        compiler_output: str,
+        max_retries: int = 5,
+    ) -> bool:
         """Execute a single directive with retries on verification failure."""
-        max_retries = 3
         attempts = 0
         prev_fail_count = float("inf")
 

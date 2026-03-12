@@ -14,7 +14,7 @@ from instructor.core.exceptions import InstructorRetryException
 from jitsu.core.executor import MonotonicityError
 from jitsu.core.orchestrator import JitsuOrchestrator
 from jitsu.core.storage import EpicStorage
-from jitsu.models.core import AgentDirective
+from jitsu.models.core import AgentDirective, PhaseStatus
 from jitsu.providers.git import GitError
 
 
@@ -508,7 +508,7 @@ async def test_orchestrator_execute_phases_failed_persistence(tmp_path: Path) ->
     state_file = out_file.with_suffix(".state")
     assert state_file.exists()
     content = json.loads(state_file.read_text())
-    assert content["status"] == "FAILED"
+    assert content["status"] == "STUCK"
 
 
 @pytest.mark.asyncio
@@ -608,3 +608,67 @@ async def test_orchestrator_handle_quarantine_git_failure() -> None:
         mock_git = mock_git_cls.return_value
         mock_git.checkout_branch.side_effect = GitError("fail")
         await orchestrator._handle_quarantine()  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_retry_budget_limit(tmp_path: Path) -> None:
+    """Test that hitting MAX_RETRIES triggers STUCK state and quarantine."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    # Return False to simulate exhaustion of retries
+    mock_executor.execute_directive = AsyncMock(return_value=False)
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    storage = EpicStorage(base_dir=tmp_path)
+    state_manager = MagicMock()
+    orchestrator = JitsuOrchestrator(
+        executor=mock_executor, storage=storage, state_manager=state_manager
+    )
+
+    with (
+        patch.object(orchestrator, "_handle_quarantine", new_callable=AsyncMock) as mock_quarantine,
+        pytest.raises(typer.Exit),
+    ):
+        await orchestrator.execute_phases([directive], compiler=mock_compiler)
+
+    # Assert that the status was updated to STUCK
+    state_manager.update_phase.assert_called_once()
+    report = state_manager.update_phase.call_args[0][0]
+    assert report.status == PhaseStatus.STUCK
+    assert f"Max retries ({orchestrator.MAX_RETRIES})" in report.agent_notes
+    mock_quarantine.assert_awaited_once()
+
+    # Verify execute_directive was called with max_retries=5
+    mock_executor.execute_directive.assert_called_once_with(
+        directive, "mock prompt", max_retries=orchestrator.MAX_RETRIES
+    )
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_retry_reset_between_phases(tmp_path: Path) -> None:
+    """Test that retry counter is reset (effectively) by checking executor calls."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive = AsyncMock(return_value=True)
+    d1 = AgentDirective(epic_id="e", phase_id="p1", module_scope="s", instructions="i")
+    d2 = AgentDirective(epic_id="e", phase_id="p2", module_scope="s", instructions="i")
+
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    with (
+        patch("shutil.which", return_value="/usr/bin/just"),
+        patch("anyio.run_process", new_callable=AsyncMock) as mock_rp,
+    ):
+        mock_rp.return_value = MagicMock(returncode=0)
+        directives = [d1, d2]
+        await orchestrator.execute_phases(directives, compiler=mock_compiler)
+
+        # Verify it was called twice, both times with max_retries=5
+        assert mock_executor.execute_directive.call_count == len(directives)
+        calls = mock_executor.execute_directive.call_args_list
+        # Accessing by index for safety with mock objects
+        assert calls[0].kwargs["max_retries"] == orchestrator.MAX_RETRIES
+        assert calls[1].kwargs["max_retries"] == orchestrator.MAX_RETRIES

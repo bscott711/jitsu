@@ -1,0 +1,35 @@
+[
+  {
+    "epic_id": "epic-orchestrator-retry-budget",
+    "phase_id": "phase-1-per-phase-retries",
+    "module_scope": "src/jitsu/core/orchestrator.py",
+    "instructions": "Implement a strict per-phase retry budget in the Orchestrator. 1. Set `MAX_RETRIES = 5`. 2. In the main autonomous loop, ensure the retry counter resets to 0 *each time* a new phase is pulled from the queue. 3. If a phase fails verification and hits MAX_RETRIES, mark its status as STUCK, break the loop, and trigger `self._handle_quarantine()`. 4. Update tests/core/test_orchestrator.py to assert that the retry counter correctly resets between phases and that hitting 5 retries triggers quarantine. Ensure 100% test coverage and no linting bypasses.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Failing to reset the retry counter inside the phase loop",
+      "Bypassing linters instead of fixing the root cause"
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "Retry counter resets to 0 on new phase",
+      "MAX_RETRIES = 5 triggers STUCK state and quarantine",
+      "test_orchestrator.py asserts both success reset and failure quarantine",
+      "just verify passes cleanly"
+    ]
+  }
+]

@@ -36,6 +36,8 @@ class JitsuOrchestrator:
 
     """
 
+    MAX_RETRIES = 5
+
     def __init__(
         self,
         planner: JitsuPlanner | None = None,
@@ -336,7 +338,9 @@ class JitsuOrchestrator:
 
             try:
                 with typer.progressbar(length=100, label="Executing...") as progress:
-                    success = await self.executor.execute_directive(directive, prompt)
+                    success = await self.executor.execute_directive(
+                        directive, prompt, max_retries=self.MAX_RETRIES
+                    )
                     progress.update(100)
             except MonotonicityError as e:
                 report = PhaseReport(
@@ -360,8 +364,8 @@ class JitsuOrchestrator:
             if not success:
                 report = PhaseReport(
                     phase_id=directive.phase_id,
-                    status=PhaseStatus.FAILED,
-                    agent_notes="Max retries reached or verification failed.",
+                    status=PhaseStatus.STUCK,
+                    agent_notes=f"Max retries ({self.MAX_RETRIES}) reached or verification failed.",
                 )
                 self.state_manager.update_phase(report)
                 if out:
