@@ -18,17 +18,17 @@ By shifting the heavy lifting of context preparation to Python, Jitsu ensures th
 
 ## **The 1.0 Architecture**
 
-Jitsu operates through a four-layer architecture designed to maximize fidelity and autonomy.
+Jitsu operates through a strict four-layer Domain-Driven Design designed to maximize fidelity, autonomy, and code decoupling. Dependencies flow in one direction: inwards.
 
-### **Layer 1: Strict Pydantic Models (The Core)**
+### **Layer 0: Strict Pydantic Models (The Domain)**
 
-The foundation of Jitsu is a set of rigorous Pydantic models (`jitsu.models`) that define the communication protocol between the orchestrator and the agent.
+The zero-dependency foundation of Jitsu is a set of rigorous Pydantic models (`jitsu.models`) that define the communication protocol between the orchestrator and the agent.
 
 * **`AgentDirective`**: Defines a work phase, including instructions, anti-patterns, and context targets.
 * **`PhaseReport`**: Structured feedback from the agent, including artifacts and verification results.
 * **`TargetResolutionMode`**: Governs how the ContextCompiler handles specific files (`AUTO`, `STRUCTURE_ONLY`, `SCHEMA_ONLY`, `FULL_SOURCE`).
 
-### **Layer 1.5: Core & State (The Engine)**
+### **Layer 1: Core & State (The Engine)**
 
 The `jitsu.core` module parses the directives and manages the state of the agent's tasks.
 
@@ -37,7 +37,7 @@ The `jitsu.core` module parses the directives and manages the state of the agent
 
 ### **Layer 2: AST-First Providers (The Eyes)**
 
-Providers (`jitsu.providers`) are specialized modules that extract information from the filesystem and environment using an AST-first policy.
+Providers (`jitsu.providers`) are specialized adapters that extract information from the filesystem and environment using an AST-first policy.
 
 * **`FileStateProvider` (`file`)**: Fallback for full source code text.
 * **`ASTProvider` (`ast`)**: Strips implementation details from Python files, providing structural skeletons. **Token Savings: 70-90%**.
@@ -47,13 +47,14 @@ Providers (`jitsu.providers`) are specialized modules that extract information f
 * **`MarkdownASTProvider` (`markdown_ast`)**: Extracts headings and code blocks from large markdown files for structural previews.
 * **`EnvVarProvider` (`env_var`)**: Safely exposes necessary environment configurations.
 
-### **Layer 3: Self-Orchestrating MCP Server (The Transport Layer)**
+### **Layer 3: Decoupled Transport Layer (MCP Server & CLI)**
 
-The top layer (`jitsu.server` & `jitsu.cli`) exposes Jitsu to IDEs via MCP and handles the autonomous execution loop.
+The top layer (`jitsu.server` & `jitsu.cli`) exposes Jitsu to IDEs and handles the execution loop. It is completely decoupled from domain logic via Dependency Injection.
 
-* **Planning & Execution Tools**: An extensive MCP Tool suite (`jitsu_get_planning_context`, `jitsu_submit_epic`, `jitsu_request_context`) allows agents to gather repository intelligence and queue their own future phases dynamically (*Progressive Disclosure*).
-* **Two-Way IPC Handshake**: A background TCP daemon (`jitsu serve`) constantly listens for new epics via `jitsu submit`, seamlessly injecting them into the running MCP server without agent interruption.
-* **Just-based Git Lifecycle**: Destructive operations are delegated to `just` recipes (`just commit`, `just sync`), providing a controlled security boundary for repository changes.
+* **Dynamic Tool Registry (`registry.py` & `handlers.py`)**: The MCP Server (`mcp_server.py`) acts purely as a transport mechanism (stdio/JSON-RPC). It delegates all tool execution to a dynamic `ToolRegistry` and injected `ToolHandlers`, preventing God-Module anti-patterns.
+* **Planning & Execution Tools**: An extensive tool suite (`jitsu_get_planning_context`, `jitsu_submit_epic`, `jitsu_request_context`) allows agents to gather intelligence and queue future phases dynamically (*Progressive Disclosure*).
+* **Two-Way IPC Handshake**: A background TCP daemon (`jitsu serve`) constantly listens for new epics via `jitsu submit`, seamlessly injecting them into the running MCP server.
+* **Just-based Git Lifecycle**: Destructive operations are delegated to `just` recipes (`just commit`, `just sync`), providing a controlled security boundary.
 
 ---
 
@@ -77,4 +78,3 @@ graph TD
     F --> G[git_commit]
     G --> H[report_status]
     H --> D
-```

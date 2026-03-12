@@ -18,11 +18,11 @@ Key pillars of our mission:
 
 Jitsu is built on a robust, layered foundation to ensure high fidelity and autonomous execution:
 
-### [Layer 1: The Core (Models)](Jitsu%20Architecture%20Overview.md#layer-1-strict-pydantic-models-the-core)
+### [Layer 0: The Domain (Models)](Jitsu%20Architecture%20Overview.md#layer-0-strict-pydantic-models-the-core)
 
 Rigorous Pydantic models defining the communication protocol between the orchestrator and the agent.
 
-### [Layer 1.5: The Engine (Core & State)](Jitsu%20Architecture%20Overview.md#layer-15-core--state-the-engine)
+### [Layer 1: The Engine (Core & State)](Jitsu%20Architecture%20Overview.md#layer-1-core--state-the-engine)
 
 The logic layer that parses directives, manages task lifecycles, and compiles JIT context manifests.
 
