@@ -37,6 +37,7 @@ dev = [
     "deptry",
     "pre-commit",
     "vulture>=2.15",
+    "complexipy>=5.2.0",
 ]
 
 [tool.hatch.build.targets.wheel]

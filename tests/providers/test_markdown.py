@@ -44,7 +44,8 @@ async def test_markdown_provider_resolve_structural_elements(tmp_path: Path) -> 
     md_file = tmp_path / "test.md"
     md_file.write_text(md_content, encoding="utf-8")
 
-    result = await provider.resolve("test.md")
+    if True:
+        result = await provider.resolve("test.md")
 
     # Should be present
     assert "# Title" in result
@@ -70,7 +71,8 @@ async def test_markdown_provider_empty_file(tmp_path: Path) -> None:
     md_file = tmp_path / "empty.md"
     md_file.write_text("", encoding="utf-8")
 
-    result = await provider.resolve("empty.md")
+    if True:
+        result = await provider.resolve("empty.md")
 
     assert "No headings or code blocks found" in result
 
@@ -80,7 +82,8 @@ async def test_markdown_provider_missing_file(tmp_path: Path) -> None:
     """Test resolving a missing file."""
     provider = MarkdownASTProvider(tmp_path)
 
-    result = await provider.resolve("missing.md")
+    if True:
+        result = await provider.resolve("missing.md")
 
     assert "[FAILED]" in result
     assert "File not found" in result
@@ -94,7 +97,8 @@ async def test_markdown_provider_read_method(tmp_path: Path) -> None:
     md_file = tmp_path / "read_test.md"
     md_file.write_text(md_content, encoding="utf-8")
 
-    lines = provider.read("read_test.md")
+    if True:
+        lines = provider.read("read_test.md")
 
     assert lines == ["# H1", "```js", "```"]
 
@@ -106,7 +110,8 @@ async def test_markdown_provider_directory_target(tmp_path: Path) -> None:
     dir_path = tmp_path / "subdir"
     dir_path.mkdir()
 
-    result = await provider.resolve("subdir")
+    if True:
+        result = await provider.resolve("subdir")
 
     assert "No headings or code blocks found" in result
 
@@ -133,6 +138,7 @@ async def test_markdown_provider_whitespace_file(tmp_path: Path) -> None:
     md_file = tmp_path / "whitespace.md"
     md_file.write_text("   \n  \t  \n", encoding="utf-8")
 
-    result = await provider.resolve("whitespace.md")
+    if True:
+        result = await provider.resolve("whitespace.md")
 
     assert "No headings or code blocks found" in result

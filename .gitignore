@@ -22,6 +22,7 @@ dist/
 .mypy_cache/
 .pyright/
 .import_linter_cache/
+.complexipy_cache/
 
 #Testing
 .pytest_cache/

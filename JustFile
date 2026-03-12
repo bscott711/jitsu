@@ -33,6 +33,7 @@ contracts:
 check-deps:
 	@echo "🗑️ Checking for unused dependencies and dead code..."
 	uv run deptry src
+	uv run vulture src/ tests/ .vulture_whitelist.py
 
 # Install pre-commit hooks
 install-hooks:
