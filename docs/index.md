@@ -1,6 +1,6 @@
-# **Jitsu (実) Wiki**
+# **Jitsu**
 
-Welcome to the **Jitsu** documentation. Jitsu (Japanese for "Truth" or "Substance") is an **AST-first, strictly-typed AI orchestrator** designed to eliminate "Prompt Debt" and "Context Drift" in AI-capable IDEs.
+Welcome to the **Jitsu** documentation. Jitsu is an **AST-first, strictly-typed AI orchestrator** designed to eliminate "Prompt Debt" and "Context Drift" in AI-capable IDEs.
 
 ## Our Mission
 

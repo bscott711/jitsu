@@ -11,9 +11,9 @@ Jitsu solves this by forcing the agent to connect via the Model Context Protocol
 
 We enforce a one-way dependency flow to ensure the system remains perfectly decoupled:
 
-Layer 1 - The Directive Engine (jitsu.models): Pure, strict Pydantic V2 schemas (AgentDirective, PhaseReport, ContextTarget). This is our core domain. It knows nothing about the outside world. Immutability (frozen=True) and strict typing are mandatory.
+Layer 0 - The Directive Engine (jitsu.models): Pure, strict Pydantic V2 schemas (AgentDirective, PhaseReport, ContextTarget). This is our core domain. It knows nothing about the outside world. Immutability (frozen=True) and strict typing are mandatory.
 
-Layer 1.5 - Core & State (jitsu.core): The ContextCompiler and JitsuStateManager. This orchestrates the queue and weaves the directives together with the provider data into optimized Markdown.
+Layer 1 - Core & State (jitsu.core): The ContextCompiler and JitsuStateManager. This orchestrates the queue and weaves the directives together with the provider data into optimized Markdown.
 
 Layer 2 - The Providers (jitsu.providers): The adapters that inspect the real world. FileStateProvider, AST dumpers, Pydantic schema extractors, Markdown structural parsers, Git analyzers, and EnvVar readers. This layer MUST be AST-First to strip noise out of the LLM context.
 

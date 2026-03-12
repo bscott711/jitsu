@@ -57,4 +57,4 @@ Jitsu exposes a suite of tools via the Model Context Protocol (MCP) to allow IDE
 - **Parameters**:
   - `message` (string): A Conventional Commit message (e.g., `feat: added routing`).
   - `sync` (boolean): If true, runs `git push` after committing.
-- **Note**: This delegates to the repository's `just commit` and `just sync` recipes to ensure security and pre-commit hooks are respected.
+- **Note**: This delegates to the repository's `just message` and `just commit` recipes to ensure security and pre-commit hooks are respected.

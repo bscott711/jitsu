@@ -1,8 +1,8 @@
-# **Jitsu (実)**
+# **Jitsu**
 
 ## **Autonomous, AST-Aware, Self-Healing AI Engineering Agent**
 
-**Jitsu** (実 / "Truth") is an orchestration layer designed to eliminate **Prompt Debt**, **Context Drift**, and **LLM Laziness** in AI-driven software engineering. It shifts context preparation from the agent's limited window to a high-performance Python engine, serving the absolute "ground truth" of your codebase **Just-In-Time (JIT)**.
+**Jitsu** is an orchestration layer designed to eliminate **Prompt Debt**, **Context Drift**, and **LLM Laziness** in AI-driven software engineering. It shifts context preparation from the agent's limited window to a high-performance Python engine, serving the absolute "ground truth" of your codebase **Just-In-Time (JIT)**.
 
 ### **✨ v0.2.0 Architecture Highlights**
 
