@@ -1,0 +1,126 @@
+[
+  {
+    "epic_id": "wiki-documentation-build",
+    "phase_id": "phase-01-wiki-scaffold",
+    "module_scope": "docs/index.md",
+    "instructions": "Create a ReadTheDocs/MkDocs style landing page at `docs/index.md` (and update `README.md` to point to it). The index should explain Jitsu's core mission: an AST-first, strictly-typed AI orchestrator preventing 'Context Drift' via Progressive Disclosure and MCP. Outline the new 4-layer architecture briefly (Layer 0 to Layer 3), setting up the table of contents for the wiki.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "README.md",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not document the individual layers deeply here; keep it high-level and act as a table of contents."
+    ],
+    "completion_criteria": [
+      "`docs/index.md` is created as a wiki homepage.",
+      "`README.md` is updated to act as a lightweight GitHub front-door pointing to the docs."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "wiki-documentation-build",
+    "phase_id": "phase-02-domain-and-core-docs",
+    "module_scope": "docs/architecture",
+    "instructions": "Create `docs/architecture/layer_0_domain.md` and `docs/architecture/layer_1_core.md`. In Layer 0, document the strict zero-dependency Pydantic V2 schemas (AgentDirective, PhaseReport). In Layer 1, document the ContextCompiler (AST-First/AUTO fallback) and JitsuStateManager. Ensure you explain *why* Layer 0 is completely isolated from the outside world.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/state.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not paste massive blocks of raw source code; document the concepts, classes, and their responsibilities.",
+      "Do not refer to Layer 1 as 'Layer 1.5'. The domain is Layer 0, Core is Layer 1."
+    ],
+    "completion_criteria": [
+      "Layer 0 and Layer 1 documentation files are created and accurately reflect the strict DDD boundaries."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "wiki-documentation-build",
+    "phase_id": "phase-03-providers-and-transport-docs",
+    "module_scope": "docs/architecture",
+    "instructions": "Create `docs/architecture/layer_2_providers.md` and `docs/architecture/layer_3_transport.md`. For Layer 2, explain the ProviderRegistry and how AST-first parsing strips LLM noise. For Layer 3, explicitly document the decoupled architecture where `mcp_server.py` acts only as a transport mechanism, delegating to `handlers.py` and `registry.py`.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/providers/base.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/handlers.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not claim mcp_server.py handles routing directly; explain the Dependency Injection of ToolHandlers."
+    ],
+    "completion_criteria": [
+      "Layer 2 and Layer 3 documentation files are created, accurately reflecting the decoupling."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "wiki-documentation-build",
+    "phase_id": "phase-04-reference-docs",
+    "module_scope": "docs/reference",
+    "instructions": "Create `docs/reference/cli.md` and `docs/reference/mcp_tools.md`. Document all Typer CLI commands and the 8 core MCP tools registered in `handlers.py`. Ensure command usage and tool parameters are clearly described.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/handlers.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not hallucinate CLI commands or tools that do not exist in the provided structure context."
+    ],
+    "completion_criteria": [
+      "CLI and MCP Tools reference pages are fully populated and accurate."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]
