@@ -44,11 +44,11 @@ class JitsuOrchestrator:
         state_manager: JitsuStateManager | None = None,
     ) -> None:
         """Initialise the orchestrator with optional DI'd collaborators."""
-        self._planner = planner
-        self._executor = executor or JitsuExecutor()
-        self._storage = storage or EpicStorage()
-        self._state_manager = state_manager or JitsuStateManager()
-        self._on_progress = on_progress
+        self.planner = planner
+        self.executor = executor or JitsuExecutor()
+        self.storage = storage or EpicStorage()
+        self.state_manager = state_manager or JitsuStateManager()
+        self.on_progress = on_progress
 
     # ------------------------------------------------------------------
     # Public API
@@ -84,13 +84,13 @@ class JitsuOrchestrator:
             typer.Exit: On any planning failure.
 
         """
-        planner = self._planner or JitsuPlanner(objective=objective, relevant_files=files)
+        planner = self.planner or JitsuPlanner(objective=objective, relevant_files=files)
 
         directives: list[AgentDirective] | None = None
 
         def _progress(msg: str) -> None:
-            if self._on_progress:
-                self._on_progress(msg)
+            if self.on_progress:
+                self.on_progress(msg)
 
         try:
             try:
@@ -114,7 +114,7 @@ class JitsuOrchestrator:
                     raise
 
         except (RuntimeError, openai.APIStatusError, InstructorRetryException) as e:
-            self._handle_planner_error(e, verbose=verbose)
+            self.handle_planner_error(e, verbose=verbose)
 
         if not directives:
             typer.secho(
@@ -172,7 +172,7 @@ class JitsuOrchestrator:
 
         """
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        out = self._storage.current_dir / f"epic_{timestamp}.json"
+        out = self.storage.current_dir / f"epic_{timestamp}.json"
 
         typer.secho(
             f"🧠 Step 1: Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True
@@ -181,21 +181,21 @@ class JitsuOrchestrator:
         await self.execute_plan(objective, files, out, model=model, verbose=verbose)
 
         typer.secho(
-            f"✅ Plan successfully generated and saved to {self._storage.rel_path(out)}",
+            f"✅ Plan successfully generated and saved to {self.storage.rel_path(out)}",
             fg=typer.colors.GREEN,
             err=True,
         )
 
         typer.secho("📡 Step 2: Submitting plan to server...", fg=typer.colors.CYAN, err=True)
         try:
-            payload = self._storage.read_bytes(out)
-            response = await self._send_payload(payload)
+            payload = self.storage.read_bytes(out)
+            response = await self.send_payload(payload)
 
             if response.startswith("ACK"):
                 typer.secho(f"✅ {response}", fg=typer.colors.GREEN, bold=True, err=True)
-                dest = await run_sync(self._storage.archive, out)
+                dest = await run_sync(self.storage.archive, out)
                 typer.secho(
-                    f"📂 Pipeline complete. Epic archived to {self._storage.completed_rel(dest)}",
+                    f"📂 Pipeline complete. Epic archived to {self.storage.completed_rel(dest)}",
                     fg=typer.colors.CYAN,
                     err=True,
                 )
@@ -237,7 +237,7 @@ class JitsuOrchestrator:
                 err=True,
             )
             try:
-                content = await run_sync(self._storage.read_text, file)
+                content = await run_sync(self.storage.read_text, file)
                 adapter = TypeAdapter(list[AgentDirective])
                 directives = adapter.validate_json(content)
                 out = file
@@ -268,7 +268,7 @@ class JitsuOrchestrator:
                 raise typer.Exit(1)
 
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-            out = self._storage.current_dir / f"epic_{timestamp}.json"
+            out = self.storage.current_dir / f"epic_{timestamp}.json"
 
             file_strings = [str(f) for f in context] if context else []
             typer.secho(
@@ -280,7 +280,7 @@ class JitsuOrchestrator:
 
         await self.run_autonomous(directives, out)
 
-    async def _send_payload(self, payload: bytes, port: int = 8765) -> str:
+    async def send_payload(self, payload: bytes, port: int = 8765) -> str:
         """Async helper to send the payload over TCP and await response."""
         try:
             async with await anyio.connect_tcp("127.0.0.1", port) as client:
@@ -333,7 +333,7 @@ class JitsuOrchestrator:
 
             try:
                 with typer.progressbar(length=100, label="Executing...") as progress:
-                    success = await self._executor.execute_directive(directive, prompt)
+                    success = await self.executor.execute_directive(directive, prompt)
                     progress.update(100)
             except MonotonicityError as e:
                 report = PhaseReport(
@@ -341,7 +341,7 @@ class JitsuOrchestrator:
                     status=PhaseStatus.STUCK,
                     agent_notes=str(e),
                 )
-                self._state_manager.update_phase(report)
+                self.state_manager.update_phase(report)
                 if out:
                     out.with_suffix(".state").write_text(report.model_dump_json())
 
@@ -359,7 +359,7 @@ class JitsuOrchestrator:
                     status=PhaseStatus.FAILED,
                     agent_notes="Max retries reached or verification failed.",
                 )
-                self._state_manager.update_phase(report)
+                self.state_manager.update_phase(report)
                 if out:
                     out.with_suffix(".state").write_text(report.model_dump_json())
 
@@ -403,10 +403,10 @@ class JitsuOrchestrator:
             out: The epic JSON file to archive.
 
         """
-        dest = await run_sync(self._storage.archive, out)
+        dest = await run_sync(self.storage.archive, out)
 
         typer.secho(
-            f"\n✨ Autonomous execution complete! Epic archived to {self._storage.completed_rel(dest)}",
+            f"\n✨ Autonomous execution complete! Epic archived to {self.storage.completed_rel(dest)}",
             fg=typer.colors.GREEN,
             bold=True,
             err=True,
@@ -434,7 +434,7 @@ class JitsuOrchestrator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _handle_planner_error(e: Exception, *, verbose: bool = False) -> None:
+    def handle_planner_error(e: Exception, *, verbose: bool = False) -> None:
         """
         Translate planner exceptions into CLI error output and exit.
 

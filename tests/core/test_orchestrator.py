@@ -113,13 +113,13 @@ async def test_orchestrator_execute_run_success(tmp_path: Path) -> None:
         _objective: str, _files: list[str], out: Path, **_kwargs: object
     ) -> list[AgentDirective]:
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps([directive.model_dump()]), encoding="utf-8")  # noqa: ASYNC240
+        await anyio.Path(out).write_text(json.dumps([directive.model_dump()]), encoding="utf-8")
         return [directive]
 
     with (
         patch.object(orchestrator, "run_plan", new_callable=AsyncMock) as mock_plan,
-        patch.object(orchestrator, "_send_payload", new_callable=AsyncMock) as mock_send,
-        patch.object(orchestrator._storage, "archive") as mock_archive,  # noqa: SLF001
+        patch.object(orchestrator, "send_payload", new_callable=AsyncMock) as mock_send,
+        patch.object(orchestrator.storage, "archive") as mock_archive,
     ):
         mock_plan.side_effect = mock_plan_side_effect
         mock_send.return_value = "ACK"
@@ -142,12 +142,12 @@ async def test_orchestrator_execute_run_server_error(tmp_path: Path) -> None:
         _objective: str, _files: list[str], out: Path, **_kwargs: object
     ) -> list[AgentDirective]:
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps([directive.model_dump()]), encoding="utf-8")  # noqa: ASYNC240
+        await anyio.Path(out).write_text(json.dumps([directive.model_dump()]), encoding="utf-8")
         return [directive]
 
     with (
         patch.object(orchestrator, "run_plan", new_callable=AsyncMock) as mock_plan,
-        patch.object(orchestrator, "_send_payload", new_callable=AsyncMock) as mock_send,
+        patch.object(orchestrator, "send_payload", new_callable=AsyncMock) as mock_send,
     ):
         mock_plan.side_effect = mock_plan_side_effect
         mock_send.return_value = "ERR"
@@ -215,7 +215,7 @@ async def test_orchestrator_send_payload_failure(tmp_path: Path) -> None:
     orchestrator = JitsuOrchestrator(storage=storage)
     with patch("anyio.connect_tcp", side_effect=ConnectionRefusedError()):
         with pytest.raises(typer.Exit) as exc:
-            await orchestrator._send_payload(b"test")  # noqa: SLF001
+            await orchestrator.send_payload(b"test")
         assert exc.value.exit_code == 1
 
 
@@ -230,7 +230,7 @@ async def test_orchestrator_send_payload_eof(tmp_path: Path) -> None:
     with patch(
         "anyio.connect_tcp", return_value=MagicMock(__aenter__=AsyncMock(return_value=mock_client))
     ):
-        res = await orchestrator._send_payload(b"test")  # noqa: SLF001
+        res = await orchestrator.send_payload(b"test")
         assert "ERR" in res
 
 
@@ -300,27 +300,27 @@ async def test_orchestrator_run_plan_general_exception(tmp_path: Path) -> None:
 
 
 def test_orchestrator_handle_planner_error_instructor() -> None:
-    """Test _handle_planner_error with InstructorRetryException."""
+    """Test handle_planner_error with InstructorRetryException."""
     e = InstructorRetryException("fail", n_attempts=1, total_usage=0)
     with pytest.raises(typer.Exit) as exc:
-        JitsuOrchestrator._handle_planner_error(e)  # noqa: SLF001
+        JitsuOrchestrator.handle_planner_error(e)
     assert exc.value.exit_code == 1
 
 
 def test_orchestrator_handle_planner_error_api_status() -> None:
-    """Test _handle_planner_error with APIStatusError."""
+    """Test handle_planner_error with APIStatusError."""
     error_response = httpx.Response(500, request=httpx.Request("POST", "url"))
     e = openai.APIStatusError("fail", response=error_response, body=None)
     with pytest.raises(typer.Exit) as exc:
-        JitsuOrchestrator._handle_planner_error(e)  # noqa: SLF001
+        JitsuOrchestrator.handle_planner_error(e)
     assert exc.value.exit_code == 1
 
 
 def test_orchestrator_handle_planner_error_runtime() -> None:
-    """Test _handle_planner_error with RuntimeError (API key)."""
+    """Test handle_planner_error with RuntimeError (API key)."""
     e = RuntimeError("OPENROUTER_API_KEY")
     with pytest.raises(typer.Exit) as exc:
-        JitsuOrchestrator._handle_planner_error(e)  # noqa: SLF001
+        JitsuOrchestrator.handle_planner_error(e)
     assert exc.value.exit_code == 1
 
 
@@ -361,11 +361,11 @@ async def test_orchestrator_run_plan_on_progress(tmp_path: Path) -> None:
 
 
 def test_orchestrator_handle_planner_error_verbose() -> None:
-    """Test _handle_planner_error with verbose=True."""
+    """Test handle_planner_error with verbose=True."""
     e = ValueError("fail")
     e.__cause__ = RuntimeError("cause")
     with pytest.raises(typer.Exit) as exc, patch("typer.secho"):
-        JitsuOrchestrator._handle_planner_error(e, verbose=True)  # noqa: SLF001
+        JitsuOrchestrator.handle_planner_error(e, verbose=True)
     assert exc.value.exit_code == 1
 
 
@@ -434,7 +434,7 @@ async def test_orchestrator_send_payload_direct(tmp_path: Path) -> None:
         "jitsu.core.orchestrator.anyio.connect_tcp",
         return_value=MagicMock(__aenter__=AsyncMock(return_value=mock_client)),
     ):
-        res = await orchestrator._send_payload(b"CMD")  # noqa: SLF001
+        res = await orchestrator.send_payload(b"CMD")
         assert res == "RESPONSE"
 
 
@@ -518,7 +518,7 @@ def test_handle_planner_error_instructor_verbose_direct() -> None:
     e.__cause__ = cause
 
     with patch("typer.secho") as mock_secho, pytest.raises(typer.Exit):
-        JitsuOrchestrator._handle_planner_error(e, verbose=True)  # noqa: SLF001
+        JitsuOrchestrator.handle_planner_error(e, verbose=True)
 
     calls = [str(c[0][0]) for c in mock_secho.call_args_list]
     assert any("CAUSE" in c for c in calls)
@@ -532,7 +532,7 @@ def test_handle_planner_error_general_verbose_direct() -> None:
     e.__cause__ = cause
 
     with patch("typer.secho") as mock_secho, pytest.raises(typer.Exit):
-        JitsuOrchestrator._handle_planner_error(e, verbose=True)  # noqa: SLF001
+        JitsuOrchestrator.handle_planner_error(e, verbose=True)
 
     calls = [str(c[0][0]) for c in mock_secho.call_args_list]
     assert any("DEBUG" in c for c in calls)

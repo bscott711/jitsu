@@ -65,7 +65,7 @@ class JitsuExecutor:
             logger.info("Updated file: %s", edit.filepath)
 
     @staticmethod
-    def _extract_first_failure_block(stderr: str) -> tuple[str, str | None]:
+    def extract_first_failure_block(stderr: str) -> tuple[str, str | None]:
         """Isolate the first actionable error block and parse the failing file path."""
         # 1. Pytest style
         # Look for ____ test_name ____ ... block
@@ -94,7 +94,7 @@ class JitsuExecutor:
         return "\n".join(lines[:20]), None
 
     @staticmethod
-    def _parse_failure_count(stderr: str) -> int:
+    def parse_failure_count(stderr: str) -> int:
         """Attempt to extract an error/failure count from command output."""
         # pytest: "1 failed", ruff: "Found 4 errors", etc.
         patterns = [
@@ -109,7 +109,7 @@ class JitsuExecutor:
                 return int(match.group(1))
         return 1  # Default to 1 if we can't find a count
 
-    def _run_verification(
+    def run_verification(
         self, commands: list[str]
     ) -> tuple[bool, VerificationFailureDetails | None]:
         """Execute verification commands and aggregate errors."""
@@ -117,11 +117,11 @@ class JitsuExecutor:
             logger.info("Running verification: %s", cmd)
             res = self.runner.run(cmd)
             if res.returncode != 0:
-                fail_count = self._parse_failure_count(res.stderr)
+                fail_count = self.parse_failure_count(res.stderr)
                 summary = (
                     f"Command '{cmd}' failed with {fail_count} errors (exit code {res.returncode})"
                 )
-                trimmed_block, failing_file = self._extract_first_failure_block(res.stderr)
+                trimmed_block, failing_file = self.extract_first_failure_block(res.stderr)
                 details = VerificationFailureDetails(
                     summary=summary,
                     trimmed=trimmed_block,
@@ -163,11 +163,11 @@ class JitsuExecutor:
                 )
 
                 if attempts > 0:
-                    self._enforce_scope(result.edits, directive.module_scope)
+                    self.enforce_scope(result.edits, directive.module_scope)
 
                 self._apply_edits(result.edits)
 
-                success, details = self._run_verification(directive.verification_commands)
+                success, details = self.run_verification(directive.verification_commands)
                 if success:
                     return True
 
@@ -209,7 +209,7 @@ class JitsuExecutor:
 
         return False
 
-    def _enforce_scope(self, edits: list[FileEdit], module_scope: str) -> None:
+    def enforce_scope(self, edits: list[FileEdit], module_scope: str) -> None:
         """Ensure all edits are within the allowed module scope."""
         for edit in edits:
             path = Path(edit.filepath)

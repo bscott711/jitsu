@@ -1,7 +1,6 @@
 # V2 Audit Report: `src/jitsu/models`
 
->
-> **Generated:** 2026-03-12 06:06:38 UTC
+> **Generated:** 2026-03-12 19:58:33 UTC
 
 ## 1. Dead Code Analysis (Vulture)
 
@@ -47,14 +46,20 @@ src/jitsu/models/execution.py:12: unused variable 'content' (60% confidence)
 src/jitsu/models/execution.py:18: unused variable 'model_config' (60% confidence)
 src/jitsu/models/execution.py:20: unused variable 'thoughts' (60% confidence)
 src/jitsu/models/execution.py:21: unused variable 'edits' (60% confidence)
+src/jitsu/models/execution.py:27: unused variable 'model_config' (60% confidence)
+src/jitsu/models/execution.py:29: unused variable 'summary' (60% confidence)
+src/jitsu/models/execution.py:30: unused variable 'trimmed' (60% confidence)
+src/jitsu/models/execution.py:31: unused variable 'failed_cmd' (60% confidence)
+src/jitsu/models/execution.py:32: unused variable 'failing_file' (60% confidence)
 ```
 
 ## 2. Cognitive Complexity (Complexipy)
 
 ```text
-──────────────────────────────────────── 🐙 complexipy ────────────────────────────────────────
-               No files were found with functions. No complexity was calculated.               
-────────────────────────────────── 🎉 Analysis completed! 🎉 ──────────────────────────────────
+───────────── 🐙 complexipy ─────────────
+ No files were found with functions. No  
+ complexity was calculated.              
+─────── 🎉 Analysis completed! 🎉 ───────
 ```
 
 ## 3. Linting (Ruff)

@@ -296,7 +296,8 @@ async def test_handle_report_status_stuck(
     state_manager.queue_directive(
         AgentDirective(epic_id="epic-1", phase_id="p2", module_scope="s", instructions="i")
     )
-    assert state_manager.pending_count == 2  # noqa: PLR2004
+    expected_pending = 2
+    assert state_manager.pending_count == expected_pending
 
     # The tool returns a list of TextContent
     result = handlers.handle_report_status({"phase_id": "phase-stuck", "status": "STUCK"})

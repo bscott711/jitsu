@@ -23,7 +23,7 @@ class ContextCompiler:
     def __init__(self, workspace_root: Path | None = None) -> None:
         """Initialize the compiler with registered providers."""
         self.workspace_root = workspace_root or Path.cwd()
-        self._providers: dict[str, BaseProvider] = {
+        self.providers: dict[str, BaseProvider] = {
             name: cls(self.workspace_root) for name, cls in ProviderRegistry.items()
         }
 
@@ -63,11 +63,11 @@ class ContextCompiler:
 
         for target in targets:
             if target.resolution_mode == TargetResolutionMode.AUTO:
-                context_data, provider_used = await self._resolve_auto(
+                context_data, provider_used = await self.resolve_auto(
                     target.target_identifier, target.provider_name
                 )
             else:
-                context_data, provider_used = await self._resolve_explicit(
+                context_data, provider_used = await self.resolve_explicit(
                     target.target_identifier, target.resolution_mode
                 )
 
@@ -115,7 +115,7 @@ class ContextCompiler:
 
         return "\n\n".join(payload)
 
-    async def _resolve_auto(self, target_id: str, preferred_provider: str) -> tuple[str, str]:
+    async def resolve_auto(self, target_id: str, preferred_provider: str) -> tuple[str, str]:
         """Attempt to resolve target: AST -> Pydantic -> Preferred -> FileState."""
         # Policy: Try AST first for Python structural logic
         if target_id.endswith(".py") or "/" in target_id:
@@ -151,7 +151,7 @@ class ContextCompiler:
 
     async def _try_resolve(self, provider_name: str, target_id: str) -> str | None:
         """Attempt to resolve with a specific provider, returning None on failure."""
-        provider = self._providers.get(provider_name)
+        provider = self.providers.get(provider_name)
         if not provider:
             return None
         res = await provider.resolve(target_id)
@@ -159,9 +159,7 @@ class ContextCompiler:
             return None
         return res
 
-    async def _resolve_explicit(
-        self, target_id: str, mode: TargetResolutionMode
-    ) -> tuple[str, str]:
+    async def resolve_explicit(self, target_id: str, mode: TargetResolutionMode) -> tuple[str, str]:
         """Resolve target using an explicit mode."""
         provider_name = {
             TargetResolutionMode.STRUCTURE_ONLY: "ast",
@@ -173,7 +171,7 @@ class ContextCompiler:
             logger.error("Unknown resolution mode provided: %s", mode)
             return "", "none"
 
-        provider = self._providers.get(provider_name)
+        provider = self.providers.get(provider_name)
         if not provider:
             logger.error("Provider '%s' not found for mode '%s'", provider_name, mode)
             return "", "none"

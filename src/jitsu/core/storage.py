@@ -17,7 +17,7 @@ class EpicStorage:
 
     def __init__(self, base_dir: Path | None = None) -> None:
         """Initialise storage with an optional base directory."""
-        self._base_dir = base_dir or Path.cwd()
+        self.base_dir = base_dir or Path.cwd()
 
     # ------------------------------------------------------------------
     # Directory helpers
@@ -26,14 +26,14 @@ class EpicStorage:
     @property
     def current_dir(self) -> Path:
         """Return the epics/current directory, creating it if necessary."""
-        p = self._base_dir / "epics" / "current"
+        p = self.base_dir / "epics" / "current"
         p.mkdir(parents=True, exist_ok=True)
         return p
 
     @property
     def completed_dir(self) -> Path:
         """Return the epics/completed directory, creating it if necessary."""
-        p = self._base_dir / "epics" / "completed"
+        p = self.base_dir / "epics" / "completed"
         p.mkdir(parents=True, exist_ok=True)
         return p
 
@@ -106,7 +106,7 @@ class EpicStorage:
             A human-readable relative path string.
 
         """
-        return str(path.relative_to(self._base_dir))
+        return str(path.relative_to(self.base_dir))
 
     def completed_rel(self, dest: Path) -> str:
         """

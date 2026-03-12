@@ -45,7 +45,7 @@ class JitsuPlanner:
         self.objective = objective
         self.relevant_files = relevant_files
         self._client = client
-        self._directives: list[AgentDirective] = []
+        self.directives: list[AgentDirective] = []
 
     async def generate_plan(
         self,
@@ -102,7 +102,7 @@ class JitsuPlanner:
             typer.secho(blueprint.model_dump_json(indent=2), fg=typer.colors.YELLOW, err=True)
 
         # Pass 2: Micro - Elaborate each phase
-        self._directives = []
+        self.directives: list[AgentDirective] = []
         for i, phase in enumerate(blueprint.phases):
             if on_progress:
                 on_progress(f"Elaborating Phase {i + 1} of {len(blueprint.phases)}...")
@@ -136,9 +136,9 @@ class JitsuPlanner:
                 )
                 typer.secho(directive.model_dump_json(indent=2), fg=typer.colors.CYAN, err=True)
 
-            self._directives.append(directive)
+            self.directives.append(directive)
 
-        return self._directives
+        return self.directives
 
     def save_plan(self, path: str | Path) -> None:
         """Save the generated plan to disk as a JSON file."""
@@ -148,5 +148,5 @@ class JitsuPlanner:
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Pydantic v2 model_dump for the list
-        json_data = [d.model_dump() for d in self._directives]
+        json_data = [d.model_dump() for d in self.directives]
         file_path.write_text(json.dumps(json_data, indent=2))

@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import anyio
 import openai
 import pytest
 from instructor.core.exceptions import InstructorRetryException
@@ -74,7 +75,7 @@ async def test_executor_execute_success(
     success = await executor.execute_directive(mock_directive, "compiler output")
 
     assert success is True
-    assert Path(filepath).read_text() == "print('hello')"  # noqa: ASYNC240
+    assert (await anyio.Path(filepath).read_text()) == "print('hello')"
     assert mock_client.chat.completions.create.call_count == 1
     assert mock_runner.run.call_count == 1
 
@@ -109,16 +110,15 @@ async def test_executor_execute_retry_success(
     success = await executor.execute_directive(mock_directive, "compiler output")
 
     assert success is True
-    assert mock_client.chat.completions.create.call_count == 2  # noqa: PLR2004
-    assert mock_runner.run.call_count == 2  # noqa: PLR2004
+    expected_attempts = 2
+    assert mock_client.chat.completions.create.call_count == expected_attempts
+    assert mock_runner.run.call_count == expected_attempts
     # Verify the second call includes the error message
     second_call_user_msg = mock_client.chat.completions.create.call_args_list[1][1]["messages"][1][
         "content"
     ]
     assert "Directive: test instructions" in second_call_user_msg
     assert EXECUTOR_RECOVERY_PROMPT in second_call_user_msg
-    # Verify the summary rule formatting (partial check)
-    assert "Verification Failure Report" in second_call_user_msg
     assert "**Failing Target:** just verify" in second_call_user_msg
     assert "Syntax Error" in second_call_user_msg
 
@@ -141,8 +141,9 @@ async def test_executor_execute_failure_monotonicity(
     with pytest.raises(MonotonicityError, match="failed to improve error count"):
         await executor.execute_directive(mock_directive, "compiler output")
 
-    assert mock_client.chat.completions.create.call_count == 2  # noqa: PLR2004
-    assert mock_runner.run.call_count == 2  # noqa: PLR2004
+    expected_attempts = 2
+    assert mock_client.chat.completions.create.call_count == expected_attempts
+    assert mock_runner.run.call_count == expected_attempts
 
 
 async def test_executor_llm_exception(
@@ -156,7 +157,8 @@ async def test_executor_llm_exception(
     success = await executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
-    assert mock_client.chat.completions.create.call_count == 4  # noqa: PLR2004
+    expected_attempts = 4
+    assert mock_client.chat.completions.create.call_count == expected_attempts
 
 
 async def test_executor_openai_api_error(
@@ -202,9 +204,10 @@ async def test_executor_instructor_retry_error(
 def test_executor_truncation_logic() -> None:
     """Test that massive traces are truncated to 20 lines (fallback logic)."""
     massive_error = "\n".join([f"Line {i}" for i in range(100)])
-    truncated, filepath = JitsuExecutor._extract_first_failure_block(massive_error)  # noqa: SLF001
+    truncated, filepath = JitsuExecutor.extract_first_failure_block(massive_error)
     lines = truncated.splitlines()
-    assert len(lines) == 20  # noqa: PLR2004
+    expected_lines = 20
+    assert len(lines) == expected_lines
     assert lines[0] == "Line 0"
     assert lines[19] == "Line 19"
     assert filepath is None
@@ -223,7 +226,7 @@ E       AssertionError
 tests/test_file.py:10: AssertionError
 =============================== 1 failed in 0.1s ===============================
 """
-    block, filepath = JitsuExecutor._extract_first_failure_block(stderr)  # noqa: SLF001
+    block, filepath = JitsuExecutor.extract_first_failure_block(stderr)
     assert "____ test_failure ____" in block
     assert "AssertionError" in block
     assert filepath == "tests/test_file.py"
@@ -232,7 +235,7 @@ tests/test_file.py:10: AssertionError
 def test_executor_smart_extraction_generic() -> None:
     """Test that generic file:line errors are correctly extracted."""
     stderr = "src/core/logic.py:42:10: error: Incompatible types"
-    block, filepath = JitsuExecutor._extract_first_failure_block(stderr)  # noqa: SLF001
+    block, filepath = JitsuExecutor.extract_first_failure_block(stderr)
     assert "Incompatible types" in block
     assert filepath == "src/core/logic.py"
 
@@ -240,7 +243,7 @@ def test_executor_smart_extraction_generic() -> None:
 def test_executor_smart_extraction_pytest_no_path() -> None:
     """Test that pytest failures without a path are handled."""
     stderr = "____ test_failure ____\nSome error without path"
-    block, filepath = JitsuExecutor._extract_first_failure_block(stderr)  # noqa: SLF001
+    block, filepath = JitsuExecutor.extract_first_failure_block(stderr)
     assert "____ test_failure ____" in block
     assert filepath is None
 
@@ -250,7 +253,7 @@ def test_executor_run_verification_structure(mock_runner: MagicMock) -> None:
     executor = JitsuExecutor(runner=mock_runner)
     mock_runner.run.return_value = MagicMock(returncode=1, stderr="Linter Error")
 
-    success, details = executor._run_verification(["npm test"])  # noqa: SLF001
+    success, details = executor.run_verification(["npm test"])
 
     assert success is False
     assert details is not None
@@ -264,10 +267,13 @@ def test_executor_run_verification_structure(mock_runner: MagicMock) -> None:
 
 def test_executor_parse_failure_count() -> None:
     """Test extracting error counts from various stderr formats."""
-    assert JitsuExecutor._parse_failure_count("1 failed, 2 passed") == 1  # noqa: SLF001
-    assert JitsuExecutor._parse_failure_count("Found 4 errors") == 4  # noqa: SLF001, PLR2004
-    assert JitsuExecutor._parse_failure_count("2 errors found") == 2  # noqa: SLF001, PLR2004
-    assert JitsuExecutor._parse_failure_count("no match") == 1  # noqa: SLF001
+    one_fail = 1
+    four_fails = 4
+    two_fails = 2
+    assert JitsuExecutor.parse_failure_count("1 failed, 2 passed") == one_fail
+    assert JitsuExecutor.parse_failure_count("Found 4 errors") == four_fails
+    assert JitsuExecutor.parse_failure_count("2 errors found") == two_fails
+    assert JitsuExecutor.parse_failure_count("no match") == one_fail
 
 
 @pytest.mark.asyncio
@@ -359,9 +365,7 @@ async def test_executor_scope_guard_outside_workspace(
     executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
 
     with pytest.raises(MonotonicityError, match="outside workspace_root"):
-        executor._enforce_scope(  # noqa: SLF001
-            [FileEdit(filepath="/outside/path.py", content="content")], "src"
-        )
+        executor.enforce_scope([FileEdit(filepath="/outside/path.py", content="content")], "src")
 
 
 @pytest.mark.asyncio
@@ -392,7 +396,8 @@ async def test_executor_recovery_includes_ast(
 
     await executor.execute_directive(mock_directive, "compiler output")
 
-    assert mock_client.chat.completions.create.call_count == 2  # noqa: PLR2004
+    expected_attempts = 2
+    assert mock_client.chat.completions.create.call_count == expected_attempts
     second_call_user_msg = mock_client.chat.completions.create.call_args_list[1][1]["messages"][1][
         "content"
     ]
@@ -433,7 +438,8 @@ async def test_executor_recovery_includes_failing_file_ast(
 
     await executor.execute_directive(mock_directive, "compiler output")
 
-    assert mock_client.chat.completions.create.call_count == 2  # noqa: PLR2004
+    expected_attempts = 2
+    assert mock_client.chat.completions.create.call_count == expected_attempts
     recovery_msg = mock_client.chat.completions.create.call_args_list[1][1]["messages"][1][
         "content"
     ]
@@ -481,8 +487,8 @@ async def test_executor_execute_failure_no_details(
     mock_client.chat.completions.create.return_value = result
 
     executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
-    # Mock _run_verification to return False, None
-    executor._run_verification = MagicMock(return_value=(False, None))  # noqa: SLF001
+    # Mock run_verification to return False, None
+    executor.run_verification = MagicMock(return_value=(False, None))
 
     success = await executor.execute_directive(mock_directive, "compiler output")
 

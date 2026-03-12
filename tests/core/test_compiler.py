@@ -1,5 +1,6 @@
 """Tests for the Context Compiler engine."""
 
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -55,7 +56,7 @@ async def test_compile_valid_provider() -> None:
     # We use AsyncMock because the compiler expects resolve() to be awaitable
     mock_provider = AsyncMock()
     mock_provider.resolve.return_value = "MOCK_FILE_CONTENT"
-    compiler._providers["file"] = mock_provider  # noqa: SLF001
+    compiler.providers["file"] = mock_provider
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -80,7 +81,7 @@ async def test_compile_auto_ast_preference() -> None:
     compiler = ContextCompiler()
     mock_ast = AsyncMock()
     mock_ast.resolve.return_value = "AST_OUTPUT"
-    compiler._providers["ast"] = mock_ast  # noqa: SLF001
+    compiler.providers["ast"] = mock_ast
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -107,11 +108,11 @@ async def test_compile_auto_fallback_to_file_on_ast_failure() -> None:
     compiler = ContextCompiler()
     mock_ast = AsyncMock()
     mock_ast.resolve.return_value = "### [FAILED] AST error"
-    compiler._providers["ast"] = mock_ast  # noqa: SLF001
+    compiler.providers["ast"] = mock_ast
 
     mock_file = AsyncMock()
     mock_file.resolve.return_value = "FILE_CONTENT"
-    compiler._providers["file"] = mock_file  # noqa: SLF001
+    compiler.providers["file"] = mock_file
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -161,7 +162,7 @@ async def test_compile_auto_pydantic_trigger() -> None:
     compiler = ContextCompiler()
     mock_pydantic = AsyncMock()
     mock_pydantic.resolve.return_value = "SCHEMA_OUTPUT"
-    compiler._providers["pydantic"] = mock_pydantic  # noqa: SLF001
+    compiler.providers["pydantic"] = mock_pydantic
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -187,7 +188,7 @@ async def test_explicit_mode_failure_string_in_manifest() -> None:
     compiler = ContextCompiler()
     mock_file = AsyncMock()
     mock_file.resolve.return_value = "ERROR: something happened"
-    compiler._providers["file"] = mock_file  # noqa: SLF001
+    compiler.providers["file"] = mock_file
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -213,7 +214,7 @@ async def test_compile_explicit_schema_mode() -> None:
     compiler = ContextCompiler()
     mock_pydantic = AsyncMock()
     mock_pydantic.resolve.return_value = "SCHEMA_JSON"
-    compiler._providers["pydantic"] = mock_pydantic  # noqa: SLF001
+    compiler.providers["pydantic"] = mock_pydantic
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -237,7 +238,7 @@ async def test_compile_explicit_schema_mode() -> None:
 async def test_explicit_mode_missing_provider_failure() -> None:
     """Test explicit mode failure when provider is missing."""
     compiler = ContextCompiler()
-    del compiler._providers["ast"]  # noqa: SLF001
+    del compiler.providers["ast"]
 
     directive = AgentDirective(
         epic_id="epic-1",
@@ -260,8 +261,7 @@ async def test_explicit_mode_missing_provider_failure() -> None:
 async def test_unknown_resolution_mode_internal() -> None:
     """Test internal _resolve_explicit with invalid mode."""
     compiler = ContextCompiler()
-    # Use type: ignore to bypass enum check for testing
-    res, provider = await compiler._resolve_explicit("target", "INVALID")  # type: ignore # noqa: SLF001
+    res, provider = await compiler.resolve_explicit("target", cast("Any", "INVALID"))
     assert res == ""
     assert provider == "none"
 
@@ -312,7 +312,7 @@ async def test_compiler_resolve_auto_tree_fallback() -> None:
     # We mock the tree provider to return a success string.
     # We pass a target without '.py' or '.' so AST and Pydantic skip it.
     with patch.object(DirectoryTreeProvider, "resolve", return_value="### Directory Tree"):
-        res, provider = await compiler._resolve_auto("my_directory", "file")  # noqa: SLF001
+        res, provider = await compiler.resolve_auto("my_directory", "file")
 
         assert provider == "tree"
         assert "### Directory Tree" in res
@@ -326,7 +326,7 @@ async def test_compiler_resolve_auto_unknown_preferred() -> None:
     with patch("jitsu.core.compiler.logger.warning") as mock_logger:
         # Pass a completely unknown provider name
         # It will fail all resolution and drop to the bottom, returning "none"
-        await compiler._resolve_auto("fake_target", "hallucinated_provider")  # noqa: SLF001
+        await compiler.resolve_auto("fake_target", "hallucinated_provider")
 
         mock_logger.assert_called_with("Unknown provider '%s' requested", "hallucinated_provider")
 
@@ -337,9 +337,9 @@ async def test_compiler_resolve_auto_git_diff_as_preferred() -> None:
     compiler = ContextCompiler()
     mock_git = AsyncMock()
     mock_git.resolve.return_value = "### Git Diff: HEAD"
-    compiler._providers["git_diff"] = mock_git  # noqa: SLF001
+    compiler.providers["git_diff"] = mock_git
 
-    res, provider = await compiler._resolve_auto("HEAD", "git_diff")  # noqa: SLF001
+    res, provider = await compiler.resolve_auto("HEAD", "git_diff")
 
     assert provider == "git_diff"
     assert "### Git Diff: HEAD" in res

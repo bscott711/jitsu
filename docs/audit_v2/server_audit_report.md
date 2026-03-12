@@ -1,7 +1,6 @@
 # V2 Audit Report: `src/jitsu/server`
 
->
-> **Generated:** 2026-03-12 06:06:38 UTC
+> **Generated:** 2026-03-12 19:58:33 UTC
 
 ## 1. Dead Code Analysis (Vulture)
 
@@ -14,26 +13,35 @@ src/jitsu/server/mcp_server.py:28: unused function 'handle_call_tool' (60% confi
 ## 2. Cognitive Complexity (Complexipy)
 
 ```text
-──────────────────────────────────────── 🐙 complexipy ────────────────────────────────────────
+───────────── 🐙 complexipy ─────────────
 server/client.py
     send_payload 2 PASSED
 
 server/handlers.py
     ToolHandlers::__init__ 0 PASSED
-    ToolHandlers::handle_git_status 0 PASSED
+    ToolHandlers::handle_git_status 0 
+PASSED
     ToolHandlers::register_all 0 PASSED
-    ToolHandlers::handle_get_next_phase 1 PASSED
-    ToolHandlers::handle_inspect_queue 1 PASSED
-    ToolHandlers::handle_get_planning_context 2 PASSED
-    ToolHandlers::handle_request_context 3 PASSED
-    ToolHandlers::handle_report_status 6 PASSED
-    ToolHandlers::handle_submit_epic 7 PASSED
-    ToolHandlers::handle_git_commit 9 PASSED
+    ToolHandlers::handle_get_next_phase 1
+PASSED
+    ToolHandlers::handle_inspect_queue 1 
+PASSED
+    ToolHandlers::handle_get_planning_con
+text 2 PASSED
+    ToolHandlers::handle_request_context 
+3 PASSED
+    ToolHandlers::handle_submit_epic 7 
+PASSED
+    ToolHandlers::handle_report_status 8 
+PASSED
+    ToolHandlers::handle_git_commit 9 
+PASSED
 
 server/ipc.py
     IPCServer::__init__ 0 PASSED
     IPCServer::serve 0 PASSED
-    IPCServer::_process_json_payload 1 PASSED
+    IPCServer::_process_json_payload 1 
+PASSED
     IPCServer::_handle_command 5 PASSED
     IPCServer::handle_client 9 PASSED
 
@@ -48,8 +56,9 @@ server/registry.py
     ToolRegistry::register 0 PASSED
     ToolRegistry::execute 7 PASSED
 
-All functions are within the allowed complexity.
-────────────────────────────────── 🎉 Analysis completed! 🎉 ──────────────────────────────────
+All functions are within the allowed 
+complexity.
+─────── 🎉 Analysis completed! 🎉 ───────
 ```
 
 ## 3. Linting (Ruff)
@@ -66,7 +75,7 @@ All checks passed!
 
 ## 5. Technical Debt (Inline Ignores)
 
-- **src/jitsu/server/handlers.py:130** ` except Exception as e:  # noqa: BLE001 `
+No inline ignores found! 🎉
 
 ---
 

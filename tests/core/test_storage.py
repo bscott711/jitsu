@@ -33,7 +33,7 @@ class TestEpicStorageDirectories:
         """EpicStorage defaults to Path.cwd() when base_dir is not given."""
         monkeypatch.chdir(tmp_path)
         s = EpicStorage()
-        assert s._base_dir == tmp_path  # noqa: SLF001
+        assert s.base_dir == tmp_path
 
 
 class TestEpicStorageReadText:

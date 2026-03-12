@@ -51,10 +51,11 @@ async def test_planner_plan_generation_success() -> None:
 
     assert len(plan) == 1
     assert plan[0].epic_id == "e1"
-    assert planner._directives == [directive]  # noqa: SLF001
+    assert planner.directives == [directive]
 
     # Verify progress calls
-    assert on_progress_mock.call_count == 2  # noqa: PLR2004
+    expected_calls = 2
+    assert on_progress_mock.call_count == expected_calls
     on_progress_mock.assert_any_call("Drafting Epic Blueprint...")
     on_progress_mock.assert_any_call("Elaborating Phase 1 of 1...")
 
@@ -130,7 +131,7 @@ async def test_planner_save_plan(tmp_path: Path) -> None:
         completion_criteria=["done"],
         verification_commands=["just verify"],
     )
-    planner._directives = [directive]  # noqa: SLF001
+    planner.directives = [directive]
 
     plan_path = tmp_path / "subdir" / "epic.json"
     planner.save_plan(plan_path)

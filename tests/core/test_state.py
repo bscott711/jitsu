@@ -70,7 +70,8 @@ def test_state_manager_remaining_count() -> None:
     manager.queue_directive(d2)
     manager.queue_directive(d3)
 
-    assert manager.get_remaining_count("epic-1") == 2  # noqa: PLR2004
+    expected_remaining = 2
+    assert manager.get_remaining_count("epic-1") == expected_remaining
     assert manager.get_remaining_count("epic-2") == 1
 
     manager.get_next_directive()  # remove p1

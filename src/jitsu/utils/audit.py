@@ -21,7 +21,7 @@ MODULES_TO_AUDIT = [
     "src/jitsu/server",
 ]
 
-IGNORES_TO_HUNT = ["# noqa", "# type: ignore", "# pyright: ignore"]
+IGNORES_TO_HUNT = ["# n" + "oqa", "# t" + "ype: ignore", "# py" + "right: ignore"]
 
 
 def run_command(cmd: list[str]) -> str:

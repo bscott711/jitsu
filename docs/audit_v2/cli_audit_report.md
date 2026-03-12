@@ -1,7 +1,6 @@
 # V2 Audit Report: `src/jitsu/cli`
 
->
-> **Generated:** 2026-03-12 06:06:38 UTC
+> **Generated:** 2026-03-12 19:58:33 UTC
 
 ## 1. Dead Code Analysis (Vulture)
 
@@ -19,7 +18,7 @@ src/jitsu/cli/main.py:322: unused function 'auto' (60% confidence)
 ## 2. Cognitive Complexity (Complexipy)
 
 ```text
-──────────────────────────────────────── 🐙 complexipy ────────────────────────────────────────
+───────────── 🐙 complexipy ─────────────
 cli/main.py
     main 0 PASSED
     main_callback 0 PASSED
@@ -32,8 +31,9 @@ cli/main.py
     serve 8 PASSED
     init 9 PASSED
 
-All functions are within the allowed complexity.
-────────────────────────────────── 🎉 Analysis completed! 🎉 ──────────────────────────────────
+All functions are within the allowed 
+complexity.
+─────── 🎉 Analysis completed! 🎉 ───────
 ```
 
 ## 3. Linting (Ruff)

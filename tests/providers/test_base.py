@@ -22,8 +22,10 @@ class DummyProvider(BaseProvider):
 
 def test_cannot_instantiate_base_provider() -> None:
     """Ensure BaseProvider cannot be instantiated directly."""
+    # We bypass the static check to test runtime enforcement
+    abstract_cls: type = BaseProvider
     with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-        BaseProvider(Path.cwd())  # type: ignore
+        abstract_cls(Path.cwd())
 
 
 async def test_dummy_provider_implementation() -> None:
