@@ -1,6 +1,7 @@
 """Autonomous execution engine for Jitsu directives."""
 
 import logging
+import re
 from pathlib import Path
 
 import openai
@@ -20,6 +21,10 @@ from jitsu.prompts import (
 from jitsu.providers.ast import ASTProvider
 
 logger = logging.getLogger(__name__)
+
+
+class MonotonicityError(Exception):
+    """Raised when the agent fails to improve or makes the situation worse."""
 
 
 class JitsuExecutor:
@@ -65,13 +70,32 @@ class JitsuExecutor:
         lines = full_stderr.splitlines()
         return "\n".join(lines[:20])
 
+    @staticmethod
+    def _parse_failure_count(stderr: str) -> int:
+        """Attempt to extract an error/failure count from command output."""
+        # pytest: "1 failed", ruff: "Found 4 errors", etc.
+        patterns = [
+            r"(\d+) failed",
+            r"Found (\d+) error",
+            r"(\d+) error(?:s)? found",
+            r"(\d+) errors",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, stderr, re.IGNORECASE)
+            if match:
+                return int(match.group(1))
+        return 1  # Default to 1 if we can't find a count
+
     def _run_verification(self, commands: list[str]) -> tuple[bool, str, str, str]:
         """Execute verification commands and aggregate errors."""
         for cmd in commands:
             logger.info("Running verification: %s", cmd)
             res = self.runner.run(cmd)
             if res.returncode != 0:
-                summary = f"Command '{cmd}' failed with exit code {res.returncode}"
+                fail_count = self._parse_failure_count(res.stderr)
+                summary = (
+                    f"Command '{cmd}' failed with {fail_count} errors (exit code {res.returncode})"
+                )
                 trimmed_block = self._extract_first_failure_block(res.stderr)
                 return False, summary, trimmed_block, cmd
 
@@ -82,6 +106,7 @@ class JitsuExecutor:
         """Execute a single directive with retries on verification failure."""
         max_retries = 3
         attempts = 0
+        prev_fail_count = float("inf")
 
         system_prompt = EXECUTOR_SYSTEM_PROMPT.format(
             module_scope=directive.module_scope,
@@ -107,6 +132,9 @@ class JitsuExecutor:
                     ],
                 )
 
+                if attempts > 0:
+                    self._enforce_scope(result.edits, directive.module_scope)
+
                 self._apply_edits(result.edits)
 
                 success, summary, trimmed, _failed_cmd = self._run_verification(
@@ -115,21 +143,11 @@ class JitsuExecutor:
                 if success:
                     return True
 
-                # Recovery Augmentation
-                recovery_payload = (
-                    EXECUTOR_RECOVERY_PROMPT
-                    + "\n\n"
-                    + VERIFICATION_SUMMARY_RULE.format(summary=summary, trimmed_block=trimmed)
+                prev_fail_count = self._check_monotonicity(summary, prev_fail_count)
+                base_user_message = await self._augment_recovery_message(
+                    base_user_message, summary, trimmed, result.edits
                 )
 
-                # Append AST for edited files to help the model recover if they were the cause
-                for edit in result.edits:
-                    if edit.filepath.endswith(".py"):
-                        ast_ctx = await self.ast_provider.resolve(edit.filepath)
-                        recovery_payload += f"\n\n{ast_ctx}"
-
-                base_user_message += f"\n\n{recovery_payload}\n"
-                base_user_message += "Please fix the errors above."
                 attempts += 1
                 logger.warning(
                     "Verification failed (Attempt %d/%d). Retrying...",
@@ -151,11 +169,65 @@ class JitsuExecutor:
                     err=True,
                 )
                 return False
+            except MonotonicityError:
+                raise
             except Exception as e:
                 logger.exception("Error during execution step")
-                # Even on non-verification exceptions, we might want to retry if it's transient,
-                # but here we treat it like a failure.
                 base_user_message += f"\n\nExecution error: {e!s}\n"
                 attempts += 1
 
         return False
+
+    def _enforce_scope(self, edits: list[FileEdit], module_scope: str) -> None:
+        """Ensure all edits are within the allowed module scope."""
+        for edit in edits:
+            path = Path(edit.filepath)
+            # If absolute, try making it relative to workspace_root
+            if path.is_absolute():
+                try:
+                    path = path.relative_to(self.workspace_root)
+                except ValueError:
+                    # Not under workspace_root, definitely out of scope
+                    msg = f"FileEdit path '{edit.filepath}' is outside workspace_root."
+                    raise MonotonicityError(msg) from None
+
+            if not path.as_posix().startswith(module_scope):
+                msg = (
+                    f"FileEdit path '{edit.filepath}' is outside module_scope "
+                    f"'{module_scope}' during retry."
+                )
+                raise MonotonicityError(msg)
+
+    def _check_monotonicity(self, summary: str, prev_fail_count: float) -> int:
+        """Verify that the error count has improved, otherwise raise MonotonicityError."""
+        fail_match = re.search(r"(\d+) errors", summary)
+        fail_count = int(fail_match.group(1)) if fail_match else 1
+
+        if fail_count >= prev_fail_count:
+            msg = (
+                f"Retry failed to improve error count (Current: {fail_count}, "
+                f"Prev: {prev_fail_count}). Aborting."
+            )
+            raise MonotonicityError(msg)
+        return fail_count
+
+    async def _augment_recovery_message(
+        self,
+        base_message: str,
+        summary: str,
+        trimmed: str,
+        edits: list[FileEdit],
+    ) -> str:
+        """Append recovery hint, failure details, and AST context to the user message."""
+        payload = (
+            EXECUTOR_RECOVERY_PROMPT
+            + "\n\n"
+            + VERIFICATION_SUMMARY_RULE.format(summary=summary, trimmed_block=trimmed)
+        )
+
+        for edit in edits:
+            if edit.filepath.endswith(".py"):
+                ast_ctx = await self.ast_provider.resolve(edit.filepath)
+                payload += f"\n\n{ast_ctx}"
+
+        return base_message + f"\n\n{payload}\nPlease fix the errors above."

@@ -49,6 +49,17 @@ class JitsuStateManager:
         self._reports.append(report)
         return self._phase_to_epic.get(report.phase_id)
 
+    def on_stuck(self, report: PhaseReport) -> None:
+        """
+        Handle a stuck phase by recording its status and halting the entire queue.
+
+        Args:
+            report: The phase report with status PhaseStatus.STUCK.
+
+        """
+        self.update_phase_status(report)
+        self.clear_queue()
+
     def get_remaining_count(self, epic_id: str) -> int:
         """
         Return the number of remaining phases in the queue for a specific epic.

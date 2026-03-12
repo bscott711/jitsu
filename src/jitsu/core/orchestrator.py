@@ -13,7 +13,7 @@ from instructor.core.exceptions import InstructorRetryException
 from pydantic import TypeAdapter, ValidationError
 
 from jitsu.core.compiler import ContextCompiler
-from jitsu.core.executor import JitsuExecutor
+from jitsu.core.executor import JitsuExecutor, MonotonicityError
 from jitsu.core.planner import JitsuPlanner
 from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective
@@ -324,9 +324,18 @@ class JitsuOrchestrator:
                 prompt = await _compiler.compile_directive(directive)
                 progress.update(100)
 
-            with typer.progressbar(length=100, label="Executing...") as progress:
-                success = await self._executor.execute_directive(directive, prompt)
-                progress.update(100)
+            try:
+                with typer.progressbar(length=100, label="Executing...") as progress:
+                    success = await self._executor.execute_directive(directive, prompt)
+                    progress.update(100)
+            except MonotonicityError as e:
+                typer.secho(
+                    f"\n❌ Phase {directive.phase_id} is STUCK: {e}",
+                    fg=typer.colors.RED,
+                    bold=True,
+                    err=True,
+                )
+                raise typer.Exit(1) from e
 
             if not success:
                 typer.secho(

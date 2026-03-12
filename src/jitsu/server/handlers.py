@@ -41,6 +41,15 @@ class ToolHandlers:
 
         try:
             report = PhaseReport.model_validate(arguments)
+            if report.status == PhaseStatus.STUCK:
+                self.state_manager.on_stuck(report)
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Epic HALTED. Phase {report.phase_id} is stuck and cannot progress.",
+                    )
+                ]
+
             epic_id = self.state_manager.update_phase_status(report)
 
             if report.status == PhaseStatus.SUCCESS and epic_id:

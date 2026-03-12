@@ -279,3 +279,27 @@ async def test_register_all(handlers: ToolHandlers) -> None:
     mock_registry = MagicMock()
     handlers.register_all(mock_registry)
     assert mock_registry.register.call_count == EXPECTED_TOOL_COUNT
+
+
+@pytest.mark.asyncio
+async def test_handle_report_status_stuck(
+    handlers: ToolHandlers, state_manager: JitsuStateManager
+) -> None:
+    """Test reporting a STUCK status halts the epic."""
+    directive = AgentDirective(
+        epic_id="epic-1",
+        phase_id="phase-stuck",
+        module_scope="src",
+        instructions="Test",
+    )
+    state_manager.queue_directive(directive)
+    state_manager.queue_directive(
+        AgentDirective(epic_id="epic-1", phase_id="p2", module_scope="s", instructions="i")
+    )
+    assert state_manager.pending_count == 2  # noqa: PLR2004
+
+    # The tool returns a list of TextContent
+    result = handlers.handle_report_status({"phase_id": "phase-stuck", "status": "STUCK"})
+    assert isinstance(result[0], TextContent)
+    assert "Epic HALTED" in result[0].text
+    assert state_manager.pending_count == 0

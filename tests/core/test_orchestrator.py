@@ -11,6 +11,7 @@ import pytest
 import typer
 from instructor.core.exceptions import InstructorRetryException
 
+from jitsu.core.executor import MonotonicityError
 from jitsu.core.orchestrator import JitsuOrchestrator
 from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective
@@ -429,13 +430,29 @@ async def test_orchestrator_send_payload_direct(tmp_path: Path) -> None:
     mock_client.send = AsyncMock()
     mock_client.send_eof = AsyncMock()
 
-    # We patch connect_tcp in the module where it's used
     with patch(
         "jitsu.core.orchestrator.anyio.connect_tcp",
         return_value=MagicMock(__aenter__=AsyncMock(return_value=mock_client)),
     ):
         res = await orchestrator._send_payload(b"CMD")  # noqa: SLF001
         assert res == "RESPONSE"
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_phases_stuck(tmp_path: Path) -> None:
+    """Test JitsuOrchestrator.execute_phases when executor raises MonotonicityError."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive = AsyncMock(side_effect=MonotonicityError("Stuck"))
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    with pytest.raises(typer.Exit) as exc:
+        await orchestrator.execute_phases([directive], compiler=mock_compiler)
+    assert exc.value.exit_code == 1
 
 
 @pytest.mark.asyncio
