@@ -35,6 +35,19 @@ class JitsuStateManager:
             return None
         return self._queue.pop(0)
 
+    def update_phase(self, report: PhaseReport) -> str | None:
+        """
+        Record the outcome of a completed phase (alias for update_phase_status).
+
+        Args:
+            report: The phase report submitted by the agent.
+
+        Returns:
+            The epic ID associated with the phase, if known.
+
+        """
+        return self.update_phase_status(report)
+
     def update_phase_status(self, report: PhaseReport) -> str | None:
         """
         Record the outcome of a completed phase.

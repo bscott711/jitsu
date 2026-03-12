@@ -65,10 +65,33 @@ class JitsuExecutor:
             logger.info("Updated file: %s", edit.filepath)
 
     @staticmethod
-    def _extract_first_failure_block(full_stderr: str) -> str:
-        """Truncate massive traces to the first 20 lines of the primary error."""
-        lines = full_stderr.splitlines()
-        return "\n".join(lines[:20])
+    def _extract_first_failure_block(stderr: str) -> tuple[str, str | None]:
+        """Isolate the first actionable error block and parse the failing file path."""
+        # 1. Pytest style
+        # Look for ____ test_name ____ ... block
+        pytest_match = re.search(r"_{4,}\s+(.*?)\s+_{4,}(.*?)(?=\n_{4,}|$)", stderr, re.DOTALL)
+        if pytest_match:
+            block = pytest_match.group(0).strip()
+            # Extract file path from pytest block (usually at the end of the block)
+            # e.g., "tests/core/test_executor.py:302: AssertionError"
+            file_match = re.search(r"^([\w\.\-/]+\.py):(\d+):", block, re.MULTILINE)
+            if file_match:
+                return block, file_match.group(1)
+            return block, None
+
+        # 2. Ruff/Pyright/Generic file:line style
+        # e.g., src/jitsu/core/executor.py:92:9: error: ...
+        generic_match = re.search(r"^([\w\.\-/]+\.py):(\d+):(?:\d+:)?\s+(.*)", stderr, re.MULTILINE)
+        if generic_match:
+            # For generic errors, just take the first few lines around the error
+            lines = stderr.splitlines()
+            for i, line in enumerate(lines):
+                if generic_match.group(0) in line:
+                    return "\n".join(lines[i : i + 10]), generic_match.group(1)
+
+        # Fallback to 20 lines if all else fails
+        lines = stderr.splitlines()
+        return "\n".join(lines[:20]), None
 
     @staticmethod
     def _parse_failure_count(stderr: str) -> int:
@@ -86,7 +109,7 @@ class JitsuExecutor:
                 return int(match.group(1))
         return 1  # Default to 1 if we can't find a count
 
-    def _run_verification(self, commands: list[str]) -> tuple[bool, str, str, str]:
+    def _run_verification(self, commands: list[str]) -> tuple[bool, str, str, str, str | None]:
         """Execute verification commands and aggregate errors."""
         for cmd in commands:
             logger.info("Running verification: %s", cmd)
@@ -96,11 +119,11 @@ class JitsuExecutor:
                 summary = (
                     f"Command '{cmd}' failed with {fail_count} errors (exit code {res.returncode})"
                 )
-                trimmed_block = self._extract_first_failure_block(res.stderr)
-                return False, summary, trimmed_block, cmd
+                trimmed_block, failing_file = self._extract_first_failure_block(res.stderr)
+                return False, summary, trimmed_block, cmd, failing_file
 
         logger.info("Verification passed!")
-        return True, "", "", ""
+        return True, "", "", "", None
 
     async def execute_directive(self, directive: AgentDirective, compiler_output: str) -> bool:
         """Execute a single directive with retries on verification failure."""
@@ -137,7 +160,7 @@ class JitsuExecutor:
 
                 self._apply_edits(result.edits)
 
-                success, summary, trimmed, _failed_cmd = self._run_verification(
+                success, summary, trimmed, _failed_cmd, failing_file = self._run_verification(
                     directive.verification_commands
                 )
                 if success:
@@ -145,7 +168,7 @@ class JitsuExecutor:
 
                 prev_fail_count = self._check_monotonicity(summary, prev_fail_count)
                 base_user_message = await self._augment_recovery_message(
-                    base_user_message, summary, trimmed, result.edits
+                    base_user_message, summary, trimmed, result.edits, failing_file
                 )
 
                 attempts += 1
@@ -217,6 +240,7 @@ class JitsuExecutor:
         summary: str,
         trimmed: str,
         edits: list[FileEdit],
+        failing_file: str | None = None,
     ) -> str:
         """Append recovery hint, failure details, and AST context to the user message."""
         payload = (
@@ -225,9 +249,25 @@ class JitsuExecutor:
             + VERIFICATION_SUMMARY_RULE.format(summary=summary, trimmed_block=trimmed)
         )
 
-        for edit in edits:
-            if edit.filepath.endswith(".py"):
-                ast_ctx = await self.ast_provider.resolve(edit.filepath)
-                payload += f"\n\n{ast_ctx}"
+        # Collect all relevant files for AST resolution
+        files_to_resolve = {edit.filepath for edit in edits if edit.filepath.endswith(".py")}
+
+        if failing_file and failing_file.endswith(".py"):
+            # Ensure failing file is within workspace root before allowing resolution
+            failing_path = Path(failing_file)
+            is_internal = True
+            if failing_path.is_absolute():
+                try:
+                    failing_path.relative_to(self.workspace_root)
+                except ValueError:
+                    is_internal = False
+                    logger.warning("Failing file %s is outside workspace root", failing_file)
+
+            if is_internal:
+                files_to_resolve.add(failing_file)
+
+        for filepath in sorted(files_to_resolve):
+            ast_ctx = await self.ast_provider.resolve(filepath)
+            payload += f"\n\n{ast_ctx}"
 
         return base_message + f"\n\n{payload}\nPlease fix the errors above."

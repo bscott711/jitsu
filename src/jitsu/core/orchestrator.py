@@ -15,8 +15,9 @@ from pydantic import TypeAdapter, ValidationError
 from jitsu.core.compiler import ContextCompiler
 from jitsu.core.executor import JitsuExecutor, MonotonicityError
 from jitsu.core.planner import JitsuPlanner
+from jitsu.core.state import JitsuStateManager
 from jitsu.core.storage import EpicStorage
-from jitsu.models.core import AgentDirective
+from jitsu.models.core import AgentDirective, PhaseReport, PhaseStatus
 
 
 class JitsuOrchestrator:
@@ -40,11 +41,13 @@ class JitsuOrchestrator:
         executor: JitsuExecutor | None = None,
         storage: EpicStorage | None = None,
         on_progress: Callable[[str], None] | None = None,
+        state_manager: JitsuStateManager | None = None,
     ) -> None:
         """Initialise the orchestrator with optional DI'd collaborators."""
         self._planner = planner
         self._executor = executor or JitsuExecutor()
         self._storage = storage or EpicStorage()
+        self._state_manager = state_manager or JitsuStateManager()
         self._on_progress = on_progress
 
     # ------------------------------------------------------------------
@@ -297,7 +300,10 @@ class JitsuOrchestrator:
             raise typer.Exit(1) from e
 
     async def execute_phases(
-        self, directives: list[AgentDirective], compiler: ContextCompiler | None = None
+        self,
+        directives: list[AgentDirective],
+        compiler: ContextCompiler | None = None,
+        out: Path | None = None,
     ) -> None:
         """
         Execute each directive in sequence, verifying and committing after each.
@@ -305,6 +311,7 @@ class JitsuOrchestrator:
         Args:
             directives: The ordered list of phases to execute.
             compiler: Optional ``ContextCompiler`` instance.
+            out: Optional Path to the epic file for state persistence.
 
         Raises:
             typer.Exit: If any phase fails or the commit step fails.
@@ -329,6 +336,15 @@ class JitsuOrchestrator:
                     success = await self._executor.execute_directive(directive, prompt)
                     progress.update(100)
             except MonotonicityError as e:
+                report = PhaseReport(
+                    phase_id=directive.phase_id,
+                    status=PhaseStatus.STUCK,
+                    agent_notes=str(e),
+                )
+                self._state_manager.update_phase(report)
+                if out:
+                    out.with_suffix(".state").write_text(report.model_dump_json())
+
                 typer.secho(
                     f"\n❌ Phase {directive.phase_id} is STUCK: {e}",
                     fg=typer.colors.RED,
@@ -338,6 +354,15 @@ class JitsuOrchestrator:
                 raise typer.Exit(1) from e
 
             if not success:
+                report = PhaseReport(
+                    phase_id=directive.phase_id,
+                    status=PhaseStatus.FAILED,
+                    agent_notes="Max retries reached or verification failed.",
+                )
+                self._state_manager.update_phase(report)
+                if out:
+                    out.with_suffix(".state").write_text(report.model_dump_json())
+
                 typer.secho(
                     f"❌ Phase {directive.phase_id} failed to execute or verify. Stopping.",
                     fg=typer.colors.RED,
@@ -401,7 +426,7 @@ class JitsuOrchestrator:
             fg=typer.colors.CYAN,
             err=True,
         )
-        await self.execute_phases(directives)
+        await self.execute_phases(directives, out=out)
         await self.finalize(out)
 
     # ------------------------------------------------------------------

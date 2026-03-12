@@ -447,12 +447,44 @@ async def test_orchestrator_execute_phases_stuck(tmp_path: Path) -> None:
     mock_executor.execute_directive = AsyncMock(side_effect=MonotonicityError("Stuck"))
     directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
 
+    out_file = tmp_path / "epic.json"
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
 
     with pytest.raises(typer.Exit) as exc:
-        await orchestrator.execute_phases([directive], compiler=mock_compiler)
+        await orchestrator.execute_phases([directive], compiler=mock_compiler, out=out_file)
     assert exc.value.exit_code == 1
+
+    # Assert disk write (state file)
+    state_file = out_file.with_suffix(".state")
+    assert state_file.exists()
+    content = json.loads(state_file.read_text())
+    assert content["status"] == "STUCK"
+    assert "Stuck" in content["agent_notes"]
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_phases_failed_persistence(tmp_path: Path) -> None:
+    """Test JitsuOrchestrator.execute_phases when execution fails (not stuck)."""
+    mock_compiler = MagicMock()
+    mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
+    mock_executor = MagicMock()
+    mock_executor.execute_directive = AsyncMock(return_value=False)
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+
+    out_file = tmp_path / "epic.json"
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    with pytest.raises(typer.Exit) as exc:
+        await orchestrator.execute_phases([directive], compiler=mock_compiler, out=out_file)
+    assert exc.value.exit_code == 1
+
+    # Assert disk write (state file)
+    state_file = out_file.with_suffix(".state")
+    assert state_file.exists()
+    content = json.loads(state_file.read_text())
+    assert content["status"] == "FAILED"
 
 
 @pytest.mark.asyncio

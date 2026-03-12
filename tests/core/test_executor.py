@@ -198,13 +198,49 @@ async def test_executor_instructor_retry_error(
 
 
 def test_executor_truncation_logic() -> None:
-    """Test that massive traces are truncated to 20 lines."""
+    """Test that massive traces are truncated to 20 lines (fallback logic)."""
     massive_error = "\n".join([f"Line {i}" for i in range(100)])
-    truncated = JitsuExecutor._extract_first_failure_block(massive_error)  # noqa: SLF001
+    truncated, filepath = JitsuExecutor._extract_first_failure_block(massive_error)  # noqa: SLF001
     lines = truncated.splitlines()
     assert len(lines) == 20  # noqa: PLR2004
     assert lines[0] == "Line 0"
     assert lines[19] == "Line 19"
+    assert filepath is None
+
+
+def test_executor_smart_extraction_pytest() -> None:
+    """Test that pytest failures are correctly extracted."""
+    stderr = """
+=================================== FAILURES ===================================
+_________________________ test_failure _________________________
+
+    def test_failure():
+>       assert False
+E       AssertionError
+
+tests/test_file.py:10: AssertionError
+=============================== 1 failed in 0.1s ===============================
+"""
+    block, filepath = JitsuExecutor._extract_first_failure_block(stderr)  # noqa: SLF001
+    assert "____ test_failure ____" in block
+    assert "AssertionError" in block
+    assert filepath == "tests/test_file.py"
+
+
+def test_executor_smart_extraction_generic() -> None:
+    """Test that generic file:line errors are correctly extracted."""
+    stderr = "src/core/logic.py:42:10: error: Incompatible types"
+    block, filepath = JitsuExecutor._extract_first_failure_block(stderr)  # noqa: SLF001
+    assert "Incompatible types" in block
+    assert filepath == "src/core/logic.py"
+
+
+def test_executor_smart_extraction_pytest_no_path() -> None:
+    """Test that pytest failures without a path are handled."""
+    stderr = "____ test_failure ____\nSome error without path"
+    block, filepath = JitsuExecutor._extract_first_failure_block(stderr)  # noqa: SLF001
+    assert "____ test_failure ____" in block
+    assert filepath is None
 
 
 def test_executor_run_verification_structure(mock_runner: MagicMock) -> None:
@@ -212,14 +248,15 @@ def test_executor_run_verification_structure(mock_runner: MagicMock) -> None:
     executor = JitsuExecutor(runner=mock_runner)
     mock_runner.run.return_value = MagicMock(returncode=1, stderr="Linter Error")
 
-    success, summary, trimmed, failed_cmd = executor._run_verification(["npm test"])  # noqa: SLF001
+    success, summary, trimmed, failed_cmd, failing_file = executor._run_verification(["npm test"])  # noqa: SLF001
 
     assert success is False
     assert "npm test" in summary
     assert "1 errors" in summary
     assert "exit code 1" in summary
-    assert trimmed == "Linter Error"
+    assert "Linter Error" in trimmed
     assert failed_cmd == "npm test"
+    assert failing_file is None
 
 
 def test_executor_parse_failure_count() -> None:
@@ -358,3 +395,74 @@ async def test_executor_recovery_includes_ast(
     ]
     assert "AST Structural Outline: src/failing_logic.py" in second_call_user_msg
     assert "def fail(): ..." in second_call_user_msg
+
+
+@pytest.mark.asyncio
+async def test_executor_recovery_includes_failing_file_ast(
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
+) -> None:
+    """Test that recovery prompt includes AST for the failing file even if not edited."""
+    mock_client = MagicMock()
+
+    # Model edits logic.py
+    edit_path = str(tmp_path / "src" / "logic.py")
+    edit = FileEdit(filepath=edit_path, content="def logic(): pass")
+    result = ExecutionResult(thoughts="Fixed logic", edits=[edit])
+    mock_client.chat.completions.create.return_value = result
+
+    # But test_logic.py fails
+    fail_path = str(tmp_path / "tests" / "test_logic.py")
+    stderr = f"____ test_logic ____\n{fail_path}:10: AssertionError"
+
+    # Fail first with the above stderr, then succeed
+    mock_runner.run.side_effect = [
+        MagicMock(returncode=1, stderr=stderr),
+        MagicMock(returncode=0),
+    ]
+
+    executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
+
+    # Mock AST resolution for both files
+    async def side_effect(path: str) -> str:
+        return f"### AST Structural Outline: {path}"
+
+    executor.ast_provider.resolve = AsyncMock(side_effect=side_effect)
+
+    await executor.execute_directive(mock_directive, "compiler output")
+
+    assert mock_client.chat.completions.create.call_count == 2  # noqa: PLR2004
+    recovery_msg = mock_client.chat.completions.create.call_args_list[1][1]["messages"][1][
+        "content"
+    ]
+
+    # Should include AST for both edited and failing file
+    assert "AST Structural Outline:" in recovery_msg
+    assert "src/logic.py" in recovery_msg
+    assert "tests/test_logic.py" in recovery_msg
+
+
+@pytest.mark.asyncio
+async def test_executor_recovery_ignores_external_failing_file(
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
+) -> None:
+    """Test that recovery prompt ignores AST for failing files outside workspace."""
+    mock_client = MagicMock()
+    result = ExecutionResult(thoughts="Fixed", edits=[])
+    mock_client.chat.completions.create.return_value = result
+
+    # Failure in some system file
+    stderr = "____ test_failure ____\n/usr/lib/python3.10/some_file.py:10: Error"
+
+    mock_runner.run.side_effect = [
+        MagicMock(returncode=1, stderr=stderr),
+        MagicMock(returncode=0),
+    ]
+
+    executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
+    executor.ast_provider.resolve = AsyncMock()
+
+    await executor.execute_directive(mock_directive, "context")
+
+    # Should NOT have called resolve for the external file
+    for call in executor.ast_provider.resolve.call_args_list:
+        assert "/usr/lib" not in call.args[0]

@@ -1,0 +1,93 @@
+[
+  {
+    "epic_id": "EPIC-RECOVERY-REFINEMENT",
+    "phase_id": "PHASE-01-SMART-EXTRACTION",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "Upgrade `_extract_first_failure_block` in `src/jitsu/core/executor.py` from a blunt 20-line truncation to an anchored extractor. Use regex or string matching to isolate the first actual failure block (e.g., looking for `==== FAILURES ====` and `____ test_... ____` for pytest, or standard file:line format for ruff/Pyright). Additionally, parse and return the specific `failing_file_path` from that block. Update the `run_verification` return tuple to include this file path. Update `tests/core/test_executor.py` to assert the new extraction logic.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not rely on fixed line counts (like `[:20]`) for the extraction anymore."
+    ],
+    "completion_criteria": [
+      "The extractor intelligently isolates the first actionable error block.",
+      "The exact file path of the failure is parsed and returned.",
+      "Tests verify the smart extraction works for standard pytest output."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "EPIC-RECOVERY-REFINEMENT",
+    "phase_id": "PHASE-02-TRACEBACK-AST",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "Update `execute_directive` in `src/jitsu/core/executor.py`. When augmenting the recovery message, if the new `failing_file_path` (from Phase 1) is present and within the workspace, resolve and inject *its* AST into the recovery prompt, rather than just the ASTs of the files the model just edited. This ensures the model sees the failing test or dependent file. Update `tests/core/test_executor.py` to mock a test-file failure and assert its AST is requested.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not attempt to read files outside the Jitsu workspace root (e.g., standard library files from the traceback)."
+    ],
+    "completion_criteria": [
+      "The model receives the AST of the exact file that raised the error.",
+      "Test coverage remains at 100%."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "EPIC-RECOVERY-REFINEMENT",
+    "phase_id": "PHASE-03-PERSIST-STUCK-STATE",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "Fix the state persistence bug in the autonomous loop. In `src/jitsu/core/orchestrator.py`, locate the `execute_phases` method. When `MonotonicityError` (or a max retries exhaustion) is caught, explicitly call `state_manager.update_phase(...)` with `status=PhaseStatus.STUCK` and generate a `PhaseReport` detailing the failure *before* breaking the loop. Update `tests/core/test_orchestrator.py` to assert this disk write occurs.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not alter the MCP/ToolHandler paths, only the autonomous `execute_phases` loop."
+    ],
+    "completion_criteria": [
+      "The UI and state file accurately reflect a STUCK phase after a monotonicity halt.",
+      "The orchestrator tests explicitly verify the state update."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  }
+]
