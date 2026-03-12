@@ -131,13 +131,12 @@ class JitsuExecutor:
         attempts = 0
         prev_fail_count = float("inf")
 
-        system_prompt = EXECUTOR_SYSTEM_PROMPT.format(
-            module_scope=directive.module_scope,
-            anti_patterns=", ".join(directive.anti_patterns),
-        )
+        system_prompt = EXECUTOR_SYSTEM_PROMPT
 
         base_user_message = (
-            f"Directive: {directive.instructions}\n\n"
+            f"Directive: {directive.instructions}\n"
+            f"Scope: {directive.module_scope}\n"
+            f"Anti-Patterns: {', '.join(directive.anti_patterns)}\n\n"
             f"Completion Criteria: {', '.join(directive.completion_criteria)}\n\n"
             f"Context:\n{compiler_output}\n"
         )

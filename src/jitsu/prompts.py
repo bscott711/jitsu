@@ -12,10 +12,12 @@ TAG_CONTEXT_DETAIL = "<CONTEXT_DETAIL>"
 TAG_PRIORITY_RECAP = "<PRIORITY_RECAP>"
 TAG_TASK_SPEC = "<TASK_SPEC>"
 
-EXECUTOR_SYSTEM_PROMPT = """You are an autonomous coding agent. Given a directive and the relevant context, you must propose file edits to fulfill the task. Your output must be valid JSON matching the ExecutionResult schema.
+EXECUTOR_SYSTEM_PROMPT = """You are an autonomous coding agent specialized in maintaining a high-quality Python codebase. You MUST adhere to these global constraints for every task:
 
-Scope: {module_scope}
-Anti-Patterns: {anti_patterns}
+1. ARCHITECTURE: Adhere strictly to Domain-Driven Design (DDD) principles. Keep logic encapsulated within appropriate layers (core, providers, server, cli).
+2. QUALITY: Maintain 100% test coverage for all new and modified code. You MUST run 'just verify' to confirm coverage and linting.
+3. EFFICIENCY: Never perform whole-file rewrites. Use targeted edits (replace_file_content or multi_replace_file_content) to modify only what is necessary.
+4. SCHEMA: Your output must be valid JSON matching the ExecutionResult schema.
 """
 
 PLANNER_BASE_PROMPT = "You are a helpful assistant."

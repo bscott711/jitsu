@@ -78,13 +78,10 @@ async def test_executor_execute_success(
     # Verify the system prompt uses the EXECUTOR_SYSTEM_PROMPT constant
     call_args = mock_client.chat.completions.create.call_args[1]
     system_msg = call_args["messages"][0]["content"]
-    assert (
-        EXECUTOR_SYSTEM_PROMPT.format(
-            module_scope=mock_directive.module_scope,
-            anti_patterns=", ".join(mock_directive.anti_patterns),
-        )
-        in system_msg
-    )
+    user_msg = call_args["messages"][1]["content"]
+    assert EXECUTOR_SYSTEM_PROMPT in system_msg
+    assert f"Scope: {mock_directive.module_scope}" in user_msg
+    assert f"Anti-Patterns: {', '.join(mock_directive.anti_patterns)}" in user_msg
 
 
 async def test_executor_execute_retry_success(
