@@ -7,10 +7,10 @@ VERIFICATION_RULE = (
 
 # XML Vocabulary for U-Curve Architecture
 TAG_INSTRUCTIONS = "<INSTRUCTIONS>"
-TAG_CONTEXT_MANIFEST = "<CONTEXT_MANIFEST>"
-TAG_CONTEXT_DETAIL = "<CONTEXT_DETAIL>"
+TAG_CONTEXT_MANIFEST = "<JIT_CONTEXT_MANIFEST>"
+TAG_CONTEXT_DETAIL = "<JIT_CONTEXT_DETAIL>"
 TAG_PRIORITY_RECAP = "<PRIORITY_RECAP>"
-TAG_TASK_SPEC = "<TASK_SPEC>"
+TAG_TASK_SPEC = "<TASK_AND_OUTPUT_SPEC>"
 
 EXECUTOR_SYSTEM_PROMPT = """You are an autonomous coding agent specialized in maintaining a high-quality Python codebase. You MUST adhere to these global constraints for every task:
 

@@ -6,6 +6,13 @@ import pytest
 
 from jitsu.core.compiler import ContextCompiler
 from jitsu.models.core import AgentDirective, ContextTarget, TargetResolutionMode
+from jitsu.prompts import (
+    TAG_CONTEXT_DETAIL,
+    TAG_CONTEXT_MANIFEST,
+    TAG_INSTRUCTIONS,
+    TAG_PRIORITY_RECAP,
+    TAG_TASK_SPEC,
+)
 from jitsu.providers import DirectoryTreeProvider
 
 
@@ -20,7 +27,7 @@ async def test_compile_empty_targets() -> None:
         instructions="do stuff",
     )
     res = await compiler.compile_directive(directive)
-    assert "No specific context targets requested" in res
+    assert "No context targets." in res
     assert "do stuff" in res
 
 
@@ -144,7 +151,7 @@ async def test_compile_context_manifest_inclusion() -> None:
         ],
     )
     res = await compiler.compile_directive(directive)
-    assert "## Compiled Context Manifest" in res
+    assert TAG_CONTEXT_MANIFEST in res
     assert "- `README.md`: **Full Source** (file)" in res
 
 
@@ -337,3 +344,32 @@ async def test_compiler_resolve_auto_git_diff_as_preferred() -> None:
     assert provider == "git_diff"
     assert "### Git Diff: HEAD" in res
     mock_git.resolve.assert_called_once_with("HEAD")
+
+
+@pytest.mark.asyncio
+async def test_compile_u_curve_ordering() -> None:
+    """Test that the compiler follows the exact U-Curve XML ordering."""
+    compiler = ContextCompiler()
+    directive = AgentDirective(
+        epic_id="epic-1",
+        phase_id="phase-1",
+        module_scope="test",
+        instructions="do stuff",
+    )
+    res = await compiler.compile_directive(directive)
+
+    # Assert exact tag presence
+    assert TAG_INSTRUCTIONS in res
+    assert TAG_CONTEXT_MANIFEST in res
+    assert TAG_CONTEXT_DETAIL in res
+    assert TAG_PRIORITY_RECAP in res
+    assert TAG_TASK_SPEC in res
+
+    # Assert mathematical ordering (index-based)
+    idx_instr = res.index(TAG_INSTRUCTIONS)
+    idx_manifest = res.index(TAG_CONTEXT_MANIFEST)
+    idx_detail = res.index(TAG_CONTEXT_DETAIL)
+    idx_recap = res.index(TAG_PRIORITY_RECAP)
+    idx_task = res.index(TAG_TASK_SPEC)
+
+    assert idx_instr < idx_manifest < idx_detail < idx_recap < idx_task

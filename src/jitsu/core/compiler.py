@@ -3,6 +3,14 @@
 from pathlib import Path
 
 from jitsu.models.core import AgentDirective, ContextTarget, TargetResolutionMode
+from jitsu.prompts import (
+    TAG_CONTEXT_DETAIL,
+    TAG_CONTEXT_MANIFEST,
+    TAG_INSTRUCTIONS,
+    TAG_PRIORITY_RECAP,
+    TAG_TASK_SPEC,
+    VERIFICATION_RULE,
+)
 from jitsu.providers import BaseProvider, ProviderRegistry
 from jitsu.utils.logger import get_logger
 
@@ -77,21 +85,35 @@ class ContextCompiler:
         return parts, manifest
 
     async def compile_directive(self, directive: AgentDirective) -> str:
-        """Weave the directive and live context into a single Markdown payload."""
-        payload_parts = self._build_preamble(directive)
-        payload_parts.append("\n## JIT Context")
+        """Weave the directive and live context into a single U-Curve XML payload."""
+        # 1. Instructions
+        preamble_parts = self._build_preamble(directive)
+        instructions_content = "\n".join(preamble_parts)
 
-        if not directive.context_targets:
-            payload_parts.append("*No specific context targets requested for this phase.*")
-        else:
+        # 2 & 3. Context
+        target_parts = []
+        manifest_lines = []
+        if directive.context_targets:
             target_parts, manifest_lines = await self._resolve_targets(directive.context_targets)
-            payload_parts.extend(target_parts)
 
-            if manifest_lines:
-                payload_parts.append("\n## Compiled Context Manifest")
-                payload_parts.extend(manifest_lines)
+        manifest_content = "\n".join(manifest_lines) if manifest_lines else "No context targets."
+        detail_content = "\n".join(target_parts) if target_parts else "No context details."
 
-        return "\n".join(payload_parts)
+        # Compile U-Curve Payload
+        payload = [
+            f"{TAG_INSTRUCTIONS}\n{instructions_content}\n{TAG_INSTRUCTIONS.replace('<', '</')}",
+            f"{TAG_CONTEXT_MANIFEST}\n{manifest_content}\n{TAG_CONTEXT_MANIFEST.replace('<', '</')}",
+            f"{TAG_CONTEXT_DETAIL}\n{detail_content}\n{TAG_CONTEXT_DETAIL.replace('<', '</')}",
+            f"{TAG_PRIORITY_RECAP}\n{VERIFICATION_RULE}\n{TAG_PRIORITY_RECAP.replace('<', '</')}",
+            (
+                f"{TAG_TASK_SPEC}\n"
+                "Please provide the file edits to fulfill the directive above while "
+                "adhering to all constraints.\n"
+                f"{TAG_TASK_SPEC.replace('<', '</')}"
+            ),
+        ]
+
+        return "\n\n".join(payload)
 
     async def _resolve_auto(self, target_id: str, preferred_provider: str) -> tuple[str, str]:
         """Attempt to resolve target: AST -> Pydantic -> Preferred -> FileState."""
