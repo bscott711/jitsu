@@ -113,6 +113,7 @@ def test_executor_execute_retry_success(
         "content"
     ]
     assert "PREVIOUS VERIFICATION FAILURE" in second_call_user_msg
+    assert "Command 'just verify' failed with exit code 1" in second_call_user_msg
     assert "Syntax Error" in second_call_user_msg
 
 
@@ -187,3 +188,26 @@ def test_executor_instructor_retry_error(
     assert mock_client.chat.completions.create.call_count == 1
     mock_secho.assert_called_once()
     assert "Failed to generate valid schema" in mock_secho.call_args[0][0]
+
+
+def test_executor_truncation_logic() -> None:
+    """Test that massive traces are truncated to 20 lines."""
+    massive_error = "\n".join([f"Line {i}" for i in range(100)])
+    truncated = JitsuExecutor._extract_first_failure_block(massive_error)  # noqa: SLF001
+    lines = truncated.splitlines()
+    assert len(lines) == 20  # noqa: PLR2004
+    assert lines[0] == "Line 0"
+    assert lines[19] == "Line 19"
+
+
+def test_executor_run_verification_structure(mock_runner: MagicMock) -> None:
+    """Test the return structure of _run_verification."""
+    executor = JitsuExecutor(runner=mock_runner)
+    mock_runner.run.return_value = MagicMock(returncode=1, stderr="Linter Error")
+
+    success, summary, trimmed, failed_cmd = executor._run_verification(["npm test"])  # noqa: SLF001
+
+    assert success is False
+    assert summary == "Command 'npm test' failed with exit code 1"
+    assert trimmed == "Linter Error"
+    assert failed_cmd == "npm test"

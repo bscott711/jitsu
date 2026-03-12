@@ -50,22 +50,24 @@ class JitsuExecutor:
             filepath.write_text(edit.content)
             logger.info("Updated file: %s", edit.filepath)
 
-    def _run_verification(self, commands: list[str]) -> tuple[bool, str]:
+    @staticmethod
+    def _extract_first_failure_block(full_stderr: str) -> str:
+        """Truncate massive traces to the first 20 lines of the primary error."""
+        lines = full_stderr.splitlines()
+        return "\n".join(lines[:20])
+
+    def _run_verification(self, commands: list[str]) -> tuple[bool, str, str, str]:
         """Execute verification commands and aggregate errors."""
-        all_stderr: list[str] = []
         for cmd in commands:
             logger.info("Running verification: %s", cmd)
             res = self.runner.run(cmd)
             if res.returncode != 0:
-                all_stderr.append(
-                    f"Command '{cmd}' failed with exit code {res.returncode}:\n{res.stderr}"
-                )
+                summary = f"Command '{cmd}' failed with exit code {res.returncode}"
+                trimmed_block = self._extract_first_failure_block(res.stderr)
+                return False, summary, trimmed_block, cmd
 
-        if not all_stderr:
-            logger.info("Verification passed!")
-            return True, ""
-
-        return False, "\n".join(all_stderr)
+        logger.info("Verification passed!")
+        return True, "", "", ""
 
     def execute_directive(self, directive: AgentDirective, compiler_output: str) -> bool:
         """Execute a single directive with retries on verification failure."""
@@ -102,11 +104,13 @@ class JitsuExecutor:
 
                 self._apply_edits(result.edits)
 
-                success, error_msg = self._run_verification(directive.verification_commands)
+                success, summary, trimmed, _failed_cmd = self._run_verification(
+                    directive.verification_commands
+                )
                 if success:
                     return True
 
-                last_error = error_msg
+                last_error = f"{summary}:\n{trimmed}"
                 attempts += 1
                 logger.warning(
                     "Verification failed (Attempt %d/%d). Retrying...",
