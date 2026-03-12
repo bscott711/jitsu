@@ -5,6 +5,13 @@ VERIFICATION_RULE = (
     "RULES (e.g., this MUST include 'just verify')."
 )
 
+# XML Vocabulary for U-Curve Architecture
+TAG_INSTRUCTIONS = "<INSTRUCTIONS>"
+TAG_CONTEXT_MANIFEST = "<CONTEXT_MANIFEST>"
+TAG_CONTEXT_DETAIL = "<CONTEXT_DETAIL>"
+TAG_PRIORITY_RECAP = "<PRIORITY_RECAP>"
+TAG_TASK_SPEC = "<TASK_SPEC>"
+
 EXECUTOR_SYSTEM_PROMPT = """You are an autonomous coding agent. Given a directive and the relevant context, you must propose file edits to fulfill the task. Your output must be valid JSON matching the ExecutionResult schema.
 
 Scope: {module_scope}

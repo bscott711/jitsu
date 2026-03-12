@@ -1,0 +1,89 @@
+[
+  {
+    "epic_id": "EPIC-U-CURVE-ARCHITECTURE",
+    "phase_id": "PHASE-01-XML-VOCABULARY",
+    "module_scope": "src/jitsu/",
+    "instructions": "Define the SOTA prompt boundary tags. Add the following string constants to `src/jitsu/prompts.py`: `TAG_INSTRUCTIONS`, `TAG_CONTEXT_MANIFEST`, `TAG_CONTEXT_DETAIL`, `TAG_PRIORITY_RECAP`, and `TAG_TASK_SPEC`. Their values should be the literal XML tags (e.g., `<INSTRUCTIONS>`, etc.). Do not alter any existing prompt logic yet; just define the vocabulary.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/prompts.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not refactor the compiler or existing prompts in this phase."
+    ],
+    "completion_criteria": [
+      "The 5 XML tag constants are explicitly defined in `prompts.py`.",
+      "Code passes linting and type checking."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "EPIC-U-CURVE-ARCHITECTURE",
+    "phase_id": "PHASE-02-SYSTEM-VS-USER",
+    "module_scope": "src/jitsu/",
+    "instructions": "Hard-code the global constraints. Update `EXECUTOR_SYSTEM_PROMPT` in `src/jitsu/prompts.py` to exclusively contain global rules: DDD architecture adherence, 100% test coverage mandates, and 'no whole-file rewrite' policies. Strip any dynamic, phase-specific task language out of the system prompt (this belongs in the user prompt).",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/prompts.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not put phase-specific dynamic variables (`{instructions}`) in the system prompt."
+    ],
+    "completion_criteria": [
+      "`EXECUTOR_SYSTEM_PROMPT` is strictly a static, global ruleset.",
+      "Any tests verifying prompt structure are updated and passing."
+    ],
+    "verification_commands": [
+      "just verify"
+    ]
+  },
+  {
+    "epic_id": "EPIC-U-CURVE-ARCHITECTURE",
+    "phase_id": "PHASE-03-U-SHAPE-COMPILER",
+    "module_scope": "src/jitsu/core/",
+    "instructions": "Implement the SOTA U-Curve formatting. Refactor `src/jitsu/core/compiler.py` to construct the user prompt using the newly defined XML tags in this exact order: 1. `<INSTRUCTIONS>` (the phase directive), 2. `<JIT_CONTEXT_MANIFEST>` (list of resolved files), 3. `<JIT_CONTEXT_DETAIL>` (the heavy AST/file dumps), 4. `<PRIORITY_RECAP>` (a short reminder of the constraints), 5. `<TASK_AND_OUTPUT_SPEC>`. Update `tests/core/test_compiler.py` to aggressively assert this exact string ordering.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/compiler.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/prompts.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_compiler.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "STRICTLY FORBIDDEN: Do not place the heavy `<JIT_CONTEXT_DETAIL>` at the top or bottom of the prompt. It must be in the middle (the U-Curve trough).",
+      "STRICTLY FORBIDDEN: Do not drop test coverage below 100%."
+    ],
+    "completion_criteria": [
+      "The compiler outputs the exact U-Curve XML structure.",
+      "The test suite proves the ordering of the strings is mathematically correct.",
+      "100% test coverage."
+    ],
+    "verification_commands": [
+      "just verify",
+      "uv run pytest tests/core/test_compiler.py"
+    ]
+  }
+]
