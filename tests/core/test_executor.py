@@ -10,7 +10,10 @@ from instructor.core.exceptions import InstructorRetryException
 from jitsu.core.executor import JitsuExecutor, MonotonicityError
 from jitsu.models.core import AgentDirective
 from jitsu.models.execution import ExecutionResult, FileEdit
-from jitsu.prompts import EXECUTOR_SYSTEM_PROMPT
+from jitsu.prompts import (
+    EXECUTOR_RECOVERY_PROMPT,
+    EXECUTOR_SYSTEM_PROMPT,
+)
 
 
 @pytest.fixture
@@ -113,8 +116,10 @@ async def test_executor_execute_retry_success(
         "content"
     ]
     assert "Directive: test instructions" in second_call_user_msg
-    assert "You are in recovery mode" in second_call_user_msg
-    assert "Command 'just verify' failed with 1 errors (exit code 1)" in second_call_user_msg
+    assert EXECUTOR_RECOVERY_PROMPT in second_call_user_msg
+    # Verify the summary rule formatting (partial check)
+    assert "Verification Failure Report" in second_call_user_msg
+    assert "**Failing Target:** just verify" in second_call_user_msg
     assert "Syntax Error" in second_call_user_msg
 
 

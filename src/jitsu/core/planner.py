@@ -62,12 +62,7 @@ class JitsuPlanner:
             get_args(ContextTarget.model_fields["provider_name"].annotation)
         )
 
-        # Read the core orchestrator prompt
-        prompt_path = anyio.Path("docs/jitsu_orchestrator_prompt.md")
-        if await prompt_path.exists():
-            base_system_prompt = await prompt_path.read_text()
-        else:
-            base_system_prompt = PLANNER_BASE_PROMPT
+        base_system_prompt = PLANNER_BASE_PROMPT
 
         # Dynamically inject the project-specific rules
         rules_path = anyio.Path(".jitsurules")

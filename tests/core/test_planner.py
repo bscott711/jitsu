@@ -44,8 +44,7 @@ async def test_planner_plan_generation_success() -> None:
     planner = JitsuPlanner(objective="Test", relevant_files=["src/main.py"], client=mock_client)
 
     with (
-        patch("jitsu.core.planner.anyio.Path.exists", return_value=True),
-        patch("jitsu.core.planner.anyio.Path.read_text", return_value="system prompt"),
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
     ):
         plan = await planner.generate_plan(on_progress=on_progress_mock)
@@ -67,7 +66,7 @@ async def test_planner_plan_generation_success() -> None:
     assert PLANNER_MACRO_PROMPT in macro_system
 
     micro_system = micro_call["messages"][0]["content"]
-    assert "You are elaborating a specific Phase for the Epic" in micro_system
+    assert "elaborating a specific Phase" in micro_system
     assert VERIFICATION_RULE in micro_system
 
 
@@ -93,8 +92,7 @@ async def test_planner_generation_failure() -> None:
     planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
 
     with (
-        patch("jitsu.core.planner.anyio.Path.exists", return_value=True),
-        patch("jitsu.core.planner.anyio.Path.read_text", return_value="system prompt"),
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
         pytest.raises(Exception, match="API error"),
     ):
@@ -165,8 +163,7 @@ async def test_planner_generate_plan_verbose() -> None:
     planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
 
     with (
-        patch("jitsu.core.planner.anyio.Path.exists", return_value=True),
-        patch("jitsu.core.planner.anyio.Path.read_text", return_value="system prompt"),
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
         patch("jitsu.core.planner.typer.secho") as mock_secho,
     ):
@@ -178,3 +175,26 @@ async def test_planner_generate_plan_verbose() -> None:
     calls = [str(call.args[0]) for call in mock_secho.call_args_list]
     assert any("[DEBUG] Epic Blueprint:" in s for s in calls)
     assert any("[DEBUG] Phase 1 Directive (p1):" in s for s in calls)
+
+
+@pytest.mark.asyncio
+async def test_planner_generate_plan_with_jitsurules() -> None:
+    """Test that the planner correctly incorporates .jitsurules if present."""
+    blueprint = EpicBlueprint(epic_id="e1", phases=[])
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = blueprint
+
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+
+    with (
+        patch("jitsu.core.planner.anyio.Path.exists", side_effect=[True, False]),
+        patch("jitsu.core.planner.anyio.Path.read_text", return_value="RULE: Do things"),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
+        await planner.generate_plan()
+
+    # Verify the system prompt contains the rules
+    call = mock_client.chat.completions.create.call_args[1]
+    system_msg = call["messages"][0]["content"]
+    assert "PROJECT RULES (.jitsurules):" in system_msg
+    assert "RULE: Do things" in system_msg
