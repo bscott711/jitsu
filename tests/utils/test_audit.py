@@ -4,6 +4,7 @@ import runpy
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import jitsu.utils.audit as audit_module
 from jitsu.utils.audit import (
     MODULES_TO_AUDIT,
     PROJECT_ROOT,
@@ -201,4 +202,4 @@ def test_main_block() -> None:
         patch("subprocess.run", return_value=mock_res),
         patch("typer.secho"),
     ):
-        runpy.run_module("jitsu.utils.audit", run_name="__main__")
+        runpy.run_path(audit_module.__file__, run_name="__main__")
