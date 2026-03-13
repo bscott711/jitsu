@@ -1,0 +1,287 @@
+[
+  {
+    "epic_id": "slim-refactor",
+    "phase_id": "remove-cli-and-templates",
+    "module_scope": [
+      "src/jitsu/cli",
+      "src/jitsu/templates",
+      "tests/cli"
+    ],
+    "instructions": "Remove all CLI commands except `serve` and the main callback from `src/jitsu/cli/main.py`. Delete the `src/jitsu/templates` directory entirely. Update `tests/cli/test_main.py` to only test the remaining `serve` command and the main callback, ensuring 100% coverage for the remaining code. This is a focused, isolated phase: we are only touching CLI and templates here, not the core engine, IPC, or models yet.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/templates/__init__.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/templates/loader.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "JustFile",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not modify any core modules (orchestrator.py, executor.py, ipc.py, client.py) in this phase.",
+      "Do not attempt to remove or modify models (core.py, state.py) in this phase.",
+      "Do not delete test files for core, server, or models in this phase; only delete templates directory and update CLI tests.",
+      "Do not leave any orphaned references to removed CLI commands (like `init`, `submit`, etc.) in the remaining code.",
+      "Do not break the `serve` command's functionality; it must remain fully operational."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The `src/jitsu/cli/main.py` file contains only the `serve` command and the main callback.",
+      "The `src/jitsu/templates` directory no longer exists.",
+      "`tests/cli/test_main.py` passes with 100% coverage for the remaining CLI code.",
+      "`just verify` passes without errors."
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "slim-refactor",
+    "phase_id": "remove-autonomous-engine",
+    "module_scope": [
+      "src/jitsu/core",
+      "tests/core"
+    ],
+    "instructions": "Delete the orchestrator and executor modules and their tests. Specifically:\n1. Delete `src/jitsu/core/orchestrator.py` and `src/jitsu/core/executor.py`.\n2. Delete `tests/core/test_orchestrator.py`, `tests/core/test_executor.py`, and `tests/core/test_executor_expansion.py`.\n3. Ensure no remaining code imports or references these deleted modules. Use AST analysis to verify import chains are clean.\n4. Run `just verify` to confirm the build passes with 100% coverage on the remaining core modules.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor_expansion.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not delete any files outside the specified module_scope (core and tests/core).",
+      "Do not leave dangling imports or references to orchestrator or executor in other modules.",
+      "Do not modify any other core modules (e.g., planner.py, runner.py) unless they directly import the deleted modules."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The files `src/jitsu/core/orchestrator.py`, `src/jitsu/core/executor.py`, `tests/core/test_orchestrator.py`, `tests/core/test_executor.py`, and `tests/core/test_executor_expansion.py` are deleted.",
+      "The `just verify` command passes with 100% coverage for the remaining codebase.",
+      "No import errors or broken references exist in the core module."
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "slim-refactor",
+    "phase_id": "remove-ipc-layer",
+    "module_scope": [
+      "src/jitsu/server"
+    ],
+    "instructions": "Delete the IPC server and client modules (`ipc.py` and `client.py`) from `src/jitsu/server/`. Then, update `src/jitsu/server/mcp_server.py` to remove all imports and usage of the `IPCServer` and `IPCClient` classes. The `run_server` function should only run the MCP server without any IPC server initialization. Ensure that the module remains functional and that any related test files are cleaned up.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/ipc.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/client.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/server/test_ipc.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/server/test_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not remove or modify the MCP server's core functionality (e.g., `FastMCP` instance, tool registration).",
+      "Do not delete the test file for the MCP server (`test_server.py`) if it still contains valid tests for the MCP server.",
+      "Do not leave any dead imports or references to the removed IPC modules in the codebase."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The files `src/jitsu/server/ipc.py` and `src/jitsu/server/client.py` are deleted.",
+      "The file `src/jitsu/server/mcp_server.py` no longer contains any references to `IPCServer` or `IPCClient`.",
+      "The file `tests/server/test_ipc.py` is deleted.",
+      "The test suite passes with `just verify`.",
+      "The MCP server can start and serve tools without errors."
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "slim-refactor",
+    "phase_id": "clean-models-state",
+    "module_scope": [
+      "src/jitsu/models",
+      "src/jitsu/core"
+    ],
+    "instructions": "Remove ResumeResult from src/jitsu/models/core.py and remove hydrate_for_resume from src/jitsu/core/state.py. Ensure all imports of these removed items are cleaned up across the codebase. Update any tests in tests/models/test_core.py and tests/core/test_state.py that reference these removed items.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/state.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/models/test_core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_state.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not leave orphaned imports or references to ResumeResult or hydrate_for_resume in any file.",
+      "Do not modify unrelated models or state functions while cleaning up ResumeResult and hydrate_for_resume.",
+      "Do not break the existing functionality of the models or state modules by removing shared dependencies."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "ResumeResult class is completely removed from src/jitsu/models/core.py",
+      "hydrate_for_resume function is completely removed from src/jitsu/core/state.py",
+      "All imports of ResumeResult and hydrate_for_resume are cleaned up from the codebase",
+      "Tests in tests/models/test_core.py and tests/core/test_state.py pass without references to removed items",
+      "just verify passes with 100% test coverage for remaining code"
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "slim-refactor",
+    "phase_id": "cleanup-and-verify",
+    "module_scope": [
+      "src/jitsu/cli",
+      "src/jitsu/core",
+      "src/jitsu/models",
+      "src/jitsu/server",
+      "src/jitsu/templates",
+      "tests/cli",
+      "tests/core",
+      "tests/server"
+    ],
+    "instructions": "Refactor the codebase to complete the slim refactor by:\n1. Remove all CLI commands except 'serve' and the main callback from src/jitsu/cli/main.py.\n2. Delete src/jitsu/core/orchestrator.py and src/jitsu/core/executor.py.\n3. Delete src/jitsu/server/ipc.py and src/jitsu/server/client.py.\n4. Remove IPCServer instantiation and usage from src/jitsu/server/mcp_server.py, ensuring run_server only runs the MCP server.\n5. Delete the src/jitsu/templates/ directory.\n6. Remove ResumeResult from src/jitsu/models/core.py.\n7. Remove hydrate_for_resume from src/jitsu/core/state.py.\n8. Delete orphaned test files: tests/core/test_executor.py, tests/core/test_executor_expansion.py, tests/core/test_orchestrator.py, tests/core/test_client.py, tests/server/test_ipc.py.\n9. Refactor tests/cli/test_main.py to only test the remaining 'serve' command and main callback.\n10. Ensure all imports and references to removed components are cleaned up.\n11. Run 'just verify' to confirm 100% test coverage and that the 9 MCP tools remain unaffected.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/state.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not remove the 'serve' command or the main callback from CLI.",
+      "Do not delete any MCP tool implementations or server entry points.",
+      "Do not leave orphaned imports or references to deleted modules.",
+      "Do not break the 'just verify' command or reduce test coverage below 100%."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "All deleted files are removed and no longer imported.",
+      "CLI only contains 'serve' command and main callback.",
+      "MCP server runs without IPC/daemon components.",
+      "Tests pass with 100% coverage on remaining code.",
+      "9 MCP tools are functional and unaffected."
+    ],
+    "context_injection": null
+  }
+]

@@ -35,6 +35,11 @@ class TestEpicStorageDirectories:
         s = EpicStorage()
         assert s.base_dir == tmp_path
 
+    def test_get_current_path(self, storage: EpicStorage, tmp_path: Path) -> None:
+        """get_current_path returns the correct path for an epic_id."""
+        p = storage.get_current_path("epic-123")
+        assert p == tmp_path / "epics" / "current" / "epic-123.json"
+
 
 class TestEpicStorageReadText:
     """Tests for read_text."""
