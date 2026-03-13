@@ -1,0 +1,65 @@
+[
+  {
+    "epic_id": "epic-extract-model-config",
+    "phase_id": "phase-1-centralize-model-names",
+    "module_scope": [
+      "src/jitsu",
+      "tests",
+      "."
+    ],
+    "instructions": "Extract hardcoded LLM model names out of the source code and into a centralized configuration. 1. Create a config module (e.g., `src/jitsu/config.py`) using `pydantic_settings.BaseSettings` to manage default model names for each agent type (e.g., `planner_model`, `executor_model`). 2. Configure the settings class to read from a root-level config file (like `.env` or `jitsu.toml`). Provide sensible defaults (e.g., 'openrouter/hunter-alpha'). 3. Update `src/jitsu/cli.py`, `src/jitsu/core/planner.py`, and `src/jitsu/core/executor.py` (or orchestrator) to read these models from the config instead of using hardcoded strings. 4. Ensure the CLI `--model` flag properly overrides the config at runtime. 5. Create `tests/test_config.py` and update existing tests to assert that models can be dynamically configured and overridden. Ensure 100% test coverage and no linting bypasses.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/config.py",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/test_config.py",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Leaving any hardcoded provider/model strings in the core execution logic.",
+      "Failing to prioritize the CLI `--model` flag over the configured defaults.",
+      "Hardcoding the path to the config file in a way that breaks if jitsu is run from a different directory."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "Model names are loaded via a central Pydantic BaseSettings class in `config.py`.",
+      "The config natively supports reading from a root-level configuration file.",
+      "CLI and Core modules dynamically use these configured models based on agent type.",
+      "CLI flags correctly override config file values.",
+      "just verify passes cleanly with 100% test coverage."
+    ]
+  }
+]

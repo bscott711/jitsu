@@ -12,6 +12,7 @@ from anyio.to_thread import run_sync
 from instructor.core.exceptions import InstructorRetryException
 from pydantic import TypeAdapter, ValidationError
 
+from jitsu.config import settings
 from jitsu.core.compiler import ContextCompiler
 from jitsu.core.executor import JitsuExecutor, MonotonicityError
 from jitsu.core.planner import JitsuPlanner
@@ -104,8 +105,8 @@ class JitsuOrchestrator:
                 )
             except openai.APIStatusError as e:
                 # 403 = OpenRouter monthly limit, 429 = rate limit
-                if e.status_code in (403, 429) and model != "openai/gpt-oss-120b:free":
-                    backup_model = "openai/gpt-oss-120b:free"
+                if e.status_code in (403, 429) and model != settings.backup_model:
+                    backup_model = settings.backup_model
                     typer.secho(
                         f"\n⚠️ API limit hit for {model}. Falling back to {backup_model}...",
                         fg=typer.colors.YELLOW,
@@ -283,7 +284,7 @@ class JitsuOrchestrator:
                 objective, file_strings, out, model=model, verbose=verbose
             )
 
-        await self.run_autonomous(directives, out)
+        await self.run_autonomous(directives, out, model=model)
 
     async def send_payload(self, payload: bytes, port: int = 8765) -> str:
         """Async helper to send the payload over TCP and await response."""
@@ -426,15 +427,25 @@ class JitsuOrchestrator:
             err=True,
         )
 
-    async def run_autonomous(self, directives: list[AgentDirective], out: Path) -> None:
+    async def run_autonomous(
+        self,
+        directives: list[AgentDirective],
+        out: Path,
+        *,
+        model: str | None = None,
+    ) -> None:
         """
         Execute all phases then archive the epic.
 
         Args:
             directives: The phases to run.
             out: The epic JSON file to archive on completion.
+            model: Optional model override.
 
         """
+        if model:
+            self.executor.model = model
+
         if directives:
             git = GitProvider(self.executor.workspace_root)
             self._original_branch = git.get_current_branch()

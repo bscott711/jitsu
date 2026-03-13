@@ -10,6 +10,7 @@ import anyio
 import typer
 from instructor.core.client import Instructor
 
+from jitsu.config import settings
 from jitsu.core.client import LLMClientFactory
 from jitsu.models.core import AgentDirective, ContextTarget, EpicBlueprint
 from jitsu.prompts import (
@@ -49,12 +50,13 @@ class JitsuPlanner:
 
     async def generate_plan(
         self,
-        model: str = "openai/gpt-oss-120b:free",
+        model: str | None = None,
         on_progress: Callable[[str], None] | None = None,
         *,
         verbose: bool = False,
     ) -> list[AgentDirective]:
         """Query the LLM and generate a validated list of directives using two passes."""
+        _model = model or settings.planner_model
         client = self._client if self._client is not None else LLMClientFactory.create()
 
         # Extract allowed provider names for prompt engineering
@@ -89,7 +91,7 @@ class JitsuPlanner:
         blueprint_system_prompt = base_system_prompt + PLANNER_MACRO_PROMPT
 
         blueprint = client.chat.completions.create(
-            model=model,
+            model=_model,
             response_model=EpicBlueprint,
             messages=[
                 {"role": "system", "content": blueprint_system_prompt},
@@ -119,7 +121,7 @@ class JitsuPlanner:
             )
 
             directive = client.chat.completions.create(
-                model=model,
+                model=_model,
                 response_model=AgentDirective,
                 messages=[
                     {"role": "system", "content": phase_system_prompt},

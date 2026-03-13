@@ -9,6 +9,7 @@ import typer
 from instructor.core.client import Instructor
 from instructor.core.exceptions import InstructorRetryException
 
+from jitsu.config import settings
 from jitsu.core.client import LLMClientFactory
 from jitsu.core.runner import CommandRunner
 from jitsu.models.core import AgentDirective
@@ -34,7 +35,7 @@ class JitsuExecutor:
 
     def __init__(
         self,
-        model: str = "openai/gpt-oss-120b:free",
+        model: str | None = None,
         client: Instructor | None = None,
         runner: CommandRunner | None = None,
         workspace_root: Path | None = None,
@@ -51,7 +52,7 @@ class JitsuExecutor:
             workspace_root: The root directory of the workspace.
 
         """
-        self.model = model
+        self.model = model or settings.executor_model
         self.client = client if client is not None else LLMClientFactory.create()
         self.runner = runner if runner is not None else CommandRunner()
         self.workspace_root = workspace_root or Path.cwd()

@@ -120,6 +120,25 @@ async def test_orchestrator_run_autonomous_bridge(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_orchestrator_run_autonomous_with_model(tmp_path: Path) -> None:
+    """Test run_autonomous updates executor model."""
+    storage = EpicStorage(base_dir=tmp_path)
+    mock_executor = MagicMock()
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
+
+    with (
+        patch("jitsu.core.orchestrator.GitProvider") as mock_git_cls,
+        patch.object(orchestrator, "execute_phases", new_callable=AsyncMock),
+        patch.object(orchestrator, "finish", new_callable=AsyncMock),
+    ):
+        mock_git = mock_git_cls.return_value
+        mock_git.get_current_branch.return_value = "main"
+        await orchestrator.run_autonomous([directive], Path("test.json"), model="custom-model")
+        assert orchestrator.executor.model == "custom-model"
+
+
+@pytest.mark.asyncio
 async def test_orchestrator_execute_run_success(tmp_path: Path) -> None:
     """Test execute_run completes successfully."""
     orchestrator = JitsuOrchestrator(storage=EpicStorage(base_dir=tmp_path))

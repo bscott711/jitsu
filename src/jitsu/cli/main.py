@@ -9,6 +9,7 @@ import anyio
 import typer
 from pydantic import TypeAdapter, ValidationError
 
+from jitsu.config import settings
 from jitsu.core.orchestrator import JitsuOrchestrator
 from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective
@@ -253,7 +254,7 @@ def plan(
             "-m",
             help="The LLM model to use via OpenRouter.",
         ),
-    ] = "openai/gpt-oss-120b:free",
+    ] = settings.planner_model,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable verbose debug output.")
     ] = False,
@@ -306,7 +307,7 @@ def run(
             "-m",
             help="The LLM model to use via OpenRouter.",
         ),
-    ] = "openai/gpt-oss-120b:free",
+    ] = settings.planner_model,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable verbose debug output.")
     ] = False,
@@ -353,7 +354,7 @@ def auto(
             "-m",
             help="The LLM model to use via OpenRouter.",
         ),
-    ] = "openai/gpt-oss-120b:free",
+    ] = settings.planner_model,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable verbose debug output.")
     ] = False,
