@@ -12,7 +12,12 @@ from instructor.core.client import Instructor
 
 from jitsu.config import settings
 from jitsu.core.client import LLMClientFactory
-from jitsu.models.core import AgentDirective, ContextTarget, EpicBlueprint
+from jitsu.models.core import (
+    AgentDirective,
+    ContextTarget,
+    EpicBlueprint,
+    TargetResolutionMode,
+)
 from jitsu.prompts import (
     PLANNER_BASE_PROMPT,
     PLANNER_MACRO_PROMPT,
@@ -54,6 +59,8 @@ class JitsuPlanner:
         on_progress: Callable[[str], None] | None = None,
         *,
         verbose: bool = False,
+        include_paths: list[str] | None = None,
+        exclude_paths: list[str] | None = None,
     ) -> list[AgentDirective]:
         """Query the LLM and generate a validated list of directives using two passes."""
         _model = model or settings.planner_model
@@ -140,7 +147,67 @@ class JitsuPlanner:
 
             self.directives.append(directive)
 
+        # Apply deterministic context injection/exclusion
+        self.directives = self.compile_phases(
+            self.directives, include_paths=include_paths, exclude_paths=exclude_paths
+        )
+
         return self.directives
+
+    def compile_phases(
+        self,
+        directives: list[AgentDirective],
+        include_paths: list[str] | None = None,
+        exclude_paths: list[str] | None = None,
+    ) -> list[AgentDirective]:
+        """
+        Deterministically transform the list of directives by injecting and excluding context.
+
+        Args:
+            directives: The list of AgentDirectives to transform.
+            include_paths: Optional list of file paths to inject into every phase.
+            exclude_paths: Optional list of file paths to strip from every phase.
+
+        Returns:
+            A new list of transformed AgentDirectives.
+
+        """
+        if not include_paths and not exclude_paths:
+            return directives
+
+        includes = include_paths or []
+        excludes = set(exclude_paths or [])
+
+        transformed_directives: list[AgentDirective] = []
+        for directive in directives:
+            # 1. Start with existing targets, but filter out excluded ones
+            new_targets: list[ContextTarget] = [
+                target
+                for target in directive.context_targets
+                if target.target_identifier not in excludes
+            ]
+
+            # 2. Add included files if not already present
+            existing_identifiers = {t.target_identifier for t in new_targets}
+            new_targets.extend(
+                [
+                    ContextTarget(
+                        provider_name="file",
+                        target_identifier=path,
+                        is_required=True,
+                        resolution_mode=TargetResolutionMode.FULL_SOURCE,
+                    )
+                    for path in includes
+                    if path not in existing_identifiers
+                ]
+            )
+
+            # 3. Create a copy of the directive with updated targets
+            transformed_directives.append(
+                directive.model_copy(update={"context_targets": new_targets})
+            )
+
+        return transformed_directives
 
     def save_plan(self, path: str | Path) -> None:
         """Save the generated plan to disk as a JSON file."""

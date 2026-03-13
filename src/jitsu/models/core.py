@@ -24,6 +24,15 @@ class TargetResolutionMode(StrEnum):
     SCHEMA_ONLY = "SCHEMA_ONLY"
 
 
+class ContextInjectionConfig(BaseModel):
+    """Configuration for deterministic context injection and exclusion."""
+
+    model_config = ConfigDict(frozen=True)
+
+    include: list[str] = Field(default_factory=list)
+    exclude: list[str] = Field(default_factory=list)
+
+
 class PhaseBlueprint(BaseModel):
     """A high-level blueprint for a single Jitsu phase."""
 
@@ -75,6 +84,7 @@ class AgentDirective(BaseModel):
         description="Commands to verify the phase is complete.",
     )
     completion_criteria: list[str] = Field(default=[])
+    context_injection: ContextInjectionConfig | None = None
 
 
 class PhaseReport(BaseModel):

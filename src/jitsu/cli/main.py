@@ -336,7 +336,7 @@ def run(
 
 
 @app.command()
-def auto(
+def auto(  # noqa: PLR0913
     objective: Annotated[
         str | None, typer.Argument(help="The natural language objective for the epic.")
     ] = None,
@@ -373,6 +373,23 @@ def auto(
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable verbose debug output.")
     ] = False,
+    include: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--include",
+            "-i",
+            help="File paths to inject into every phase context.",
+            exists=True,
+        ),
+    ] = None,
+    exclude: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--exclude",
+            "-x",
+            help="File paths to strip from every phase context.",
+        ),
+    ] = None,
 ) -> None:
     """Generate a Jitsu plan and execute it autonomously step-by-step."""
     if not objective and not file:
@@ -384,9 +401,21 @@ def auto(
         )
         raise typer.Exit(1)
 
+    include_strings = [str(f) for f in include] if include else []
+    exclude_strings = [str(f) for f in exclude] if exclude else []
+
     orchestrator = JitsuOrchestrator()
     anyio.run(
-        partial(orchestrator.execute_auto, objective, file, context, model=model, verbose=verbose)
+        partial(
+            orchestrator.execute_auto,
+            objective,
+            file,
+            context,
+            model=model,
+            verbose=verbose,
+            include_paths=include_strings,
+            exclude_paths=exclude_strings,
+        )
     )
 
 

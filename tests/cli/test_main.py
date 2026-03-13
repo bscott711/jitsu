@@ -343,6 +343,35 @@ def test_cli_plan_default_path(
     assert f"Plan successfully generated and saved to {expected_path}" in result.output
 
 
+@patch("jitsu.cli.main.JitsuOrchestrator")
+def test_cli_auto_with_injection(mock_orch_cls: MagicMock, tmp_path: Path) -> None:
+    """Test the auto command with --include and --exclude flags."""
+    mock_orch = mock_orch_cls.return_value
+    mock_orch.execute_auto = AsyncMock()
+
+    inc_file = tmp_path / "inc.py"
+    inc_file.touch()
+    exc_file = tmp_path / "exc.py"
+
+    result = runner.invoke(
+        app,
+        [
+            "auto",
+            "Objective",
+            "--include",
+            str(inc_file),
+            "--exclude",
+            str(exc_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    mock_orch.execute_auto.assert_called_once()
+    kwargs = mock_orch.execute_auto.call_args[1]
+    assert kwargs["include_paths"] == [str(inc_file)]
+    assert kwargs["exclude_paths"] == [str(exc_file)]
+
+
 @patch("jitsu.cli.main.anyio.run")
 def test_cli_queue_ls(mock_run: MagicMock) -> None:
     """Test the 'jitsu queue ls' command."""

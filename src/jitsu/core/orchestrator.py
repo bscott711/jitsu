@@ -59,7 +59,7 @@ class JitsuOrchestrator:
     # Public API
     # ------------------------------------------------------------------
 
-    async def run_plan(
+    async def run_plan(  # noqa: PLR0913
         self,
         objective: str,
         files: list[str],
@@ -67,6 +67,8 @@ class JitsuOrchestrator:
         *,
         model: str,
         verbose: bool = False,
+        include_paths: list[str] | None = None,
+        exclude_paths: list[str] | None = None,
     ) -> list[AgentDirective]:
         """
         Run the planner and save the epic JSON to *out*.
@@ -81,6 +83,8 @@ class JitsuOrchestrator:
             out: File path where the resulting epic JSON will be written.
             model: LLM model identifier.
             verbose: Emit extra debug output when ``True``.
+            include_paths: Optional list of file paths to inject into every phase.
+            exclude_paths: Optional list of file paths to strip from every phase.
 
         Returns:
             List of generated ``AgentDirective`` objects.
@@ -100,7 +104,11 @@ class JitsuOrchestrator:
         try:
             try:
                 directives = await planner.generate_plan(
-                    model=model, on_progress=_progress, verbose=verbose
+                    model=model,
+                    on_progress=_progress,
+                    verbose=verbose,
+                    include_paths=include_paths,
+                    exclude_paths=exclude_paths,
                 )
             except openai.APIStatusError as e:
                 # 403 = OpenRouter monthly limit, 429 = rate limit
@@ -113,7 +121,11 @@ class JitsuOrchestrator:
                         err=True,
                     )
                     directives = await planner.generate_plan(
-                        model=backup_model, on_progress=_progress, verbose=verbose
+                        model=backup_model,
+                        on_progress=_progress,
+                        verbose=verbose,
+                        include_paths=include_paths,
+                        exclude_paths=exclude_paths,
                     )
                 else:
                     raise
@@ -130,7 +142,7 @@ class JitsuOrchestrator:
         planner.save_plan(out)
         return directives
 
-    async def execute_plan(
+    async def execute_plan(  # noqa: PLR0913
         self,
         objective: str,
         files: list[str],
@@ -138,6 +150,8 @@ class JitsuOrchestrator:
         *,
         model: str,
         verbose: bool = False,
+        include_paths: list[str] | None = None,
+        exclude_paths: list[str] | None = None,
     ) -> list[AgentDirective]:
         """
         Execute the planning phase with a progress bar.
@@ -148,23 +162,35 @@ class JitsuOrchestrator:
             out: File path where the resulting epic JSON will be written.
             model: LLM model identifier.
             verbose: Emit extra debug output when ``True``.
+            include_paths: Optional list of file paths to inject into every phase.
+            exclude_paths: Optional list of file paths to strip from every phase.
 
         Returns:
             List of generated ``AgentDirective`` objects.
 
         """
         with typer.progressbar(length=100, label="Pondering...") as progress:
-            directives = await self.run_plan(objective, files, out, model=model, verbose=verbose)
+            directives = await self.run_plan(
+                objective,
+                files,
+                out,
+                model=model,
+                verbose=verbose,
+                include_paths=include_paths,
+                exclude_paths=exclude_paths,
+            )
             progress.update(100)
         return directives
 
-    async def execute_run(
+    async def execute_run(  # noqa: PLR0913
         self,
         objective: str,
         files: list[str],
         *,
         model: str,
         verbose: bool = False,
+        include_paths: list[str] | None = None,
+        exclude_paths: list[str] | None = None,
     ) -> None:
         """
         Generate a plan and immediately submit it to the server.
@@ -174,6 +200,8 @@ class JitsuOrchestrator:
             files: Relevant file paths (as strings) for context.
             model: LLM model identifier.
             verbose: Emit extra debug output when ``True``.
+            include_paths: Optional list of file paths to inject into every phase.
+            exclude_paths: Optional list of file paths to strip from every phase.
 
         """
         typer.secho(
@@ -182,7 +210,13 @@ class JitsuOrchestrator:
 
         temp_out = self.storage.current_dir / "temp_plan.json"
         directives = await self.execute_plan(
-            objective, files, temp_out, model=model, verbose=verbose
+            objective,
+            files,
+            temp_out,
+            model=model,
+            verbose=verbose,
+            include_paths=include_paths,
+            exclude_paths=exclude_paths,
         )
 
         epic_id = directives[0].epic_id
@@ -216,7 +250,7 @@ class JitsuOrchestrator:
             typer.secho(f"❌ Failed to read or move epic file: {e}", fg=typer.colors.RED, err=True)
             raise typer.Exit(1) from e
 
-    async def execute_auto(
+    async def execute_auto(  # noqa: PLR0913
         self,
         objective: str | None = None,
         file: Path | None = None,
@@ -224,6 +258,8 @@ class JitsuOrchestrator:
         *,
         model: str,
         verbose: bool = False,
+        include_paths: list[str] | None = None,
+        exclude_paths: list[str] | None = None,
     ) -> None:
         """
         Execute an epic autonomously, either from an objective or an existing file.
@@ -234,6 +270,8 @@ class JitsuOrchestrator:
             context: Relevant files to provide as context.
             model: LLM model identifier.
             verbose: Emit extra debug output when ``True``.
+            include_paths: Optional list of file paths to inject into every phase.
+            exclude_paths: Optional list of file paths to strip from every phase.
 
         """
         directives: list[AgentDirective]
@@ -282,7 +320,13 @@ class JitsuOrchestrator:
                 f"🧠 Step 1: Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True
             )
             directives = await self.execute_plan(
-                objective, file_strings, temp_out, model=model, verbose=verbose
+                objective,
+                file_strings,
+                temp_out,
+                model=model,
+                verbose=verbose,
+                include_paths=include_paths,
+                exclude_paths=exclude_paths,
             )
             epic_id = directives[0].epic_id
             out = self.storage.get_current_path(epic_id)

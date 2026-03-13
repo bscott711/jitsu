@@ -7,7 +7,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from jitsu.core.planner import JitsuPlanner
-from jitsu.models.core import AgentDirective, EpicBlueprint, PhaseBlueprint
+from jitsu.models.core import (
+    AgentDirective,
+    ContextTarget,
+    EpicBlueprint,
+    PhaseBlueprint,
+    TargetResolutionMode,
+)
 from jitsu.prompts import PLANNER_MACRO_PROMPT, VERIFICATION_RULE
 
 
@@ -199,3 +205,88 @@ async def test_planner_generate_plan_with_jitsurules() -> None:
     system_msg = call["messages"][0]["content"]
     assert "PROJECT RULES (.jitsurules):" in system_msg
     assert "RULE: Do things" in system_msg
+
+
+def test_planner_compile_phases_logic() -> None:
+    """Test the deterministic compile_phases logic."""
+    planner = JitsuPlanner(objective="Test", relevant_files=[])
+
+    initial_targets = [
+        ContextTarget(provider_name="file", target_identifier="keep.py"),
+        ContextTarget(provider_name="file", target_identifier="remove.py"),
+    ]
+    directive = AgentDirective(
+        epic_id="e1",
+        phase_id="p1",
+        module_scope=["src"],
+        instructions="test",
+        context_targets=initial_targets,
+    )
+
+    # 1. Include only
+    transformed = planner.compile_phases([directive], include_paths=["new.py"])
+    targets = transformed[0].context_targets
+    expected_len_3 = 3
+    assert len(targets) == expected_len_3
+    assert any(t.target_identifier == "new.py" for t in targets)
+    assert any(t.target_identifier == "keep.py" for t in targets)
+    assert any(t.target_identifier == "remove.py" for t in targets)
+
+    # 2. Exclude only
+    transformed = planner.compile_phases([directive], exclude_paths=["remove.py"])
+    targets = transformed[0].context_targets
+    expected_len_1 = 1
+    assert len(targets) == expected_len_1
+    assert targets[0].target_identifier == "keep.py"
+
+    # 3. Combination
+    transformed = planner.compile_phases(
+        [directive], include_paths=["new.py"], exclude_paths=["remove.py"]
+    )
+    targets = transformed[0].context_targets
+    expected_len_2 = 2
+    assert len(targets) == expected_len_2
+    assert {t.target_identifier for t in targets} == {"keep.py", "new.py"}
+
+    # 4. No duplicates on include
+    transformed = planner.compile_phases([directive], include_paths=["keep.py"])
+    targets = transformed[0].context_targets
+    assert len(targets) == expected_len_2  # keep.py was already there
+
+    # 5. Empty lists
+    transformed = planner.compile_phases([directive], include_paths=[], exclude_paths=[])
+    assert transformed[0].context_targets == initial_targets
+
+
+@pytest.mark.asyncio
+async def test_planner_generate_plan_with_injection() -> None:
+    """Test that generate_plan correctly applies context injection."""
+    blueprint = EpicBlueprint(
+        epic_id="e1",
+        phases=[PhaseBlueprint(phase_id="p1", description="test phase")],
+    )
+    directive = AgentDirective(
+        epic_id="e1",
+        phase_id="p1",
+        module_scope=["test"],
+        instructions="test",
+        context_targets=[ContextTarget(provider_name="file", target_identifier="old.py")],
+    )
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = [blueprint, directive]
+
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+
+    with (
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
+        plan = await planner.generate_plan(include_paths=["new.py"], exclude_paths=["old.py"])
+
+    expected_len_1 = 1
+    assert len(plan) == expected_len_1
+    targets = plan[0].context_targets
+    assert len(targets) == expected_len_1
+    assert targets[0].target_identifier == "new.py"
+    assert targets[0].resolution_mode == TargetResolutionMode.FULL_SOURCE

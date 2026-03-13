@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from jitsu.models.core import (
     AgentDirective,
+    ContextInjectionConfig,
     ContextTarget,
     PhaseReport,
     PhaseStatus,
@@ -28,6 +29,22 @@ def test_target_resolution_mode_enum() -> None:
     assert TargetResolutionMode.STRUCTURE_ONLY.value == "STRUCTURE_ONLY"
     assert TargetResolutionMode.FULL_SOURCE.value == "FULL_SOURCE"
     assert TargetResolutionMode.SCHEMA_ONLY.value == "SCHEMA_ONLY"
+
+
+def test_context_injection_config() -> None:
+    """Test the ContextInjectionConfig model."""
+    config = ContextInjectionConfig(include=["file1.py"], exclude=["file2.py"])
+    assert config.include == ["file1.py"]
+    assert config.exclude == ["file2.py"]
+
+    # Test defaults
+    default_config = ContextInjectionConfig()
+    assert default_config.include == []
+    assert default_config.exclude == []
+
+    # Test frozen
+    with pytest.raises(ValidationError):
+        config.include = ["new.py"]
 
 
 def test_context_target_initialization() -> None:
@@ -74,6 +91,7 @@ def test_agent_directive_defaults() -> None:
     # The default_factory lambdas should be triggered here
     assert directive.context_targets == []
     assert directive.anti_patterns == []
+    assert directive.context_injection is None
 
 
 def test_phase_report_defaults() -> None:
@@ -101,6 +119,20 @@ def test_agent_directive_new_fields() -> None:
     )
     assert directive.verification_commands == ["uv run pytest"]
     assert directive.completion_criteria == ["All tests pass"]
+
+
+def test_agent_directive_with_injection_config() -> None:
+    """Test AgentDirective with context_injection field."""
+    config = ContextInjectionConfig(include=["inc.py"])
+    directive = AgentDirective(
+        epic_id="epic-001",
+        phase_id="phase-001",
+        module_scope=["src"],
+        instructions="test",
+        context_injection=config,
+    )
+    assert directive.context_injection == config
+    assert directive.context_injection.include == ["inc.py"]
 
 
 def test_phase_report_new_fields() -> None:
