@@ -71,7 +71,7 @@ def test_cli_serve_with_valid_epic(mock_run: MagicMock, tmp_path: Path) -> None:
         {
             "epic_id": "test-epic",
             "phase_id": "phase-1",
-            "module_scope": "test",
+            "module_scope": ["test"],
             "instructions": "do the thing",
         }
     ]

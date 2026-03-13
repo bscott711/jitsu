@@ -23,7 +23,7 @@ def mock_directive() -> AgentDirective:
     return AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="src",
+        module_scope=["src"],
         instructions="test instructions",
         completion_criteria=["done"],
         verification_commands=["just verify"],
@@ -321,7 +321,7 @@ async def test_executor_scope_guard_on_retry(
 ) -> None:
     """Test that MonotonicityError is raised when editing outside scope on retry."""
     mock_client = MagicMock()
-    directive = mock_directive.model_copy(update={"module_scope": "src/jitsu"})
+    directive = mock_directive.model_copy(update={"module_scope": ["src/jitsu"]})
 
     # 1st attempt: Valid edit
     # 2nd attempt: Invalid edit (outside src/jitsu)
@@ -365,7 +365,26 @@ async def test_executor_scope_guard_outside_workspace(
     executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
 
     with pytest.raises(MonotonicityError, match="outside workspace_root"):
-        executor.enforce_scope([FileEdit(filepath="/outside/path.py", content="content")], "src")
+        executor.enforce_scope([FileEdit(filepath="/outside/path.py", content="content")], ["src"])
+
+
+@pytest.mark.asyncio
+async def test_executor_scope_guard_multiple_scopes(mock_runner: MagicMock, tmp_path: Path) -> None:
+    """Test that multiple scopes are correctly handled."""
+    executor = JitsuExecutor(runner=mock_runner, workspace_root=tmp_path)
+    module_scope = ["src", "tests"]
+
+    # Valid edits
+    edits = [
+        FileEdit(filepath=str(tmp_path / "src/a.py"), content=""),
+        FileEdit(filepath=str(tmp_path / "tests/b.py"), content=""),
+    ]
+    executor.enforce_scope(edits, module_scope)  # Should not raise
+
+    # Invalid edit
+    invalid_edits = [FileEdit(filepath=str(tmp_path / "other/c.py"), content="")]
+    with pytest.raises(MonotonicityError, match="outside module_scope"):
+        executor.enforce_scope(invalid_edits, module_scope)
 
 
 @pytest.mark.asyncio

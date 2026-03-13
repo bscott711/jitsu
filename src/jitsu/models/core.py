@@ -66,7 +66,7 @@ class AgentDirective(BaseModel):
 
     epic_id: str
     phase_id: str
-    module_scope: str
+    module_scope: list[str]
     instructions: str
     context_targets: list[ContextTarget] = Field(default=[])
     anti_patterns: list[str] = Field(default=[])

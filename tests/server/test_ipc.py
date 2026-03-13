@@ -32,7 +32,7 @@ async def test_handle_client_success(
     directive_data = {
         "epic_id": "test-epic",
         "phase_id": "phase-1",
-        "module_scope": "test",
+        "module_scope": ["test"],
         "instructions": "do something",
     }
     payload = json.dumps([directive_data]).encode("utf-8")
@@ -114,7 +114,7 @@ async def test_handle_client_queue_ls(
     directive_data = {
         "epic_id": "test-epic",
         "phase_id": "phase-1",
-        "module_scope": "test",
+        "module_scope": ["test"],
         "instructions": "do something",
     }
     state_manager.queue_directive(AgentDirective.model_validate(directive_data))
@@ -147,7 +147,7 @@ async def test_handle_client_queue_clear(
 ) -> None:
     """Test the QUEUE_CLEAR command."""
     state_manager.queue_directive(
-        AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+        AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
     )
     assert state_manager.pending_count == 1
 

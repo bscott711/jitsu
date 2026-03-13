@@ -66,7 +66,7 @@ def test_agent_directive_defaults() -> None:
     directive = AgentDirective(
         epic_id="epic-001",
         phase_id="phase-001",
-        module_scope="src/auth",
+        module_scope=["src/auth"],
         instructions="Build the auth module.",
     )
     assert directive.epic_id == "epic-001"
@@ -93,7 +93,7 @@ def test_agent_directive_new_fields() -> None:
     directive = AgentDirective(
         epic_id="epic-001",
         phase_id="phase-001",
-        module_scope="src/auth",
+        module_scope=["src/auth"],
         instructions="Build the auth module.",
         verification_commands=["uv run pytest"],
         completion_criteria=["All tests pass"],
@@ -117,7 +117,7 @@ def test_agent_directive_strictness_and_frozen() -> None:
     directive = AgentDirective(
         epic_id="epic-001",
         phase_id="phase-001",
-        module_scope="src/auth",
+        module_scope=["src/auth"],
         instructions="Build the auth module.",
     )
     # Test frozen

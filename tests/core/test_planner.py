@@ -30,7 +30,7 @@ async def test_planner_plan_generation_success() -> None:
     directive = AgentDirective(
         epic_id="e1",
         phase_id="p1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
         completion_criteria=["done"],
         verification_commands=["just verify"],
@@ -126,7 +126,7 @@ async def test_planner_save_plan(tmp_path: Path) -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
         completion_criteria=["done"],
         verification_commands=["just verify"],
@@ -154,7 +154,7 @@ async def test_planner_generate_plan_verbose() -> None:
     directive = AgentDirective(
         epic_id="e1",
         phase_id="p1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
     )
 

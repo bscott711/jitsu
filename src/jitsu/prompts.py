@@ -33,7 +33,7 @@ The Jitsu Executor is completely blind. It can ONLY read and edit files that you
 YOUR DIRECTIVES:
 1. NO ANALYSIS PHASES: Never create a phase to "read", "analyze", "plan", or "run tests". The Executor automatically analyzes code and runs tests during execution. Every single phase MUST be an actionable code modification.
 2. THE CONTEXT MANDATE: You MUST populate `context_targets` for every phase. If you are asking the Executor to modify a file, that file's exact path MUST be in the `context_targets`.
-3. PAIRED TESTING: Always include the corresponding test file in the `context_targets` alongside the source file (e.g., if you target `src/foo/bar.py`, you must also target `tests/foo/test_bar.py`).
+3. PAIRED TESTING & SYMMETRY: A feature and its tests MUST be implemented in the EXACT SAME PHASE. Never split implementation and testing into separate phases, or the 100% test coverage check will fail the build.
 4. LOGICAL GROUPING: Do not split a single feature across multiple phases if they touch the same files. Group related changes into a single comprehensive phase.
 
 JSON SCHEMA REQUIREMENT:
@@ -42,7 +42,7 @@ You must return a JSON array of objects matching this strict schema:
   {
     "epic_id": "string (slugified epic name)",
     "phase_id": "string (slugified phase name)",
-    "module_scope": "string (high level description of area)",
+    "module_scope": ["string (list of root directory paths this phase is restricted to)"],
     "instructions": "string (EXACT, highly technical instructions for the Executor)",
     "context_targets": [
       {
@@ -63,6 +63,8 @@ Do not output any markdown text outside of the JSON array. Output valid JSON onl
 
 PLANNER_MACRO_PROMPT = """
 CRITICAL MACRO RULE: You are drafting a high-level blueprint ONLY. You must return a SINGLE EpicBlueprint object. Each phase inside the blueprint MUST contain ONLY a `phase_id` and a 1-sentence `description`. Do NOT generate full instructions, module_scopes, context_targets, or any other fields yet. We will elaborate on those in a separate pass.
+
+MACRO ARCHITECTURE RULE: NEVER split implementation and testing into separate phases. For simple features and bug fixes, you MUST output exactly ONE comprehensive phase.
 """
 
 PLANNER_MICRO_PROMPT = """
@@ -79,7 +81,8 @@ EXECUTOR_RECOVERY_PROMPT = (
     "CRITICAL ALERT: You are in recovery mode. A previous attempt failed verification. "
     "Analyze the provided failure summary, traceback, and AST structural outline below. "
     "You must apply the MINIMAL targeted fix necessary to resolve the issue. "
-    "Preserve the core logic of your original implementation while addressing the specific contract violation."
+    "Preserve the core logic of your original implementation while addressing the specific contract violation. "
+    "If you are stuck in a loop (error count not improving), you MUST try a fundamentally different approach. Do not repeat the exact same code edit."
 )
 
 VERIFICATION_SUMMARY_RULE = """### Verification Failure Report

@@ -213,7 +213,7 @@ class JitsuExecutor:
 
         return False
 
-    def enforce_scope(self, edits: list[FileEdit], module_scope: str) -> None:
+    def enforce_scope(self, edits: list[FileEdit], module_scope: list[str]) -> None:
         """Ensure all edits are within the allowed module scope."""
         for edit in edits:
             path = Path(edit.filepath)
@@ -226,7 +226,8 @@ class JitsuExecutor:
                     msg = f"FileEdit path '{edit.filepath}' is outside workspace_root."
                     raise MonotonicityError(msg) from None
 
-            if not path.as_posix().startswith(module_scope):
+            posix_path = path.as_posix()
+            if not any(posix_path.startswith(scope) for scope in module_scope):
                 msg = (
                     f"FileEdit path '{edit.filepath}' is outside module_scope "
                     f"'{module_scope}' during retry."

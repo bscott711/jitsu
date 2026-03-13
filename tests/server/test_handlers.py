@@ -48,7 +48,7 @@ async def test_handle_get_next_phase_with_data(
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="src/test",
+        module_scope=["src/test"],
         instructions="Do a thing",
     )
     state_manager.queue_directive(directive)
@@ -66,7 +66,7 @@ async def test_handle_report_status_success(
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-success",
-        module_scope="src/test",
+        module_scope=["src/test"],
         instructions="Test",
     )
     state_manager.queue_directive(directive)
@@ -117,7 +117,7 @@ async def test_handle_inspect_queue(
     directive = AgentDirective(
         epic_id="epic-inspect",
         phase_id="phase-inspect",
-        module_scope="src/test",
+        module_scope=["src/test"],
         instructions="Test",
     )
     state_manager.queue_directive(directive)
@@ -192,7 +192,7 @@ async def test_handle_submit_epic_success(
     directive_data = {
         "epic_id": "epic-new",
         "phase_id": "phase-new",
-        "module_scope": "src",
+        "module_scope": ["src"],
         "instructions": "Go",
     }
 
@@ -289,12 +289,12 @@ async def test_handle_report_status_stuck(
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-stuck",
-        module_scope="src",
+        module_scope=["src"],
         instructions="Test",
     )
     state_manager.queue_directive(directive)
     state_manager.queue_directive(
-        AgentDirective(epic_id="epic-1", phase_id="p2", module_scope="s", instructions="i")
+        AgentDirective(epic_id="epic-1", phase_id="p2", module_scope=["s"], instructions="i")
     )
     expected_pending = 2
     assert state_manager.pending_count == expected_pending

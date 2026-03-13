@@ -19,7 +19,7 @@ def test_state_manager_queue_and_get() -> None:
     directive = AgentDirective(
         epic_id="epic-001",
         phase_id="phase-001",
-        module_scope="src/test",
+        module_scope=["src/test"],
         instructions="Test instructions.",
     )
 
@@ -40,7 +40,7 @@ def test_state_manager_update_status() -> None:
     directive = AgentDirective(
         epic_id="epic-001",
         phase_id="phase-001",
-        module_scope="src/test",
+        module_scope=["src/test"],
         instructions="Test",
     )
     manager.queue_directive(directive)
@@ -62,9 +62,9 @@ def test_state_manager_update_status() -> None:
 def test_state_manager_remaining_count() -> None:
     """Test correctly calculating remaining phases for an epic."""
     manager = JitsuStateManager()
-    d1 = AgentDirective(epic_id="epic-1", phase_id="p1", module_scope="s", instructions="i")
-    d2 = AgentDirective(epic_id="epic-1", phase_id="p2", module_scope="s", instructions="i")
-    d3 = AgentDirective(epic_id="epic-2", phase_id="p3", module_scope="s", instructions="i")
+    d1 = AgentDirective(epic_id="epic-1", phase_id="p1", module_scope=["s"], instructions="i")
+    d2 = AgentDirective(epic_id="epic-1", phase_id="p2", module_scope=["s"], instructions="i")
+    d3 = AgentDirective(epic_id="epic-2", phase_id="p3", module_scope=["s"], instructions="i")
 
     manager.queue_directive(d1)
     manager.queue_directive(d2)
@@ -84,7 +84,7 @@ def test_state_manager_pending_phases() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="src/test",
+        module_scope=["src/test"],
         instructions="Test",
     )
     manager.queue_directive(directive)
@@ -98,8 +98,8 @@ def test_state_manager_pending_phases() -> None:
 def test_state_manager_on_stuck() -> None:
     """Test that on_stuck records the report and clears the queue."""
     manager = JitsuStateManager()
-    d1 = AgentDirective(epic_id="epic-1", phase_id="p1", module_scope="s", instructions="i")
-    d2 = AgentDirective(epic_id="epic-1", phase_id="p2", module_scope="s", instructions="i")
+    d1 = AgentDirective(epic_id="epic-1", phase_id="p1", module_scope=["s"], instructions="i")
+    d2 = AgentDirective(epic_id="epic-1", phase_id="p2", module_scope=["s"], instructions="i")
     manager.queue_directive(d1)
     manager.queue_directive(d2)
 

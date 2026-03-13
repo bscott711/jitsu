@@ -25,7 +25,7 @@ async def test_orchestrator_execute_phases_success(tmp_path: Path) -> None:
     mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
     mock_executor = MagicMock()
     mock_executor.execute_directive = AsyncMock(return_value=True)
-    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
 
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
@@ -46,7 +46,7 @@ async def test_orchestrator_execute_phases_failure(tmp_path: Path) -> None:
     mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
     mock_executor = MagicMock()
     mock_executor.execute_directive = AsyncMock(return_value=False)
-    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
 
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
@@ -66,7 +66,7 @@ async def test_orchestrator_execute_phases_just_missing(tmp_path: Path) -> None:
     mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
     mock_executor = MagicMock()
     mock_executor.execute_directive = AsyncMock(return_value=True)
-    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
 
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
@@ -104,7 +104,7 @@ async def test_orchestrator_run_autonomous_bridge(tmp_path: Path) -> None:
     """Test JitsuOrchestrator.run_autonomous bridges to execute_phases and finish."""
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(storage=storage)
-    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
 
     with (
         patch("jitsu.core.orchestrator.GitProvider") as mock_git_cls,
@@ -123,7 +123,7 @@ async def test_orchestrator_run_autonomous_bridge(tmp_path: Path) -> None:
 async def test_orchestrator_execute_run_success(tmp_path: Path) -> None:
     """Test execute_run completes successfully."""
     orchestrator = JitsuOrchestrator(storage=EpicStorage(base_dir=tmp_path))
-    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
 
     async def mock_plan_side_effect(
         _objective: str, _files: list[str], out: Path, **_kwargs: object
@@ -152,7 +152,7 @@ async def test_orchestrator_execute_run_success(tmp_path: Path) -> None:
 async def test_orchestrator_execute_run_server_error(tmp_path: Path) -> None:
     """Test execute_run handles server error response."""
     orchestrator = JitsuOrchestrator(storage=EpicStorage(base_dir=tmp_path))
-    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
 
     async def mock_plan_side_effect(
         _objective: str, _files: list[str], out: Path, **_kwargs: object
@@ -254,7 +254,7 @@ async def test_orchestrator_send_payload_eof(tmp_path: Path) -> None:
 async def test_orchestrator_run_plan_success(tmp_path: Path) -> None:
     """Test run_plan success and output generation."""
     mock_planner = MagicMock()
-    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
     mock_planner.generate_plan = AsyncMock(return_value=[directive])
 
     storage = EpicStorage(base_dir=tmp_path)
@@ -272,7 +272,7 @@ async def test_orchestrator_run_plan_fallback(tmp_path: Path) -> None:
     mock_planner = MagicMock()
     error_response = httpx.Response(429, request=httpx.Request("POST", "url"))
     mock_error = openai.APIStatusError("limit", response=error_response, body=None)
-    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
 
     mock_planner.generate_plan.side_effect = [mock_error, AsyncMock(return_value=[directive])()]
 
@@ -362,7 +362,9 @@ async def test_orchestrator_run_plan_on_progress(tmp_path: Path) -> None:
 
     mock_planner = MagicMock()
     mock_planner.generate_plan = AsyncMock(
-        return_value=[AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")]
+        return_value=[
+            AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
+        ]
     )
 
     storage = EpicStorage(base_dir=tmp_path)
@@ -461,7 +463,7 @@ async def test_orchestrator_execute_phases_stuck(tmp_path: Path) -> None:
     mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
     mock_executor = MagicMock()
     mock_executor.execute_directive = AsyncMock(side_effect=MonotonicityError("Stuck"))
-    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
 
     out_file = tmp_path / "epic.json"
     storage = EpicStorage(base_dir=tmp_path)
@@ -490,7 +492,7 @@ async def test_orchestrator_execute_phases_failed_persistence(tmp_path: Path) ->
     mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
     mock_executor = MagicMock()
     mock_executor.execute_directive = AsyncMock(return_value=False)
-    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
 
     out_file = tmp_path / "epic.json"
     storage = EpicStorage(base_dir=tmp_path)
@@ -518,7 +520,7 @@ async def test_orchestrator_execute_phases_commit_failure(tmp_path: Path) -> Non
     mock_compiler.compile_directive = AsyncMock(return_value="prompt")
     mock_executor = MagicMock()
     mock_executor.execute_directive = AsyncMock(return_value=True)
-    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
 
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
@@ -618,7 +620,7 @@ async def test_orchestrator_retry_budget_limit(tmp_path: Path) -> None:
     mock_executor = MagicMock()
     # Return False to simulate exhaustion of retries
     mock_executor.execute_directive = AsyncMock(return_value=False)
-    directive = AgentDirective(epic_id="e", phase_id="p", module_scope="s", instructions="i")
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
 
     storage = EpicStorage(base_dir=tmp_path)
     state_manager = MagicMock()
@@ -652,8 +654,8 @@ async def test_orchestrator_retry_reset_between_phases(tmp_path: Path) -> None:
     mock_compiler.compile_directive = AsyncMock(return_value="mock prompt")
     mock_executor = MagicMock()
     mock_executor.execute_directive = AsyncMock(return_value=True)
-    d1 = AgentDirective(epic_id="e", phase_id="p1", module_scope="s", instructions="i")
-    d2 = AgentDirective(epic_id="e", phase_id="p2", module_scope="s", instructions="i")
+    d1 = AgentDirective(epic_id="e", phase_id="p1", module_scope=["s"], instructions="i")
+    d2 = AgentDirective(epic_id="e", phase_id="p2", module_scope=["s"], instructions="i")
 
     storage = EpicStorage(base_dir=tmp_path)
     orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
