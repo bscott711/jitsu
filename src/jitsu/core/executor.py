@@ -19,6 +19,8 @@ from jitsu.prompts import (
     VERIFICATION_SUMMARY_RULE,
 )
 from jitsu.providers.ast import ASTProvider
+from jitsu.providers.file import FileStateProvider
+from jitsu.utils.traceback_parser import extract_filepaths, filter_local_paths
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,7 @@ class JitsuExecutor:
         self.runner = runner if runner is not None else CommandRunner()
         self.workspace_root = workspace_root or Path.cwd()
         self.ast_provider = ASTProvider(self.workspace_root)
+        self.file_provider = FileStateProvider(self.workspace_root)
 
     @staticmethod
     def _apply_edits(edits: list[FileEdit]) -> None:
@@ -179,8 +182,8 @@ class JitsuExecutor:
                     return False
 
                 prev_fail_count = self._check_monotonicity(details.summary, prev_fail_count)
-                base_user_message = await self._augment_recovery_message(
-                    base_user_message, details, result.edits
+                base_user_message = await self.augment_recovery_message(
+                    base_user_message, details, result.edits, directive
                 )
 
                 attempts += 1
@@ -247,11 +250,12 @@ class JitsuExecutor:
             raise MonotonicityError(msg)
         return fail_count
 
-    async def _augment_recovery_message(
+    async def augment_recovery_message(
         self,
         base_message: str,
         details: VerificationFailureDetails,
         edits: list[FileEdit],
+        directive: AgentDirective,
     ) -> str:
         """Append recovery hint, failure details, and AST context to the user message."""
         payload = (
@@ -282,6 +286,26 @@ class JitsuExecutor:
 
             if is_internal:
                 files_to_resolve.add(details.failing_file)
+
+        # Dynamic Context Expansion: Parse traceback for more relevant files
+        extracted_paths = extract_filepaths(details.trimmed)
+        local_paths = filter_local_paths(extracted_paths, self.workspace_root)
+
+        for filepath in sorted(local_paths):
+            # 1. Must be in module_scope
+            in_scope = any(filepath.startswith(scope) for scope in directive.module_scope)
+            if not in_scope:
+                continue
+
+            # 2. Must NOT be in the base_message already
+            # We check both full source and manifest indicators
+            if f"`{filepath}`" in base_message or f"### File: {filepath}" in base_message:
+                continue
+
+            # 3. Load full source and append
+            logger.info("Found out-of-context file in traceback: %s. Expanding context.", filepath)
+            file_ctx = await self.file_provider.resolve(filepath)
+            payload += f"\n\n{file_ctx}"
 
         for filepath in sorted(files_to_resolve):
             ast_ctx = await self.ast_provider.resolve(filepath)
