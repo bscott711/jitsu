@@ -2,7 +2,6 @@
 
 import shutil
 from collections.abc import Callable
-from datetime import datetime, timezone
 from pathlib import Path
 
 import anyio
@@ -177,14 +176,18 @@ class JitsuOrchestrator:
             verbose: Emit extra debug output when ``True``.
 
         """
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        out = self.storage.current_dir / f"epic_{timestamp}.json"
-
         typer.secho(
             f"🧠 Step 1: Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True
         )
 
-        await self.execute_plan(objective, files, out, model=model, verbose=verbose)
+        temp_out = self.storage.current_dir / "temp_plan.json"
+        directives = await self.execute_plan(
+            objective, files, temp_out, model=model, verbose=verbose
+        )
+
+        epic_id = directives[0].epic_id
+        out = self.storage.get_current_path(epic_id)
+        await anyio.Path(temp_out).rename(out)
 
         typer.secho(
             f"✅ Plan successfully generated and saved to {self.storage.rel_path(out)}",
@@ -273,16 +276,17 @@ class JitsuOrchestrator:
                 )
                 raise typer.Exit(1)
 
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-            out = self.storage.current_dir / f"epic_{timestamp}.json"
-
             file_strings = [str(f) for f in context] if context else []
+            temp_out = self.storage.current_dir / "temp_plan.json"
             typer.secho(
                 f"🧠 Step 1: Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True
             )
             directives = await self.execute_plan(
-                objective, file_strings, out, model=model, verbose=verbose
+                objective, file_strings, temp_out, model=model, verbose=verbose
             )
+            epic_id = directives[0].epic_id
+            out = self.storage.get_current_path(epic_id)
+            await anyio.Path(temp_out).rename(out)
 
         await self.run_autonomous(directives, out, model=model)
 

@@ -245,8 +245,9 @@ def plan(
         ),
     ] = None,
     out: Annotated[
-        Path, typer.Option("--out", "-o", help="Output path for the generated epic JSON.")
-    ] = Path("epic.json"),
+        Path | None,
+        typer.Option("--out", "-o", help="Output path for the generated epic JSON."),
+    ] = None,
     model: Annotated[
         str,
         typer.Option(
@@ -273,11 +274,25 @@ def plan(
         typer.secho(f"  {msg}", fg=typer.colors.WHITE, dim=True, err=True)
 
     orchestrator = JitsuOrchestrator(on_progress=on_progress)
-    anyio.run(
+    actual_out = out or Path("temp_plan.json")
+
+    directives = anyio.run(
         partial(
-            orchestrator.execute_plan, objective, file_strings, out, model=model, verbose=verbose
+            orchestrator.execute_plan,
+            objective,
+            file_strings,
+            actual_out,
+            model=model,
+            verbose=verbose,
         )
     )
+
+    if out is None:
+        epic_id = directives[0].epic_id
+        out = orchestrator.storage.get_current_path(epic_id)
+        actual_out.replace(out)
+    else:
+        out = actual_out
 
     typer.secho(
         f"\n✅ Plan successfully generated and saved to {out}",

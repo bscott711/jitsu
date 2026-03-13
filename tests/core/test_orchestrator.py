@@ -149,23 +149,28 @@ async def test_orchestrator_execute_run_success(tmp_path: Path) -> None:
         _objective: str, _files: list[str], out: Path, **_kwargs: object
     ) -> list[AgentDirective]:
         out.parent.mkdir(parents=True, exist_ok=True)
+        # The mock should write to 'out' which is now 'temp_plan.json'
         await anyio.Path(out).write_text(json.dumps([directive.model_dump()]), encoding="utf-8")
         return [directive]
 
     with (
-        patch.object(orchestrator, "run_plan", new_callable=AsyncMock) as mock_plan,
+        patch.object(orchestrator, "execute_plan", new_callable=AsyncMock) as mock_plan,
         patch.object(orchestrator, "send_payload", new_callable=AsyncMock) as mock_send,
         patch.object(orchestrator.storage, "archive") as mock_archive,
     ):
         mock_plan.side_effect = mock_plan_side_effect
         mock_send.return_value = "ACK"
-        mock_archive.return_value = tmp_path / "epics" / "completed" / "test.json"
+        # The archive call should be on the final path: epics/current/e.json
+        expected_out = tmp_path / "epics" / "current" / "e.json"
+        mock_archive.return_value = tmp_path / "epics" / "completed" / "e.json"
 
         await orchestrator.execute_run("test", [], model="test", verbose=False)
 
         mock_plan.assert_awaited_once()
         mock_send.assert_awaited_once()
-        mock_archive.assert_called_once()
+        # Verify archive was called with the correct path
+        assert mock_archive.call_args[0][0] == expected_out
+        assert expected_out.parent.exists()
 
 
 @pytest.mark.asyncio
@@ -182,7 +187,7 @@ async def test_orchestrator_execute_run_server_error(tmp_path: Path) -> None:
         return [directive]
 
     with (
-        patch.object(orchestrator, "run_plan", new_callable=AsyncMock) as mock_plan,
+        patch.object(orchestrator, "execute_plan", new_callable=AsyncMock) as mock_plan,
         patch.object(orchestrator, "send_payload", new_callable=AsyncMock) as mock_send,
     ):
         mock_plan.side_effect = mock_plan_side_effect
@@ -213,12 +218,27 @@ async def test_orchestrator_execute_auto_objective_success(tmp_path: Path) -> No
 
     with (
         patch.object(orchestrator, "execute_plan", new_callable=AsyncMock) as mock_plan,
+        # Patch archive to prevent real archiving during auto run
+        patch.object(orchestrator.storage, "archive", side_effect=lambda x: x),
         patch.object(orchestrator, "run_autonomous", new_callable=AsyncMock) as mock_auto,
     ):
-        mock_plan.return_value = []
+        directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
+        mock_plan.return_value = [directive]
+
+        # We need to simulate the file being created
+        async def side_effect(
+            _objective: str, _files: list[str], _out: Path, **_kwargs: object
+        ) -> list[AgentDirective]:
+            await anyio.Path(_out).write_text("[]", encoding="utf-8")
+            return [directive]
+
+        mock_plan.side_effect = side_effect
+
         await orchestrator.execute_auto(objective="test", model="test")
         mock_plan.assert_awaited_once()
         mock_auto.assert_awaited_once()
+        # Verify the path passed to run_autonomous uses epic_id
+        assert mock_auto.call_args[0][1] == tmp_path / "epics" / "current" / "e.json"
 
 
 @pytest.mark.asyncio
@@ -411,14 +431,25 @@ def test_orchestrator_handle_planner_error_verbose() -> None:
 async def test_orchestrator_execute_run_os_error(tmp_path: Path) -> None:
     """Test execute_run handles OSError during file read."""
     orchestrator = JitsuOrchestrator(storage=EpicStorage(base_dir=tmp_path))
+
+    directive = AgentDirective(epic_id="e", phase_id="p", module_scope=["s"], instructions="i")
+
+    async def mock_plan_side_effect(
+        _objective: str, _files: list[str], out: Path, **_kwargs: object
+    ) -> list[AgentDirective]:
+        await anyio.Path(out).write_text("[]", encoding="utf-8")
+        return [directive]
+
     with (
-        patch.object(orchestrator, "execute_plan", new_callable=AsyncMock),
+        patch.object(orchestrator, "execute_plan", new_callable=AsyncMock) as mock_plan,
+        # Patch read_bytes after the rename happens
         patch.object(
             EpicStorage,
             "read_bytes",
             side_effect=OSError("Read error"),
         ),
     ):
+        mock_plan.side_effect = mock_plan_side_effect
         with pytest.raises(typer.Exit) as exc:
             await orchestrator.execute_run("test", [], model="test")
         assert exc.value.exit_code == 1

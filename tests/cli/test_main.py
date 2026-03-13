@@ -235,14 +235,24 @@ def test_cli_plan_success(mock_orch_cls: MagicMock, tmp_path: Path) -> None:
     """Test successful plan generation via CLI."""
     out_file = tmp_path / "epic.json"
     mock_orch = mock_orch_cls.return_value
-    mock_orch.execute_plan = AsyncMock(return_value=[])
+    # Mock a directive to avoid index error
+    mock_directive = MagicMock(spec=AgentDirective)
+    mock_directive.epic_id = "test-epic"
+    mock_orch.execute_plan.return_value = [mock_directive]
 
     # Trigger callback when execute_plan is called
     async def side_effect(*_args: object, **_kwargs: object) -> list[AgentDirective]:
+        # Create the file that the code expects to exist after planning
+        # In actual call: objective, files, actual_out
+        if len(_args) > 2:  # noqa: PLR2004
+            out_path = _args[2]
+            if isinstance(out_path, Path):
+                await anyio.Path(out_path).write_text("[]", encoding="utf-8")
+
         on_progress = mock_orch_cls.call_args[1].get("on_progress")
         if on_progress:
             on_progress("Task started")
-        return []
+        return [mock_directive]
 
     mock_orch.execute_plan.side_effect = side_effect
 
@@ -255,6 +265,7 @@ def test_cli_plan_success(mock_orch_cls: MagicMock, tmp_path: Path) -> None:
     assert "Using model: gpt-4o" in result.output
     assert "Task started" in result.output
     mock_orch.execute_plan.assert_awaited_once()
+    assert out_file.exists()
 
 
 @patch.object(JitsuOrchestrator, "execute_plan", new_callable=AsyncMock)
@@ -276,6 +287,20 @@ def test_cli_plan_with_files(mock_execute: AsyncMock, tmp_path: Path) -> None:
     ctx_file = tmp_path / "context_file.py"
     ctx_file.touch()
 
+    # Mock a directive to avoid index error
+    mock_directive = MagicMock(spec=AgentDirective)
+    mock_directive.epic_id = "test-epic"
+    mock_execute.return_value = [mock_directive]
+
+    async def side_effect(*_args: object, **_kwargs: object) -> list[AgentDirective]:
+        if len(_args) > 2:  # noqa: PLR2004
+            out_path = _args[2]
+            if isinstance(out_path, Path):
+                await anyio.Path(out_path).write_text("[]", encoding="utf-8")
+        return [mock_directive]
+
+    mock_execute.side_effect = side_effect
+
     result = runner.invoke(
         app, ["plan", "Feature", "--file", str(ctx_file), "--out", str(out_file)]
     )
@@ -283,6 +308,39 @@ def test_cli_plan_with_files(mock_execute: AsyncMock, tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "Using 1 context file" in result.output
     mock_execute.assert_awaited_once()
+
+
+@patch("jitsu.cli.main.JitsuOrchestrator", autospec=True)
+def test_cli_plan_default_path(
+    mock_orch_cls: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that plan uses epics/current/{epic_id}.json by default."""
+    monkeypatch.chdir(tmp_path)
+    mock_orch = mock_orch_cls.return_value
+
+    # Mock a directive with specific epic_id
+    mock_directive = MagicMock(spec=AgentDirective)
+    mock_directive.epic_id = "plan-epic-123"
+    mock_orch.execute_plan = AsyncMock(return_value=[mock_directive])
+
+    # Storage helper
+    mock_orch.storage = EpicStorage(tmp_path)
+
+    async def side_effect(
+        _objective: str, _files: list[str], _out: Path, **_kwargs: object
+    ) -> list[AgentDirective]:
+        # Create the temp file
+        await anyio.Path(_out).write_text("[]", encoding="utf-8")
+        return [mock_directive]
+
+    mock_orch.execute_plan.side_effect = side_effect
+
+    result = runner.invoke(app, ["plan", "Some objective"])
+
+    assert result.exit_code == 0
+    expected_path = tmp_path / "epics" / "current" / "plan-epic-123.json"
+    assert expected_path.exists()
+    assert f"Plan successfully generated and saved to {expected_path}" in result.output
 
 
 @patch("jitsu.cli.main.anyio.run")
