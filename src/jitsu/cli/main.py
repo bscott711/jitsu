@@ -12,33 +12,18 @@ from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective
 from jitsu.server.mcp_server import run_server, state_manager
 from jitsu.utils.logger import secho as jitsu_secho
-from jitsu.utils.logger import set_quiet
 
 app = typer.Typer(
     name="jitsu",
     help="Jitsu: JIT Context & Workflow Orchestrator for AI IDEs",
+    add_completion=False,
     no_args_is_help=True,
 )
 
 
 @app.callback()
-def main_callback(
-    ctx: typer.Context,
-    *,
-    quiet: Annotated[
-        bool,
-        typer.Option(
-            "--quiet",
-            "-q",
-            help="Suppress all non-error output.",
-        ),
-    ] = False,
-) -> None:
+def main_callback() -> None:
     """Jitsu CLI."""
-    ctx.ensure_object(dict)
-    ctx.obj["quiet"] = quiet
-    if quiet:
-        set_quiet(enabled=True)
 
 
 @app.command()
