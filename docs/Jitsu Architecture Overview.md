@@ -16,6 +16,18 @@ By shifting the heavy lifting of context preparation to Python, Jitsu ensures th
 
 ---
 
+## **Agentic Excellence**
+
+Jitsu is designed to empower **Agentic Excellence**—the transition from passive LLM assistance to fully autonomous, self-healing engineering. It enables agents to operate at the highest level of competence by providing a structured environment where natural language intent is systematically converted into flawless implementation.
+
+### **The Intelligence Core**
+
+* **Intent-to-Plan Pipeline:** Jitsu's `Planner` uses high-level goals as a substrate to build a deterministic execution strategy. It breaks down complex user requests into discrete, manageable `AgentDirectives` that are logically sequenced and dependency-aware.
+* **Mandatory Documentation Lifecycle:** A cornerstone of Agentic Excellence is the **Self-Documenting Workflow**. Jitsu mandates that every significant codebase change is accompanied by an update to the system's documentation (`README.md` and `docs/`). This requirement is baked into the Jitsu protocol, ensuring that human-readable knowledge evolves synchronously with the machine-executable source.
+* **Zero-Hallucination Recovery:** When regressions occur, Jitsu's `Executor` does not guess. It leverages the AST-Aware recovery loop to provide the agent with surgical context (tracebacks, file skeletons, and failing tests), forcing a deterministic and verified fix.
+
+---
+
 ## **The 1.0 Architecture**
 
 Jitsu operates through a strict four-layer Domain-Driven Design designed to maximize fidelity, autonomy, and code decoupling. Dependencies flow in one direction: inwards.
