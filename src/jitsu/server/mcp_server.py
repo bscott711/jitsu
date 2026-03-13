@@ -36,7 +36,7 @@ async def handle_call_tool(
 tool_registry = ToolRegistry()
 
 # Initialize handlers and register all tools
-handlers = ToolHandlers(state_manager, context_compiler)
+handlers = ToolHandlers(state_manager, context_compiler, server=app)
 handlers.register_all(tool_registry)
 
 

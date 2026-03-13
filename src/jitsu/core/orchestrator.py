@@ -1,6 +1,8 @@
 """JitsuOrchestrator: Autonomous planning and execution loop."""
 
+import inspect
 import shutil
+import typing
 from collections.abc import Callable
 from pathlib import Path
 
@@ -43,7 +45,7 @@ class JitsuOrchestrator:
         planner: JitsuPlanner | None = None,
         executor: JitsuExecutor | None = None,
         storage: EpicStorage | None = None,
-        on_progress: Callable[[str], None] | None = None,
+        on_progress: Callable[[str], typing.Any] | None = None,
         state_manager: JitsuStateManager | None = None,
     ) -> None:
         """Initialise the orchestrator with optional DI'd collaborators."""
@@ -97,9 +99,11 @@ class JitsuOrchestrator:
 
         directives: list[AgentDirective] | None = None
 
-        def _progress(msg: str) -> None:
+        async def _progress(msg: str) -> None:
             if self.on_progress:
-                self.on_progress(msg)
+                res = self.on_progress(msg)
+                if inspect.isawaitable(res):
+                    await res
 
         try:
             try:
@@ -170,15 +174,31 @@ class JitsuOrchestrator:
 
         """
         with typer.progressbar(length=100, label="Pondering...") as progress:
-            directives = await self.run_plan(
-                objective,
-                files,
-                out,
-                model=model,
-                verbose=verbose,
-                include_paths=include_paths,
-                exclude_paths=exclude_paths,
-            )
+            original_on_progress = self.on_progress
+
+            async def _on_progress(msg: str) -> None:
+                progress.label = msg
+                progress.update(0)  # Refresh the label
+                if original_on_progress:
+                    res = original_on_progress(msg)
+                    if inspect.isawaitable(res):
+                        await res
+
+            # Temporarily override self.on_progress for run_plan
+            self.on_progress = _on_progress
+            try:
+                directives = await self.run_plan(
+                    objective,
+                    files,
+                    out,
+                    model=model,
+                    verbose=verbose,
+                    include_paths=include_paths,
+                    exclude_paths=exclude_paths,
+                )
+            finally:
+                self.on_progress = original_on_progress
+
             progress.update(100)
         return directives
 

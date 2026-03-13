@@ -1,7 +1,9 @@
 """Tool handlers for the Jitsu MCP server."""
 
+import contextlib
 import re
 import subprocess
+import sys
 import typing
 from pathlib import Path
 
@@ -22,10 +24,16 @@ from jitsu.server.registry import ToolRegistry
 class ToolHandlers:
     """Handles tool execution logic for Jitsu."""
 
-    def __init__(self, state_manager: JitsuStateManager, context_compiler: ContextCompiler) -> None:
+    def __init__(
+        self,
+        state_manager: JitsuStateManager,
+        context_compiler: ContextCompiler,
+        server: typing.Any | None = None,  # noqa: ANN401
+    ) -> None:
         """Initialize the tool handlers."""
         self.state_manager = state_manager
         self.context_compiler = context_compiler
+        self.server = server
 
     async def handle_get_next_phase(self) -> list[types.TextContent]:
         """Handle the 'get_next_phase' tool request."""
@@ -151,11 +159,36 @@ class ToolHandlers:
         prompt = str(arguments["prompt"])
         relevant_files = typing.cast("list[str]", arguments.get("relevant_files", []))
 
-        relevant_files = typing.cast("list[str]", arguments.get("relevant_files", []))
+        async def on_progress(msg: str) -> None:
+            """Safe progress reporting via stderr to avoid JSON-RPC corruption."""
+            sys.stderr.write(f"[* progress] {msg}\n")
+            sys.stderr.flush()
+
+            # Optional: Emit proper MCP progress notification if client supports it
+            token: str | int | None = None
+            if arguments:
+                metadata = arguments.get("_metadata")
+                if isinstance(metadata, dict):
+                    metadata_dict = typing.cast("dict[typing.Any, typing.Any]", metadata)
+                    candidate = metadata_dict.get("progressToken")
+                    if isinstance(candidate, (str, int)):
+                        token = candidate
+
+            if token is not None and self.server:
+                with contextlib.suppress(Exception):
+                    await self.server.send_notification(
+                        types.ProgressNotification(
+                            params=types.ProgressNotificationParams(
+                                progressToken=token,
+                                progress=0,  # Indeterminate
+                                total=None,
+                            )
+                        )
+                    )
 
         planner = JitsuPlanner(objective=prompt, relevant_files=relevant_files)
         # 2. Inside the tool handler, instantiate the JitsuPlanner and call its planning method
-        await planner.generate_plan()
+        await planner.generate_plan(on_progress=on_progress)
 
         if not planner.directives:
             return [types.TextContent(type="text", text="Error: Failed to generate plan.")]

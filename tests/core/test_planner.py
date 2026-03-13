@@ -14,6 +14,7 @@ from jitsu.models.core import (
     PhaseBlueprint,
     TargetResolutionMode,
 )
+from jitsu.models.execution import PlannerStage, PlannerStatusUpdate
 from jitsu.prompts import PLANNER_MACRO_PROMPT, VERIFICATION_RULE
 
 
@@ -60,10 +61,10 @@ async def test_planner_plan_generation_success() -> None:
     assert planner.directives == [directive]
 
     # Verify progress calls
-    expected_calls = 2
+    expected_calls = 6
     assert on_progress_mock.call_count == expected_calls
     on_progress_mock.assert_any_call("Drafting Epic Blueprint...")
-    on_progress_mock.assert_any_call("Elaborating Phase 1 of 1...")
+    on_progress_mock.assert_any_call("Elaborating Phase 1 of 1 (p1)...")
 
     # Verify prompts
     macro_call = mock_client.chat.completions.create.call_args_list[0][1]
@@ -290,3 +291,82 @@ async def test_planner_generate_plan_with_injection() -> None:
     assert len(targets) == expected_len_1
     assert targets[0].target_identifier == "new.py"
     assert targets[0].resolution_mode == TargetResolutionMode.FULL_SOURCE
+
+
+@pytest.mark.asyncio
+async def test_planner_structured_callback() -> None:
+    """Test the new structured on_status callback."""
+    mock_client = MagicMock()
+    blueprint = EpicBlueprint(epic_id="e1", phases=[])
+    mock_client.chat.completions.create.return_value = blueprint
+
+    status_updates = []
+
+    async def on_status(update: PlannerStatusUpdate) -> None:
+        status_updates.append(update)
+
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+
+    with (
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
+        await planner.generate_plan(on_status=on_status)
+
+    assert len(status_updates) > 0
+    assert any(u.stage == PlannerStage.ANALYZING_SCOPE for u in status_updates)
+    assert any(u.stage == PlannerStage.COMPLETE for u in status_updates)
+
+
+@pytest.mark.asyncio
+async def test_planner_sync_callbacks() -> None:
+    """Test sync versions of callbacks in _emit_status."""
+    mock_client = MagicMock()
+    blueprint = EpicBlueprint(epic_id="e1", phases=[])
+    mock_client.chat.completions.create.return_value = blueprint
+
+    msgs = []
+
+    def on_progress(msg: str) -> None:
+        msgs.append(msg)
+
+    status_updates = []
+
+    def on_status_sync(update: PlannerStatusUpdate) -> None:
+        status_updates.append(update)
+
+    planner = JitsuPlanner(
+        objective="Test", relevant_files=[], client=mock_client, on_status=on_status_sync
+    )
+
+    with (
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
+        await planner.generate_plan(on_progress=on_progress)
+
+    assert len(msgs) > 0
+    assert len(status_updates) > 0
+
+
+@pytest.mark.asyncio
+async def test_planner_async_legacy_callback() -> None:
+    """Test async legacy on_progress callback."""
+    mock_client = MagicMock()
+    blueprint = EpicBlueprint(epic_id="e1", phases=[])
+    mock_client.chat.completions.create.return_value = blueprint
+
+    msgs = []
+
+    async def on_progress(msg: str) -> None:
+        msgs.append(msg)
+
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+
+    with (
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
+        await planner.generate_plan(on_progress=on_progress)
+
+    assert len(msgs) > 0

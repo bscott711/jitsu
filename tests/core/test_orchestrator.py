@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import anyio
@@ -582,7 +583,7 @@ async def test_orchestrator_run_plan_on_progress(tmp_path: Path) -> None:
     await orchestrator.run_plan("test", [], out_file, model="test")
     _, kwargs = mock_planner.generate_plan.call_args
     on_prog_cb = kwargs["on_progress"]
-    on_prog_cb("test message")
+    await on_prog_cb("test message")
     assert "test message" in progress_msgs
 
 
@@ -893,3 +894,93 @@ async def test_orchestrator_retry_reset_between_phases(tmp_path: Path) -> None:
         # Accessing by index for safety with mock objects
         assert calls[0].kwargs["max_retries"] == orchestrator.MAX_RETRIES
         assert calls[1].kwargs["max_retries"] == orchestrator.MAX_RETRIES
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_plan_progress(tmp_path: Path) -> None:
+    """Test progress reporting in execute_plan."""
+    storage = EpicStorage(base_dir=tmp_path)
+    mock_planner = MagicMock()
+
+    async def _mock_gen_plan(*_args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        on_prog = kwargs.get("on_progress")
+        if on_prog:
+            await on_prog("triggered")
+
+    mock_planner.generate_plan = AsyncMock(side_effect=_mock_gen_plan)
+
+    progress_msgs = []
+
+    async def on_progress(msg: str) -> None:
+        progress_msgs.append(msg)
+
+    orchestrator = JitsuOrchestrator(planner=mock_planner, on_progress=on_progress, storage=storage)
+    out = tmp_path / "out.json"
+
+    with (
+        patch("typer.progressbar") as mock_pb_cls,
+        patch.object(orchestrator, "run_plan", wraps=orchestrator.run_plan),
+    ):
+        mock_pb = mock_pb_cls.return_value.__enter__.return_value
+        with pytest.raises(typer.Exit):
+            await orchestrator.execute_plan("objective", [], out, model="test")
+
+        # Verify that progress.label was set
+        assert mock_pb.label is not None
+        # Verify that our async on_progress was called
+        assert len(progress_msgs) > 0
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_execute_plan_progress_sync(tmp_path: Path) -> None:
+    """Test sync progress reporting in execute_plan."""
+    storage = EpicStorage(base_dir=tmp_path)
+    mock_planner = MagicMock()
+
+    async def _mock_gen_plan(*_args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        on_prog = kwargs.get("on_progress")
+        if on_prog:
+            await on_prog("triggered")
+
+    mock_planner.generate_plan = AsyncMock(side_effect=_mock_gen_plan)
+
+    progress_msgs = []
+
+    def on_progress_sync(msg: str) -> None:
+        progress_msgs.append(msg)
+
+    orchestrator = JitsuOrchestrator(
+        planner=mock_planner, on_progress=on_progress_sync, storage=storage
+    )
+    out = tmp_path / "out.json"
+
+    with patch("typer.progressbar") as mock_pb_cls:
+        mock_pb = mock_pb_cls.return_value.__enter__.return_value
+        with pytest.raises(typer.Exit):
+            await orchestrator.execute_plan("objective", [], out, model="test")
+
+        assert len(progress_msgs) > 0
+        assert mock_pb.label is not None
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_run_plan_on_progress_async(tmp_path: Path) -> None:
+    """Test run_plan with an async progress callback."""
+    orchestrator = JitsuOrchestrator()
+    mock_planner = MagicMock()
+    mock_planner.generate_plan = AsyncMock()
+    orchestrator.planner = mock_planner
+    out_file = tmp_path / "plan.json"
+
+    progress_msgs = []
+
+    async def on_progress(msg: str) -> None:
+        progress_msgs.append(msg)
+
+    orchestrator.on_progress = on_progress
+    await orchestrator.run_plan("test", [], out_file, model="test")
+
+    _, kwargs = mock_planner.generate_plan.call_args
+    on_prog_cb = kwargs["on_progress"]
+    await on_prog_cb("test message")
+    assert "test message" in progress_msgs

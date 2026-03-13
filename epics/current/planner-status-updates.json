@@ -1,0 +1,142 @@
+[
+  {
+    "epic_id": "planner-status-updates",
+    "phase_id": "data-structures-and-interfaces",
+    "module_scope": [
+      "src/jitsu/models",
+      "src/jitsu/core/planner.py",
+      "tests/models",
+      "tests/core/test_planner.py"
+    ],
+    "instructions": "Define Pydantic models for planner status updates and update JitsuPlanner to accept a callback protocol.\n\n1. **Models**: Add new model(s) to `src/jitsu/models/execution.py`:\n   - `PlannerStatusUpdate` with fields: `timestamp` (datetime), `stage` (string enum: 'initializing', 'analyzing_scope', 'drafting_phases', 'validating_schema', 'complete'), `message` (str), `progress_percent` (float, 0-100).\n   - Ensure proper validation (e.g., progress between 0-100).\n\n2. **Callback Protocol**: In `src/jitsu/core/planner.py`:\n   - Define a `PlannerStatusCallback` Protocol class with `__call__(self, update: PlannerStatusUpdate) -> None`.\n   - Modify `JitsuPlanner.__init__` to accept an optional `on_status: PlannerStatusCallback | None = None`.\n   - During planning phases (e.g., before/after LLM calls, during phase drafting), emit status updates via the callback if it's provided. Add calls at logical points: start, after scope analysis, during phase drafting, after validation, and completion.\n\n3. **Tests**: Update `tests/models/test_execution.py` to test the new model (validation, serialization). Update `tests/core/test_planner.py` to test the callback integration: mock the callback, ensure it's called with expected updates during a planning run, and verify no calls if callback is None.\n\nDo NOT modify CLI or MCP server layers yet. This phase only establishes the data structures and planner interface.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/execution.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/models/test_execution.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not modify the Planner's return type or core planning logic; only add the callback hook.",
+      "Do not emit status updates via print() or logging; use the callback only.",
+      "Do not add mutable state to PlannerStatusUpdate; keep it a frozen Pydantic model."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "PlannerStatusUpdate model passes validation tests (invalid progress raises error).",
+      "JitsuPlanner accepts optional on_status callback and calls it during planning.",
+      "Tests for both model and callback integration pass with 100% coverage."
+    ]
+  },
+  {
+    "epic_id": "planner-status-updates",
+    "phase_id": "core-logic-and-callbacks",
+    "module_scope": [
+      "src/jitsu/core/planner.py",
+      "tests/core/test_planner.py"
+    ],
+    "instructions": "1. Modify `JitsuPlanner` in `src/jitsu/core/planner.py` to implement generator-based status emission. Update the `plan` method (and any internal helper methods like `_generate_phases` or `_validate_schema`) to be a generator that yields status strings (e.g., 'Analyzing module scope...', 'Drafting phases...', 'Validating schema...') at key points during execution. The final yielded value should be the complete `Plan` object. Ensure the method signature supports an optional `progress_callback: Callable[[str], None]` parameter that, if provided, is called with each yielded status string. This callback will be used by the CLI and MCP server layers in subsequent phases.\n2. Add comprehensive tests in `tests/core/test_planner.py` for the new generator behavior. Tests must verify: a) The generator yields expected status strings in the correct order. b) The final yielded value is a valid `Plan` object. c) The `progress_callback` is invoked correctly when provided. d) Existing functionality (e.g., planning without a callback, error handling) remains intact. Ensure 100% test coverage for the modified/added code in `planner.py`.\n3. Do NOT modify any CLI (`src/jitsu/cli/main.py`), MCP server (`src/jitsu/server/`), or other files outside the specified module scope. Those will be handled in separate phases.\n4. The implementation must maintain backward compatibility: existing calls to `planner.plan()` without a callback should still work, returning the `Plan` object directly (by consuming the generator internally).",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not block the generator with synchronous LLM calls; ensure status updates are yielded promptly between logical steps.",
+      "Do not use global state or module-level variables to store progress; pass the callback explicitly.",
+      "Do not raise exceptions inside the generator without first yielding a final error status if appropriate."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "All tests in `tests/core/test_planner.py` pass with 100% coverage for the modified code in `src/jitsu/core/planner.py`.",
+      "The `JitsuPlanner.plan` method is a generator that yields status strings and returns a `Plan` object.",
+      "Backward compatibility is maintained: existing code calling `planner.plan()` without arguments works unchanged."
+    ]
+  },
+  {
+    "epic_id": "planner-status-updates",
+    "phase_id": "cli-and-mcp-integration",
+    "module_scope": [
+      "src/jitsu",
+      "tests"
+    ],
+    "instructions": "Update CLI and MCP layers to consume and display status updates from JitsuPlanner. Specifically: 1) Modify `src/jitsu/cli/main.py` to consume a generator or callback from `jitsu_plan` that yields status updates, and print these updates dynamically to the terminal using `typer.secho` or `sys.stderr.write`. 2) Update `src/jitsu/server/mcp_server.py` to emit MCP progress notifications (using `progressToken` or stderr logging) for the `jitsu_plan` tool, ensuring these updates do not corrupt the JSON-RPC stdout. 3) Write integration tests in `tests/cli/test_main.py` and `tests/server/test_mcp_server.py` that verify status updates are emitted and do not break final JSON parsing. Ensure 100% test coverage for modified code.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/server/test_mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "ast",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not print status updates to stdout in the MCP server; use stderr or MCP progress notifications only.",
+      "Do not block the main thread with synchronous status updates in the CLI; use asynchronous or generator-based consumption.",
+      "Do not modify the final JSON output structure of `jitsu_plan` or `jitsu_plan_generator`."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "CLI `jitsu plan` command prints intermediate status updates (e.g., 'Analyzing module scope...', 'Drafting phases...', 'Validating schema...') during execution.",
+      "MCP server emits progress notifications for `jitsu_plan` tool via stderr or MCP progress token without corrupting JSON-RPC stdout.",
+      "All new and existing tests pass with 100% coverage for modified files."
+    ]
+  }
+]

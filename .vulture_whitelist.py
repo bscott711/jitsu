@@ -29,3 +29,4 @@ create_and_checkout_branch
 checkout_branch
 merge_branch
 delete_branch
+label

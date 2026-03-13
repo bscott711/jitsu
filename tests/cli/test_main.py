@@ -576,6 +576,26 @@ def test_cli_auto_failure(
     mock_execute.assert_awaited_once()
 
 
+@patch("jitsu.cli.main.JitsuOrchestrator", autospec=True)
+def test_cli_auto_progress(mock_orch_cls: MagicMock) -> None:
+    """Test 'jitsu auto' progress reporting."""
+    mock_orch = mock_orch_cls.return_value
+    mock_orch.execute_auto = AsyncMock()
+
+    # Trigger callback when execute_auto is called
+    async def side_effect(*_args: object, **_kwargs: object) -> None:
+        on_progress = mock_orch_cls.call_args[1].get("on_progress")
+        if on_progress:
+            on_progress("Auto progress message")
+
+    mock_orch.execute_auto.side_effect = side_effect
+
+    result = runner.invoke(app, ["auto", "Build something"])
+
+    assert result.exit_code == 0
+    assert "Auto progress message" in result.output
+
+
 def test_cli_auto_missing_args() -> None:
     """Test 'jitsu auto' fails if neither objective nor --file is provided."""
     result = runner.invoke(app, ["auto"])

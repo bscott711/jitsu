@@ -354,3 +354,50 @@ async def test_handle_plan_epic_failure(handlers: ToolHandlers) -> None:
 
         result = await handlers.handle_plan_epic({"prompt": "Fail epic"})
         assert "Error: Failed to generate plan." in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_plan_epic_with_progress(
+    state_manager: JitsuStateManager, context_compiler: ContextCompiler
+) -> None:
+    """Test handle_plan_epic with progress notifications."""
+    mock_server = AsyncMock()
+    handlers = ToolHandlers(
+        state_manager=state_manager, context_compiler=context_compiler, server=mock_server
+    )
+
+    mock_directive = AgentDirective(
+        epic_id="epic-progress",
+        phase_id="p1",
+        module_scope=["src"],
+        instructions="Plan",
+    )
+
+    with (
+        patch("jitsu.server.handlers.JitsuPlanner") as mock_planner_cls,
+        patch("jitsu.server.handlers.EpicStorage") as mock_storage_cls,
+        patch("sys.stderr.write") as mock_stderr,
+        patch("sys.stderr.flush"),
+    ):
+        mock_planner = mock_planner_cls.return_value
+        mock_planner.generate_plan = AsyncMock(return_value=[mock_directive])
+        mock_planner.directives = [mock_directive]
+
+        mock_storage = mock_storage_cls.return_value
+        mock_storage.get_current_path.return_value = Path("epic.json")
+
+        arguments = {"prompt": "Progress test", "_metadata": {"progressToken": "token-123"}}
+        await handlers.handle_plan_epic(arguments)
+
+        # Retrieve the on_progress callback passed to generate_plan
+        _, kwargs = mock_planner.generate_plan.call_args
+        on_progress = kwargs["on_progress"]
+
+        # Call the callback
+        await on_progress("Test message")
+
+        # Verify stderr output
+        mock_stderr.assert_called_with("[* progress] Test message\n")
+
+        # Verify MCP notification
+        mock_server.send_notification.assert_called_once()

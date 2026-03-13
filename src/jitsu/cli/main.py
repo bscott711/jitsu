@@ -329,7 +329,11 @@ def run(
 ) -> None:
     """Generate a Jitsu plan and immediately submit it to the server."""
     file_strings = [str(f) for f in files] if files else []
-    orchestrator = JitsuOrchestrator()
+
+    def on_progress(msg: str) -> None:
+        typer.secho(f"  {msg}", fg=typer.colors.WHITE, dim=True, err=True)
+
+    orchestrator = JitsuOrchestrator(on_progress=on_progress)
     anyio.run(
         partial(orchestrator.execute_run, objective, file_strings, model=model, verbose=verbose)
     )
@@ -404,7 +408,10 @@ def auto(  # noqa: PLR0913
     include_strings = [str(f) for f in include] if include else []
     exclude_strings = [str(f) for f in exclude] if exclude else []
 
-    orchestrator = JitsuOrchestrator()
+    def on_progress(msg: str) -> None:
+        typer.secho(f"  {msg}", fg=typer.colors.WHITE, dim=True, err=True)
+
+    orchestrator = JitsuOrchestrator(on_progress=on_progress)
     anyio.run(
         partial(
             orchestrator.execute_auto,
