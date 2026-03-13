@@ -16,27 +16,51 @@ from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective
 from jitsu.server.client import send_payload
 from jitsu.server.mcp_server import state_manager
+from jitsu.utils.logger import set_quiet
 
 runner = CliRunner()
 
 
 @pytest.fixture(autouse=True)
 def clear_state() -> None:
-    """Clear the global state manager queue before each test."""
+    """Clear the global state manager queue and reset logger before each test."""
     while state_manager.get_next_directive():
         pass
+    set_quiet(enabled=False)
 
 
 @patch("jitsu.cli.main.anyio.run")
 def test_cli_serve(mock_run: MagicMock) -> None:
     """Test the CLI serve command runs the server."""
+    set_quiet(enabled=False)
     result = runner.invoke(app, ["serve"])
 
-    assert result.exit_code == 0, (
-        f"Command failed:\nOUTPUT: {result.output}\nEXC: {result.exception}"
-    )
+    assert result.exit_code == 0
     mock_run.assert_called_once()
     assert "Starting Jitsu MCP Server" in result.output
+
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_quiet_flag_suppresses_output(mock_run: MagicMock) -> None:
+    """Test that --quiet suppresses output."""
+    set_quiet(enabled=False)
+    # Use serve as a test case
+    result = runner.invoke(app, ["--quiet", "serve"])
+
+    assert result.exit_code == 0
+    mock_run.assert_called_once()
+    assert "Starting Jitsu MCP Server" not in result.output
+    assert "Listening for IDE agent connections" not in result.output
+
+
+@patch("jitsu.cli.main.anyio.run", side_effect=RuntimeError("Test mock error"))
+def test_cli_quiet_flag_shows_errors(mock_run: MagicMock) -> None:  # noqa: ARG001
+    """Test that --quiet still shows error messages."""
+    set_quiet(enabled=False)
+    result = runner.invoke(app, ["--quiet", "serve"])
+
+    assert result.exit_code == 1
+    assert "Fatal error during server execution: Test mock error" in result.output
 
 
 @patch("jitsu.cli.main.anyio.run", side_effect=KeyboardInterrupt)

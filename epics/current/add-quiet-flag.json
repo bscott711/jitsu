@@ -1,0 +1,51 @@
+[
+  {
+    "epic_id": "add-quiet-flag",
+    "phase_id": "implement-quiet-flag",
+    "module_scope": [
+      "src/jitsu/cli",
+      "src/jitsu/utils"
+    ],
+    "instructions": "Add a `--quiet` flag to the main CLI application that suppresses all non-error output and ensure all subcommands respect this flag. Implement this by:\n1. Adding a `--quiet` option to the root `app` in `src/jitsu/cli/main.py` that sets a global state.\n2. Modifying the logger utility in `src/jitsu/utils/logger.py` to respect the quiet state, suppressing all log messages at WARNING level and below when quiet mode is active.\n3. Updating all CLI commands to propagate the quiet flag or inherit the global state.\n4. Writing comprehensive tests in `tests/cli/test_main.py` and `tests/utils/test_logger.py` to verify the flag's behavior and ensure 100% test coverage. The flag must be accessible via `ctx.obj['quiet']` or a similar mechanism so subcommands can read it. All non-error output (INFO, DEBUG, WARNING) must be suppressed; only ERROR and CRITICAL should appear. The logger's `quiet` flag must be set based on the CLI flag at runtime.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/utils/logger.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/utils/test_logger.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not use global mutable state for quiet flag without thread-safety considerations.",
+      "Do not bypass the logger's configured handlers to implement quiet mode.",
+      "Do not forget to pass the quiet flag to subcommands via Click's context or similar mechanism."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "All tests pass with 'just verify'",
+      "The --quiet flag suppresses non-error output in CLI execution",
+      "100% test coverage for modified files"
+    ],
+    "context_injection": null
+  }
+]
