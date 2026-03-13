@@ -13,7 +13,12 @@ from jitsu.config import settings
 from jitsu.core.client import LLMClientFactory
 from jitsu.core.runner import CommandRunner
 from jitsu.models.core import AgentDirective
-from jitsu.models.execution import ExecutionResult, FileEdit, VerificationFailureDetails
+from jitsu.models.execution import (
+    ExecutionResult,
+    FileEdit,
+    ToolRequest,
+    VerificationFailureDetails,
+)
 from jitsu.prompts import (
     EXECUTOR_RECOVERY_PROMPT,
     EXECUTOR_SYSTEM_PROMPT,
@@ -58,6 +63,13 @@ class JitsuExecutor:
         self.workspace_root = workspace_root or Path.cwd()
         self.ast_provider = ASTProvider(self.workspace_root)
         self.file_provider = FileStateProvider(self.workspace_root)
+
+    def _route_action(self, action: list[FileEdit] | ToolRequest) -> list[FileEdit]:
+        """Route the action and handle tool requests."""
+        if isinstance(action, ToolRequest):
+            msg = "Tool execution engine pending phase 2"
+            raise NotImplementedError(msg)
+        return action
 
     @staticmethod
     def _apply_edits(edits: list[FileEdit]) -> None:
@@ -170,10 +182,11 @@ class JitsuExecutor:
                     ],
                 )
 
+                edits = self._route_action(result.action)
                 if attempts > 0:
-                    self.enforce_scope(result.edits, directive.module_scope)
+                    self.enforce_scope(edits, directive.module_scope)
 
-                self._apply_edits(result.edits)
+                self._apply_edits(edits)
 
                 success, details = self.run_verification(directive.verification_commands)
                 if success:
@@ -184,7 +197,7 @@ class JitsuExecutor:
 
                 prev_fail_count = self._check_monotonicity(details.summary, prev_fail_count)
                 base_user_message = await self.augment_recovery_message(
-                    base_user_message, details, result.edits, directive
+                    base_user_message, details, edits, directive
                 )
 
                 attempts += 1
@@ -208,7 +221,7 @@ class JitsuExecutor:
                     err=True,
                 )
                 return False
-            except MonotonicityError:
+            except (MonotonicityError, NotImplementedError):
                 raise
             except Exception as e:
                 logger.exception("Error during execution step")

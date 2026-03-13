@@ -5,7 +5,12 @@ This module provides the Pydantic schemas for the Jitsu orchestration layer.
 """
 
 from jitsu.models.core import AgentDirective, ContextTarget, PhaseReport, PhaseStatus
-from jitsu.models.execution import ExecutionResult, FileEdit, VerificationFailureDetails
+from jitsu.models.execution import (
+    ExecutionResult,
+    FileEdit,
+    ToolRequest,
+    VerificationFailureDetails,
+)
 
 __all__ = [
     "AgentDirective",
@@ -14,5 +19,6 @@ __all__ = [
     "FileEdit",
     "PhaseReport",
     "PhaseStatus",
+    "ToolRequest",
     "VerificationFailureDetails",
 ]

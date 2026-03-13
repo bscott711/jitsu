@@ -1,0 +1,59 @@
+[
+  {
+    "epic_id": "epic-executor-tool-calling",
+    "phase_id": "phase-1-action-schema-refactor",
+    "module_scope": [
+      "src/jitsu/models",
+      "src/jitsu/core",
+      "src/jitsu",
+      "tests"
+    ],
+    "instructions": "Refactor the Executor's Pydantic response schema to support agentic tool calling. 1. In `src/jitsu/models/core.py` (or where the Executor's output schema is defined), create a new `ToolRequest` model (fields: `tool_name: str`, `arguments: dict[str, Any]`). 2. Update the main Executor response model to use a tagged Union or polymorphic type (e.g., `action: FileEdit | ToolRequest`). 3. Update `JitsuExecutor` in `src/jitsu/core/executor.py` to parse this new Union. If it parses a `ToolRequest`, have it raise a `NotImplementedError(\"Tool execution engine pending phase 2\")` for now. If it parses a `FileEdit`, process it normally. 4. Update `src/jitsu/prompts.py` so the EXECUTOR_SYSTEM_PROMPT explains this new JSON schema structure. 5. Update all failing tests to use the new schema structure. Maintain 100% test coverage.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/__init__.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/prompts.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/models/test_models.py",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT implement actual tools (like grep or read_file) yet; just build the Pydantic schema and routing infrastructure.",
+      "Do NOT break the existing `FileEdit` execution flow.",
+      "Ensure Pydantic discriminated unions are used correctly if necessary to differentiate between FileEdit and ToolRequest."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "A `ToolRequest` Pydantic model exists.",
+      "The Executor output schema accepts either a code edit or a tool request.",
+      "The Executor routes `ToolRequest` to a NotImplementedError and `FileEdit` to standard execution.",
+      "All downstream tests instantiate the new schema correctly, passing `just verify`."
+    ]
+  }
+]

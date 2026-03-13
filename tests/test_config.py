@@ -11,9 +11,9 @@ from jitsu.config import JitsuSettings, get_settings
 def test_config_defaults() -> None:
     """Test that the configuration has sensible defaults."""
     settings = JitsuSettings()
-    assert settings.planner_model == "openai/gpt-oss-120b:free"
-    assert settings.executor_model == "openai/gpt-oss-120b:free"
-    assert settings.backup_model == "openai/gpt-oss-120b:free"
+    assert settings.planner_model == "openrouter/hunter-alpha"
+    assert settings.executor_model == "openrouter/hunter-alpha"
+    assert settings.backup_model == "stepfun/step-3.5-flash:free"
 
 
 def test_config_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:

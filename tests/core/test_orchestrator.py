@@ -11,6 +11,7 @@ import pytest
 import typer
 from instructor.core.exceptions import InstructorRetryException
 
+from jitsu.config import settings
 from jitsu.core.executor import MonotonicityError
 from jitsu.core.orchestrator import JitsuOrchestrator
 from jitsu.core.storage import EpicStorage
@@ -437,7 +438,7 @@ async def test_orchestrator_run_plan_fallback_fail(tmp_path: Path) -> None:
     out_file = tmp_path / "out.json"
 
     with pytest.raises(typer.Exit) as exc:
-        await orchestrator.run_plan("test", [], out_file, model="openai/gpt-oss-120b:free")
+        await orchestrator.run_plan("test", [], out_file, model=settings.backup_model)
     assert exc.value.exit_code == 1
     assert mock_planner.generate_plan.call_count == 1
 

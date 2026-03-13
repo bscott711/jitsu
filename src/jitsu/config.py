@@ -11,9 +11,9 @@ class JitsuSettings(BaseSettings):
     or a .env file.
     """
 
-    planner_model: str = "openai/gpt-oss-120b:free"
-    executor_model: str = "openai/gpt-oss-120b:free"
-    backup_model: str = "openai/gpt-oss-120b:free"
+    planner_model: str = "openrouter/hunter-alpha"
+    executor_model: str = "openrouter/hunter-alpha"
+    backup_model: str = "stepfun/step-3.5-flash:free"
 
     # Support reading from .env or jitsu.toml (via pydantic-settings)
     # Default search path is current working directory
