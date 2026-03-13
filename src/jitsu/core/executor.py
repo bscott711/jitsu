@@ -8,6 +8,7 @@ import openai
 import typer
 from instructor.core.client import Instructor
 from instructor.core.exceptions import InstructorRetryException
+from openai.types.chat import ChatCompletionMessageParam
 
 from jitsu.config import settings
 from jitsu.core.client import LLMClientFactory
@@ -26,6 +27,7 @@ from jitsu.prompts import (
 )
 from jitsu.providers.ast import ASTProvider
 from jitsu.providers.file import FileStateProvider
+from jitsu.providers.registry import ProviderRegistry
 from jitsu.utils.traceback_parser import extract_filepaths, filter_local_paths
 
 logger = logging.getLogger(__name__)
@@ -64,12 +66,51 @@ class JitsuExecutor:
         self.ast_provider = ASTProvider(self.workspace_root)
         self.file_provider = FileStateProvider(self.workspace_root)
 
-    def _route_action(self, action: list[FileEdit] | ToolRequest) -> list[FileEdit]:
-        """Route the action and handle tool requests."""
-        if isinstance(action, ToolRequest):
-            msg = "Tool execution engine pending phase 2"
-            raise NotImplementedError(msg)
-        return action
+    async def _execute_tool(self, tool_request: ToolRequest) -> str:
+        """Execute a tool via Jitsu Providers and return its output."""
+        provider_cls = ProviderRegistry.get(tool_request.tool_name)
+        if not provider_cls:
+            return f"Error: Unknown tool '{tool_request.tool_name}'"
+
+        provider = provider_cls(self.workspace_root)
+
+        # Extraction logic: use 'target', 'path' or first argument as the resolution target
+        target = (
+            tool_request.arguments.get("target")
+            or tool_request.arguments.get("path")
+            or tool_request.arguments.get("target_identifier")
+            or (next(iter(tool_request.arguments.values()), "") if tool_request.arguments else "")
+        )
+
+        return await provider.resolve(str(target))
+
+    async def _run_react_loop(
+        self, messages: list[ChatCompletionMessageParam]
+    ) -> list[FileEdit] | None:
+        """Run the ReAct tool calling loop and return the resulting file edits."""
+        tool_turns = 0
+        max_tool_turns = 5
+        while tool_turns < max_tool_turns:
+            result = self.client.chat.completions.create(
+                model=self.model,
+                response_model=ExecutionResult,
+                messages=messages,
+            )
+
+            if isinstance(result.action, ToolRequest):
+                tool_turns += 1
+                logger.info("Executing tool: %s", result.action.tool_name)
+                tool_output = await self._execute_tool(result.action)
+
+                # Maintain ReAct history
+                messages.append({"role": "assistant", "content": result.model_dump_json()})
+                messages.append({"role": "user", "content": f"Tool output:\n{tool_output}"})
+                continue
+
+            return result.action
+
+        logger.warning("Max tool turns reached (circuit breaker triggered)")
+        return None
 
     @staticmethod
     def _apply_edits(edits: list[FileEdit]) -> None:
@@ -158,9 +199,6 @@ class JitsuExecutor:
         """Execute a single directive with retries on verification failure."""
         attempts = 0
         prev_fail_count = float("inf")
-
-        system_prompt = EXECUTOR_SYSTEM_PROMPT
-
         base_user_message = (
             f"Directive: {directive.instructions}\n"
             f"Scope: {directive.module_scope}\n"
@@ -170,65 +208,84 @@ class JitsuExecutor:
         )
 
         while attempts <= max_retries:
-            user_message = base_user_message
-
-            try:
-                result = self.client.chat.completions.create(
-                    model=self.model,
-                    response_model=ExecutionResult,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_message},
-                    ],
-                )
-
-                edits = self._route_action(result.action)
-                if attempts > 0:
-                    self.enforce_scope(edits, directive.module_scope)
-
-                self._apply_edits(edits)
-
-                success, details = self.run_verification(directive.verification_commands)
-                if success:
-                    return True
-
-                if details is None:
-                    return False
-
-                prev_fail_count = self._check_monotonicity(details.summary, prev_fail_count)
-                base_user_message = await self.augment_recovery_message(
-                    base_user_message, details, edits, directive
-                )
-
-                attempts += 1
-                logger.warning(
-                    "Verification failed (Attempt %d/%d). Retrying...",
-                    attempts,
-                    max_retries + 1,
-                )
-
-            except openai.APIStatusError as e:
-                typer.secho(
-                    f"\n❌ Execution API Error [{e.status_code}]: {e.message}",
-                    fg=typer.colors.RED,
-                    err=True,
-                )
+            success, base_user_message, prev_fail_count = await self._execute_attempt_cycle(
+                directive, base_user_message, attempts, prev_fail_count
+            )
+            if success:
+                return True
+            if base_user_message is None:
                 return False
-            except InstructorRetryException:
-                typer.secho(
-                    "\n❌ Executor Error: Failed to generate valid schema.",
-                    fg=typer.colors.RED,
-                    err=True,
-                )
-                return False
-            except (MonotonicityError, NotImplementedError):
-                raise
-            except Exception as e:
-                logger.exception("Error during execution step")
-                base_user_message += f"\n\nExecution error: {e!s}\n"
-                attempts += 1
+            attempts += 1
 
         return False
+
+    async def _execute_attempt_cycle(
+        self,
+        directive: AgentDirective,
+        base_user_message: str,
+        attempts: int,
+        prev_fail_count: float,
+    ) -> tuple[bool, str | None, float]:
+        """Perform one cycle of LLM generation, edit application, and verification."""
+        messages: list[ChatCompletionMessageParam] = [
+            {"role": "system", "content": EXECUTOR_SYSTEM_PROMPT},
+            {"role": "user", "content": base_user_message},
+        ]
+
+        try:
+            edits = await self._run_react_loop(messages)
+            if edits is None:
+                return False, None, prev_fail_count
+
+            if attempts > 0:
+                self.enforce_scope(edits, directive.module_scope)
+
+            self._apply_edits(edits)
+            success, details = self.run_verification(directive.verification_commands)
+        except (openai.APIStatusError, InstructorRetryException) as e:
+            self._report_api_issue(e)
+            return False, None, prev_fail_count
+        except MonotonicityError:
+            raise
+        except Exception as e:
+            logger.exception("Error during execution step")
+            return False, base_user_message + f"\n\nExecution error: {e!s}\n", prev_fail_count
+        else:
+            if success:
+                return True, base_user_message, prev_fail_count
+
+            if details is None:
+                return False, None, prev_fail_count
+
+            new_fail_count, augmented_message = await self._handle_attempt_failure(
+                base_user_message, details, edits, directive, prev_fail_count
+            )
+            logger.warning("Verification failed (Attempt %d). Retrying...", attempts + 1)
+            return False, augmented_message, new_fail_count
+
+    def _report_api_issue(self, e: Exception) -> None:
+        """Report API or schema generation errors to the user."""
+        if isinstance(e, openai.APIStatusError):
+            typer.secho(
+                f"\n❌ Execution API Error [{e.status_code}]: {e.message}", fg="red", err=True
+            )
+        else:
+            typer.secho("\n❌ Executor Error: Failed to generate valid schema.", fg="red", err=True)
+
+    async def _handle_attempt_failure(
+        self,
+        base_user_message: str,
+        details: VerificationFailureDetails,
+        edits: list[FileEdit],
+        directive: AgentDirective,
+        prev_fail_count: float,
+    ) -> tuple[float, str]:
+        """Handle a verification failure by checking monotonicity and augmenting the prompt."""
+        new_fail_count = self._check_monotonicity(details.summary, prev_fail_count)
+        augmented_message = await self.augment_recovery_message(
+            base_user_message, details, edits, directive
+        )
+        return float(new_fail_count), augmented_message
 
     def enforce_scope(self, edits: list[FileEdit], module_scope: list[str]) -> None:
         """Ensure all edits are within the allowed module scope."""

@@ -1,0 +1,47 @@
+[
+  {
+    "epic_id": "epic-executor-tool-calling",
+    "phase_id": "phase-2-tool-execution-loop",
+    "module_scope": [
+      "src/jitsu/core",
+      "src/jitsu/providers",
+      "tests"
+    ],
+    "instructions": "Implement the ReAct (Reason + Act) loop in `JitsuExecutor` to handle `ToolRequest` payloads. 1. Remove the `NotImplementedError` for `ToolRequest`. 2. When the executor parses a `ToolRequest`, use the `tool_name` to invoke the corresponding existing Jitsu Provider (e.g., `file`, `ast`, `tree`, `git`) to resolve the requested target. 3. Append the provider's string output to the active LLM conversation history (as a user or tool response message). 4. Loop back and call the LLM generation method again. Continue this loop until the LLM returns a `FileEdit` payload. 5. Implement a safety mechanism (e.g., max 5 tool calls per execution) to prevent infinite loops. 6. Update `tests/core/test_executor.py` to mock a multi-turn conversation where the LLM requests a tool, receives context, and then outputs a `FileEdit`. Maintain 100% test coverage and zero linting bypasses.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/providers/__init__.py",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Allowing infinite tool calling loops without a hard limit/circuit breaker.",
+      "Writing duplicate code for fetching context; reuse the existing Providers from `jitsu.providers`.",
+      "Losing the initial U-Curve prompt context when making subsequent LLM calls in the loop."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The Executor recursively/iteratively handles `ToolRequest` -> Provider Execution -> LLM Retry.",
+      "A circuit breaker (max tool turns) is implemented.",
+      "The original `NotImplementedError` is removed.",
+      "Unit tests simulate and verify a successful multi-turn tool call sequence.",
+      "just verify passes cleanly with 100% test coverage."
+    ]
+  }
+]

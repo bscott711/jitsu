@@ -517,17 +517,108 @@ async def test_executor_execute_failure_no_details(
 
 @pytest.mark.asyncio
 async def test_executor_execute_tool_request(
-    mock_directive: AgentDirective, mock_runner: MagicMock
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
 ) -> None:
-    """Test that ToolRequest raises NotImplementedError."""
+    """Test that the executor handles ToolRequest by looping back to LLM."""
     mock_client = MagicMock()
-    result = ExecutionResult(
+
+    # 1st response: ToolRequest
+    # 2nd response: FileEdit
+    filepath = str(tmp_path / "src" / "test.py")
+    edit = FileEdit(filepath=filepath, content="print('hello with tool')")
+    result_tool = ExecutionResult(
         thoughts="I need to use a tool",
-        action=ToolRequest(tool_name="grep_search", arguments={"query": "test"}),
+        action=ToolRequest(tool_name="file", arguments={"target": "src/test.py"}),
     )
-    mock_client.chat.completions.create.return_value = result
+    result_edit = ExecutionResult(
+        thoughts="Now I can fix it",
+        action=[edit],
+    )
+    mock_client.chat.completions.create.side_effect = [result_tool, result_edit]
 
-    executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=Path.cwd())
+    # Mock provider registry and provider
+    with patch("jitsu.core.executor.ProviderRegistry") as mock_registry:
+        mock_provider_cls = MagicMock()
+        mock_provider = mock_provider_cls.return_value
+        mock_provider.resolve = AsyncMock(return_value="mocked file content")
+        mock_registry.get.return_value = mock_provider_cls
 
-    with pytest.raises(NotImplementedError, match="Tool execution engine pending phase 2"):
-        await executor.execute_directive(mock_directive, "compiler output")
+        mock_runner.run.return_value = MagicMock(returncode=0)
+
+        executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
+        success = await executor.execute_directive(mock_directive, "compiler output")
+
+    assert success is True
+    expected_calls = 2
+    assert mock_client.chat.completions.create.call_count == expected_calls
+    assert (await anyio.Path(filepath).read_text()) == "print('hello with tool')"
+
+    # Verify ReAct history in the second call
+    second_call_messages = mock_client.chat.completions.create.call_args_list[1][1]["messages"]
+    # Messages: System, User, Assistant(ToolRequest), User(ToolOutput)
+    expected_msg_count = 4
+    assert len(second_call_messages) == expected_msg_count
+    assistant_idx = 2
+    user_idx = 3
+    assert second_call_messages[assistant_idx]["role"] == "assistant"
+    assert "tool_name" in second_call_messages[assistant_idx]["content"]
+    assert "file" in second_call_messages[assistant_idx]["content"]
+    assert second_call_messages[user_idx]["role"] == "user"
+    assert "Tool output:\nmocked file content" in second_call_messages[user_idx]["content"]
+
+
+@pytest.mark.asyncio
+async def test_executor_execute_tool_request_circuit_breaker(
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
+) -> None:
+    """Test that the executor stops after max tool turns."""
+    mock_client = MagicMock()
+
+    # Always return ToolRequest
+    result_tool = ExecutionResult(
+        thoughts="I need more context",
+        action=ToolRequest(tool_name="file", arguments={"target": "src/test.py"}),
+    )
+    mock_client.chat.completions.create.return_value = result_tool
+
+    with patch("jitsu.core.executor.ProviderRegistry") as mock_registry:
+        mock_provider_cls = MagicMock()
+        mock_provider = mock_provider_cls.return_value
+        mock_provider.resolve = AsyncMock(return_value="mocked file content")
+        mock_registry.get.return_value = mock_provider_cls
+
+        executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
+        success = await executor.execute_directive(mock_directive, "compiler output")
+
+    assert success is False
+    # Should stop after 5 tool turns
+    expected_tool_turns = 5
+    assert mock_client.chat.completions.create.call_count == expected_tool_turns
+
+
+@pytest.mark.asyncio
+async def test_executor_execute_tool_request_unknown_tool(
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
+) -> None:
+    """Test handling of unknown tool requests."""
+    mock_client = MagicMock()
+
+    result_tool = ExecutionResult(
+        thoughts="I need an unknown tool",
+        action=ToolRequest(tool_name="unknown", arguments={"target": "something"}),
+    )
+    result_edit = ExecutionResult(
+        thoughts="Falling back to edit",
+        action=[],
+    )
+    mock_client.chat.completions.create.side_effect = [result_tool, result_edit]
+
+    mock_runner.run.return_value = MagicMock(returncode=0)
+
+    executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
+    success = await executor.execute_directive(mock_directive, "compiler output")
+
+    assert success is True
+    # Verify that the error message was sent to the LLM
+    second_call_messages = mock_client.chat.completions.create.call_args_list[1][1]["messages"]
+    assert "Error: Unknown tool 'unknown'" in second_call_messages[3]["content"]
