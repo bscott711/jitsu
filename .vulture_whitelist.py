@@ -30,3 +30,9 @@ checkout_branch
 merge_branch
 delete_branch
 label
+
+# Pydantic Validators
+validate_phases_not_empty
+validate_provider_name
+validate_module_scope_not_empty
+enforce_zero_bypass_verification

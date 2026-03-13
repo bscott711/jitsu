@@ -110,9 +110,14 @@ async def test_planner_generation_failure() -> None:
 @pytest.mark.asyncio
 async def test_planner_generation_fallback_prompt() -> None:
     """Test that the planner uses the fallback prompt if the prompt file is missing."""
-    blueprint = EpicBlueprint(epic_id="e1", phases=[])
+    blueprint = EpicBlueprint(
+        epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
+    )
+    directive = AgentDirective(
+        epic_id="e1", phase_id="p1", module_scope=["src"], instructions="test"
+    )
     mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = blueprint
+    mock_client.chat.completions.create.side_effect = [blueprint, directive]
 
     planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
 
@@ -122,8 +127,9 @@ async def test_planner_generation_fallback_prompt() -> None:
     ):
         await planner.generate_plan()
 
-    # Verify it called create
-    mock_client.chat.completions.create.assert_called_once()
+    # Verify it called create (macro + 1 micro)
+    expected_calls = 2
+    assert mock_client.chat.completions.create.call_count == expected_calls
 
 
 @pytest.mark.asyncio
@@ -188,7 +194,9 @@ async def test_planner_generate_plan_verbose() -> None:
 @pytest.mark.asyncio
 async def test_planner_generate_plan_with_jitsurules() -> None:
     """Test that the planner correctly incorporates .jitsurules if present."""
-    blueprint = EpicBlueprint(epic_id="e1", phases=[])
+    blueprint = EpicBlueprint(
+        epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
+    )
     mock_client = MagicMock()
     mock_client.chat.completions.create.return_value = blueprint
 
@@ -297,7 +305,9 @@ async def test_planner_generate_plan_with_injection() -> None:
 async def test_planner_structured_callback() -> None:
     """Test the new structured on_status callback."""
     mock_client = MagicMock()
-    blueprint = EpicBlueprint(epic_id="e1", phases=[])
+    blueprint = EpicBlueprint(
+        epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
+    )
     mock_client.chat.completions.create.return_value = blueprint
 
     status_updates = []
@@ -322,7 +332,9 @@ async def test_planner_structured_callback() -> None:
 async def test_planner_sync_callbacks() -> None:
     """Test sync versions of callbacks in _emit_status."""
     mock_client = MagicMock()
-    blueprint = EpicBlueprint(epic_id="e1", phases=[])
+    blueprint = EpicBlueprint(
+        epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
+    )
     mock_client.chat.completions.create.return_value = blueprint
 
     msgs = []
@@ -353,7 +365,9 @@ async def test_planner_sync_callbacks() -> None:
 async def test_planner_async_legacy_callback() -> None:
     """Test async legacy on_progress callback."""
     mock_client = MagicMock()
-    blueprint = EpicBlueprint(epic_id="e1", phases=[])
+    blueprint = EpicBlueprint(
+        epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
+    )
     mock_client.chat.completions.create.return_value = blueprint
 
     msgs = []

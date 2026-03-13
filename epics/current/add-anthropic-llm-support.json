@@ -1,0 +1,46 @@
+[
+  {
+    "epic_id": "add-anthropic-llm-support",
+    "phase_id": "extend-client-for-anthropic",
+    "module_scope": [
+      "src/jitsu/core/client.py",
+      "src/jitsu/config.py",
+      "tests/core/test_client.py"
+    ],
+    "instructions": "Extend the LLM client to support Anthropic Claude 3.5 Sonnet. Modify the configuration model in config.py to add 'anthropic' as a valid provider option with appropriate default settings. Update the client.py to handle the new provider, ensuring it uses the anthropic SDK properly for API calls. Implement proper error handling and token counting specific to Anthropic's API. Write comprehensive tests in test_client.py covering configuration validation, client initialization for the new provider, and API call simulation (mocked).",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/client.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/config.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_client.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not hardcode API keys or secrets directly in the code; use environment variables or configuration.",
+      "Do not bypass the existing client abstraction layer; integrate Anthropic support within the current class structure.",
+      "Do not ignore token counting differences between providers; implement provider-specific token counting."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "All tests pass including new tests for Anthropic provider.",
+      "Configuration model validates Anthropic provider correctly.",
+      "Client initializes Anthropic client when provider is set to 'anthropic'."
+    ],
+    "context_injection": null
+  }
+]

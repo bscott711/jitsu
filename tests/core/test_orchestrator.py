@@ -248,7 +248,7 @@ async def test_orchestrator_resume_success(tmp_path: Path) -> None:
 
         await orchestrator.resume(epic_id)
 
-        mock_executor.run_verification.assert_called_once_with(["c1"])
+        mock_executor.run_verification.assert_called_once_with(["c1", "just verify"])
         assert not state_path.exists()
         mock_finish.assert_awaited_once()
 

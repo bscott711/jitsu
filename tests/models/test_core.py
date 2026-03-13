@@ -7,6 +7,7 @@ from jitsu.models.core import (
     AgentDirective,
     ContextInjectionConfig,
     ContextTarget,
+    EpicBlueprint,
     PhaseReport,
     PhaseStatus,
     ResumeResult,
@@ -117,7 +118,7 @@ def test_agent_directive_new_fields() -> None:
         verification_commands=["uv run pytest"],
         completion_criteria=["All tests pass"],
     )
-    assert directive.verification_commands == ["uv run pytest"]
+    assert directive.verification_commands == ["uv run pytest", "just verify"]
     assert directive.completion_criteria == ["All tests pass"]
 
 
@@ -190,3 +191,62 @@ def test_resume_result_model() -> None:
     # Test frozen
     with pytest.raises(ValidationError):
         result.phase_id = "phase-003"
+
+
+def test_context_target_invalid_provider() -> None:
+    """Test that ContextTarget rejects invalid provider names."""
+    with pytest.raises(ValidationError, match="Invalid provider name 'invalid'"):
+        ContextTarget(provider_name="invalid", target_identifier="src/main.py")
+
+
+def test_epic_blueprint_empty_phases() -> None:
+    """Test that EpicBlueprint rejects an empty phases list."""
+    with pytest.raises(ValidationError, match="Epic must have at least one phase"):
+        EpicBlueprint(epic_id="epic-001", phases=[])
+
+
+def test_agent_directive_invalid_module_scope() -> None:
+    """Test that AgentDirective rejects empty or invalid module_scope."""
+    # Test empty list
+    with pytest.raises(
+        ValidationError, match="module_scope must contain at least one non-empty string"
+    ):
+        AgentDirective(
+            epic_id="epic-001",
+            phase_id="phase-001",
+            module_scope=[],
+            instructions="test",
+        )
+
+    # Test list with only empty strings
+    with pytest.raises(
+        ValidationError, match="module_scope must contain at least one non-empty string"
+    ):
+        AgentDirective(
+            epic_id="epic-001",
+            phase_id="phase-001",
+            module_scope=["", "  "],
+            instructions="test",
+        )
+
+
+def test_agent_directive_verification_bypass_prevention() -> None:
+    """Test that 'just verify' is automatically added to verification_commands."""
+    directive = AgentDirective(
+        epic_id="epic-001",
+        phase_id="phase-001",
+        module_scope=["src"],
+        instructions="test",
+        verification_commands=["ls -R"],
+    )
+    assert "just verify" in directive.verification_commands
+
+    # Test when it's already there
+    directive2 = AgentDirective(
+        epic_id="epic-001",
+        phase_id="phase-001",
+        module_scope=["src"],
+        instructions="test",
+        verification_commands=["just verify", "other command"],
+    )
+    assert directive2.verification_commands.count("just verify") == 1

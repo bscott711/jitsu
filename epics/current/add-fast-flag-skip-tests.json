@@ -1,0 +1,51 @@
+[
+  {
+    "epic_id": "add-fast-flag-skip-tests",
+    "phase_id": "implement-fast-flag-and-skip-logic",
+    "module_scope": [
+      "src/jitsu/cli",
+      "src/jitsu/core"
+    ],
+    "instructions": "Implement the --fast flag in the CLI and the corresponding skip logic in the core runner.\n\n1. In `src/jitsu/cli/main.py`, add a `--fast` flag to the `verify` command (typer.Option). The flag should be a boolean, defaulting to False.\n2. In `src/jitsu/core/runner.py`, modify the `verify` function to accept an optional `fast: bool = False` parameter.\n3. In `src/jitsu/core/runner.py`, when `fast` is True, skip the execution of the test suite (i.e., do not run `just verify` or the equivalent test command). Ensure the function returns a success status indicating tests were skipped.\n4. Update the CLI's `verify` command to pass the `fast` flag value to the core runner's `verify` function.\n5. Add appropriate unit tests in `tests/cli/test_main.py` and `tests/core/test_runner.py` to cover the new flag and skip logic.\n\nAll code must follow existing patterns and use the project's JustFile commands where appropriate.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/runner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_runner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not bypass the CLI's Typer option parsing for flag handling.",
+      "Do not hardcode test execution commands inside the runner; use the existing command execution abstraction.",
+      "Do not modify the `just verify` command in the JustFile; only skip its invocation."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The --fast flag is present in the CLI's verify command and defaults to False.",
+      "The core runner's verify function accepts a fast parameter and skips test execution when True.",
+      "Unit tests for the flag and skip logic pass."
+    ],
+    "context_injection": null
+  }
+]
