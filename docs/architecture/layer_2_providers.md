@@ -1,5 +1,7 @@
 # **Layer 2: AST-First Providers**
 
+> **Automatic Documentation Guarantee:** This documentation is automatically synchronized by Jitsu's self-documenting workflow as part of its core process.
+
 Layer 2 is responsible for "observing" the codebase. It consists of specialized Context Providers that translate raw filesystem data into LLM-optimized representations.
 
 ---
@@ -30,6 +32,8 @@ The `ProviderRegistry` allows for the dynamic registration and discovery of cont
 - **FileState Provider (`file`)**: A raw-text fallback when full implementation is required.
 - **Git Provider (`git`)**: Integrates live repository state (diffs, status) into the context.
 - **Tree Provider (`tree`)**: Generates visual directory structures for navigational context.
+- **Markdown AST Provider (`markdown`)**: Extracts headings and code blocks from large markdown files.
+- **Env Var Provider (`env`)**: Safely exposes necessary environment configurations.
 
 ---
 

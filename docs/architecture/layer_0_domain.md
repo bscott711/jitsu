@@ -1,5 +1,7 @@
 # **Layer 0: Domain Models**
 
+> **Automatic Documentation Guarantee:** This documentation is automatically synchronized by Jitsu's self-documenting workflow as part of its core process.
+
 Layer 0 represents the fundamental "contract" of the Jitsu system. It contains zero-dependency, strictly-typed Pydantic V2 models that define how the orchestrator and AI agents communicate.
 
 ## **Why Layer 0 is Isolated**
@@ -37,6 +39,9 @@ The structured feedback submitted by the agent upon completion of a phase.
 
 ### **Supporting Types**
 
-- **`TargetResolutionMode`**: Controls how the `ContextCompiler` resolves a file (e.g., `AST`, `SCHEMA`, `FULL_SOURCE`).
-- **`PhaseStatus`**: Enum capturing the lifecycle of a phase.
-- **`EpicBlueprint`**: A collection of directives forming a larger project goal.
+- **`PhaseStatus`**: Enum capturing the lifecycle of a phase (`PENDING`, `RUNNING`, `SUCCESS`, `FAILED`, `STUCK`).
+- **`TargetResolutionMode`**: Controls how the `ContextCompiler` resolves a file (`AUTO`, `STRUCTURE_ONLY`, `FULL_SOURCE`, `SCHEMA_ONLY`).
+- **`ContextInjectionConfig`**: Configuration for deterministic context inclusion and exclusion.
+- **`PhaseBlueprint` / `EpicBlueprint`**: High-level structures for planning the sequence of tasks.
+- **`ContextTarget`**: A specific request for a file/module with a chosen provider and resolution mode.
+- **`ResumeResult`**: The outcome of resuming a previously interrupted orchestration.
