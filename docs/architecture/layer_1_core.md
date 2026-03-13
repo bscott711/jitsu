@@ -31,17 +31,9 @@ The `JitsuStateManager` manages the persistence of the entire orchestration loop
 - **Status Tracking**: Records `PhaseReports` and aggregates progress.
 - **Persistence**: Ensures state survives process restarts via local file storage or SQLite.
 
-### **`JitsuOrchestrator`**
-
-The high-level manager that coordinates the autonomous loop between planning, execution, and reporting.
-
 ### **`JitsuPlanner`**
 
-The "brain" that translates natural language goals into a structured `EpicBlueprint` and `AgentDirectives`.
-
-### **`JitsuExecutor`**
-
-The "hands" of the system. It handles the ReAct loop, tool calling, and the AST-aware recovery cycle when errors occur.
+The "brain" that translates natural language goals into a structured `EpicBlueprint` and `AgentDirectives`. This logic powers the `jitsu_plan_epic` MCP tool.
 
 ### **`JitsuRunner`**
 

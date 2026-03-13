@@ -29,17 +29,11 @@ The `ToolHandlers` class encapsulates the actual logic for every Jitsu tool. It 
 
 Routing is handled by a dedicated `ToolRegistry`. This registry maps tool names to their corresponding logic in `ToolHandlers`, further decoupling the server from the specific tool implementation.
 
-### **`ipc.py`: The Background Daemon**
-
-A background TCP daemon (`jitsu serve`) constantly listens for new epics via `jitsu submit`, injecting them into the running MCP server's state manager.
-
----
-
-## **The Orchestration Lifecycle**
+### **The Orchestration Lifecycle**
 
 1. **`jitsu serve`**: Initializes the `JitsuStateManager` and `ContextCompiler`.
 2. **Setup**: The `ToolHandlers` are created (Dependency Injection) and registered with the `ToolRegistry`.
-3. **Transport**: `run_server()` starts the MCP transport and the IPC background daemon.
+3. **Transport**: `run_server()` starts the MCP transport over stdio.
 4. **Call**: When an IDE agent calls a tool, the transport layer asks the Registry for the handler and executes it.
 
 This design allows for high-fidelity testing of the orchestration logic in `handlers.py` while keeping the "messy" details of stdio communication isolated in `mcp_server.py`.

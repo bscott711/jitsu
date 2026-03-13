@@ -1,67 +1,74 @@
 # **Jitsu**
 
-## **Autonomous, AST-Aware, Self-Healing AI Engineering Agent**
+## **JIT Context & Workflow Orchestrator for AI IDEs**
 
-**Jitsu** is an orchestration layer designed to eliminate **Prompt Debt**, **Context Drift**, and **LLM Laziness** in AI-driven software engineering. It shifts context preparation from the agent's limited window to a high-performance Python engine, serving the absolute "ground truth" of your codebase **Just-In-Time (JIT)**.
+**Jitsu** is a high-performance orchestration layer designed to eliminate **Prompt Debt**, **Context Drift**, and **LLM Laziness** in AI-driven software engineering. It shifts context preparation from the agent's limited window to a powerful Python engine, serving the absolute "ground truth" of your codebase **Just-In-Time (JIT)** directly to your AI IDE.
 
-### **✨ v0.2.0 Architecture Highlights**
+### **✨ v1.0.0 Architecture Highlights**
 
-Jitsu operates as a deterministic, engineer with a built-in safety net:
+Jitsu operates as a stateful memory and context engine for your IDE agent:
 
 * **U-Curve Context Compilation:** Mathematically optimized prompt construction that forces critical instructions to the edges of the context window, eliminating the LLM "Lost in the Middle" syndrome.  
-* **AST-Aware Recovery Loop:** If a test fails, Jitsu doesn't just guess why. It surgically extracts the traceback, resolves the Abstract Syntax Tree (AST) of the failing file, and injects it into a recovery prompt for a zero-hallucination fix.  
-* **Pydantic Gatekeepers:** Ironclad output validation instantly rejects LLM laziness (e.g., \# rest of code here or ...), forcing the model to generate 100% complete, executable code before it ever touches your disk.  
-* **Zero-Bypass Engineering:** Jitsu strictly adheres to a "Zero-Regression" policy, enforcing 100% test coverage with zero \# noqa or \# type: ignore linting bypasses.
+* **AST-Aware Intelligence:** Jitsu surgically extracts the structural skeletons (AST) of your files, providing 70-90% token savings while maintaining high-fidelity architectural context.  
+* **Pydantic Gatekeepers:** Directives are delivered as ironclad, validated Pydantic models with explicit "Definitions of Done," verification commands, and anti-patterns.
+* **Persistent Task Queue:** Maintain complex state across IDE restarts. Jitsu keeps track of your Epic's progress and the absolute "ground truth" of completed phases.
 
 ## **🤖 Agentic Excellence**
 
-Jitsu is not just a code generator; it is a **self-orchestrating engineer**. It transforms high-level natural language intent into verified, production-ready codebases with zero manual intervention.
+Jitsu is designed to empower **Agentic Excellence**—the transition from passive LLM assistance to collaborative, state-aware engineering. It transforms high-level natural language intent into a structured, verified implementation loop within IDEs like Antigravity, Cursor, and Windsurf.
 
-### **The Flawless Workflow**
+### **The Collaborative Workflow**
 
-Jitsu handles the heavy lifting of engineering management automatically:
+Jitsu handles the heavy lifting of context management and state tracking:
 
-1. **Natural Language Intent:** You provide a goal (e.g., *"Add support for Anthropic LLMs"*).
-2. **Epic Planning:** Jitsu's `Planner` analyzes the codebase and generates a multi-phase `Epic` with strict Pydantic-validated directives.
+1. **Natural Language Intent:** You provide a goal to your IDE agent.
+2. **Deterministic Planning:** Use the `jitsu_plan_epic` tool to analyze the codebase and generate a multi-phase `Epic`.
 3. **JIT Context Compilation:** For each phase, Jitsu surgically compiles the absolute minimum context required, optimized via **U-Curve Attention**.
-4. **Autonomous Execution:** The `Executor` implements the changes, handling complex edits across multiple files.
-5. **Self-Healing Loop:** If a test fails, Jitsu enters a recovery loop, parsing the traceback and AST to fix the regression instantly.
-6. **Self-Documentation:** Jitsu automatically updates `README.md` and `docs/` to ensure documentation matches the new reality.
-7. **Verified Completion:** Final verification via `just verify` ensures 100% coverage and zero technical debt.
+4. **Verified Completion:** Every phase includes mandatory verification via `just verify` to ensure 100% coverage and zero technical debt.
+5. **Self-Documentation:** Jitsu mandates that documentation updates are part of the implementation cycle to ensure knowledge is always current.
 
 > [!NOTE]
-> **Self-Documentation Guarantee:** Jitsu treats documentation as code. Every Epic concluded by Jitsu includes a mandatory step to synchronize architectural docs, ensuring your wiki never goes stale.
+> **Self-Documentation Guarantee:** Jitsu treats documentation as code. Every Epic concluded using Jitsu includes a final step to synchronize architectural docs, ensuring your wiki never goes stale.
 
 ## **🚀 Quick Start**
 
 ### **Installation**
 
-Jitsu is optimized for uv:
+Jitsu is optimized for `uv`:
 
 ```bash
 uv tool install jitsu
 ```
 
-### **Core Workflows**
+### **IDE Integration (MCP)**
 
-**1\. Autonomous Execution (New in v0.2.0)**  
-Let Jitsu act as a fully autonomous agent. It will plan the Epic, compile the context, execute the edits, and run the verification loops itself.  
-jitsu auto "Refactor the core orchestrator to use the new State Manager"
+To use Jitsu in an MCP-compatible IDE (Antigravity, Cursor, Windsurf, etc.):
 
-**2\. The IDE Integration (MCP)**  
-If you prefer to drive via an MCP-compatible IDE (Antigravity, Cursor, etc.):
+1. **Configure MCP**: Add `jitsu serve` as an MCP server using `stdio` transport.
+2. **Load an Epic**: Optional pre-loading of an existing plan:
 
-1. **Serve**: uv run jitsu serve  
-2. **Plan & Submit**: Draft an epic.json and run uv run jitsu submit epic.json  
-3. **Orchestrate**: Use your IDE to pull phases via the jitsu\_get\_next\_phase tool.
+   ```bash
+   jitsu serve --epic path/to/epic_plan.json
+   ```
+
+3. **Orchestrate**: Drive your agent using the **9 Core Jitsu Tools**:
+   * `jitsu_get_planning_context`
+   * `jitsu_plan_epic`
+   * `jitsu_submit_epic`
+   * `jitsu_get_next_phase`
+   * `jitsu_report_status`
+   * `jitsu_inspect_queue`
+   * `jitsu_request_context`
+   * `jitsu_git_status`
+   * `jitsu_git_commit`
 
 ## **📖 Documentation**
 
 For a deep dive into Jitsu's architecture and capabilities, visit our [**Wiki**](docs/index.md).
 
-* [**Architecture Overview**](docs/index.md#4-layer-architecture): The execution stack (Planner \-\> Context Compiler \-\> Executor \-\> Storage).  
-* [**CLI Reference**](docs/CLI%20Reference.md): Typer CLI usage for auto, init, serve, and submit.  
-* [**MCP Tools**](docs/MCP%20Tools%20Reference.md): Reference for the default orchestrator tools.
+* [**Architecture Overview**](docs/index.md#4-layer-architecture): The 4-layer stack.
+* [**CLI Reference**](docs/CLI%20Reference.md): Typer CLI usage for `serve`.
+* [**MCP Tools Reference**](docs/MCP%20Tools%20Reference.md): Detailed documentation for the 9 core orchestrator tools.
 
 ## **🛠️ Development**
 

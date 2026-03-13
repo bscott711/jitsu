@@ -44,4 +44,3 @@ The structured feedback submitted by the agent upon completion of a phase.
 - **`ContextInjectionConfig`**: Configuration for deterministic context inclusion and exclusion.
 - **`PhaseBlueprint` / `EpicBlueprint`**: High-level structures for planning the sequence of tasks.
 - **`ContextTarget`**: A specific request for a file/module with a chosen provider and resolution mode.
-- **`ResumeResult`**: The outcome of resuming a previously interrupted orchestration.
