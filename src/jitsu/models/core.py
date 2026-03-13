@@ -88,3 +88,13 @@ class PhaseReport(BaseModel):
     artifacts_generated: list[str] = Field(default=[])
     agent_notes: str = ""
     verification_output: str = ""
+
+
+class ResumeResult(BaseModel):
+    """The result of a resume operation."""
+
+    model_config = ConfigDict(use_enum_values=True, frozen=True)
+
+    phase_id: str
+    status: PhaseStatus
+    reason: str | None = None

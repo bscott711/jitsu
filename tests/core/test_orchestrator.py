@@ -15,7 +15,8 @@ from jitsu.config import settings
 from jitsu.core.executor import MonotonicityError
 from jitsu.core.orchestrator import JitsuOrchestrator
 from jitsu.core.storage import EpicStorage
-from jitsu.models.core import AgentDirective, PhaseStatus
+from jitsu.models.core import AgentDirective, PhaseReport, PhaseStatus
+from jitsu.models.execution import VerificationFailureDetails
 from jitsu.providers.git import GitError
 
 
@@ -209,6 +210,173 @@ async def test_orchestrator_execute_auto_file_success(tmp_path: Path) -> None:
     with patch.object(orchestrator, "run_autonomous", new_callable=AsyncMock) as mock_auto:
         await orchestrator.execute_auto(file=epic_file, model="test")
         mock_auto.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_resume_success(tmp_path: Path) -> None:
+    """Test successful resumption of a stuck epic."""
+    storage = EpicStorage(base_dir=tmp_path)
+    mock_executor = MagicMock()
+    mock_executor.run_verification.return_value = (True, None)
+
+    # Use a real state manager to test hydration integration
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    epic_id = "test-resume"
+    epic_path = storage.get_current_path(epic_id)
+    state_path = epic_path.with_suffix(".state")
+
+    d1 = AgentDirective(
+        epic_id=epic_id,
+        phase_id="p1",
+        module_scope=["s"],
+        instructions="i1",
+        verification_commands=["c1"],
+    )
+    epic_path.write_text(json.dumps([d1.model_dump()]), encoding="utf-8")
+
+    report = PhaseReport(phase_id="p1", status=PhaseStatus.STUCK)
+    state_path.write_text(report.model_dump_json(), encoding="utf-8")
+
+    with (
+        patch("jitsu.core.orchestrator.GitProvider") as mock_git_cls,
+        patch.object(orchestrator, "finish", new_callable=AsyncMock) as mock_finish,
+    ):
+        mock_git = mock_git_cls.return_value
+        mock_git.get_current_branch.return_value = "main"
+
+        await orchestrator.resume(epic_id)
+
+        mock_executor.run_verification.assert_called_once_with(["c1"])
+        assert not state_path.exists()
+        mock_finish.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_resume_fails_verification(tmp_path: Path) -> None:
+    """Test resume fails if verification still fails."""
+    storage = EpicStorage(base_dir=tmp_path)
+    mock_executor = MagicMock()
+
+    details = VerificationFailureDetails(summary="still fails", trimmed="...", failed_cmd="c1")
+    mock_executor.run_verification.return_value = (False, details)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    epic_id = "test-fail"
+    epic_path = storage.get_current_path(epic_id)
+    state_path = epic_path.with_suffix(".state")
+
+    d1 = AgentDirective(
+        epic_id=epic_id,
+        phase_id="p1",
+        module_scope=["s"],
+        instructions="i1",
+        verification_commands=["c1"],
+    )
+    epic_path.write_text(json.dumps([d1.model_dump()]), encoding="utf-8")
+    report = PhaseReport(phase_id="p1", status=PhaseStatus.STUCK)
+    state_path.write_text(report.model_dump_json(), encoding="utf-8")
+
+    with pytest.raises(typer.Exit) as exc:
+        await orchestrator.resume(epic_id)
+    assert exc.value.exit_code == 1
+    assert state_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_resume_with_remaining(tmp_path: Path) -> None:
+    """Test resume with remaining phases."""
+    storage = EpicStorage(base_dir=tmp_path)
+    mock_executor = MagicMock()
+    mock_executor.run_verification.return_value = (True, None)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    epic_id = "test-remaining"
+    epic_path = storage.get_current_path(epic_id)
+    state_path = epic_path.with_suffix(".state")
+
+    d1 = AgentDirective(epic_id=epic_id, phase_id="p1", module_scope=["s"], instructions="i1")
+    d2 = AgentDirective(epic_id=epic_id, phase_id="p2", module_scope=["s"], instructions="i2")
+    epic_path.write_text(json.dumps([d1.model_dump(), d2.model_dump()]), encoding="utf-8")
+
+    report = PhaseReport(phase_id="p1", status=PhaseStatus.STUCK)
+    state_path.write_text(report.model_dump_json(), encoding="utf-8")
+
+    with (
+        patch("jitsu.core.orchestrator.GitProvider") as mock_git_cls,
+        patch.object(orchestrator, "execute_phases", new_callable=AsyncMock) as mock_exec,
+        patch.object(orchestrator, "finish", new_callable=AsyncMock) as mock_finish,
+    ):
+        mock_git = mock_git_cls.return_value
+        mock_git.checkout_branch.side_effect = GitError("failed")
+        mock_git.get_current_branch.return_value = "main"
+
+        await orchestrator.resume(epic_id)
+
+        mock_exec.assert_awaited_once()
+        mock_finish.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_resume_hydrate_error(tmp_path: Path) -> None:
+    """Test resume handles hydration errors."""
+    storage = EpicStorage(base_dir=tmp_path)
+    orchestrator = JitsuOrchestrator(storage=storage)
+
+    with pytest.raises(typer.Exit) as exc:
+        await orchestrator.resume("missing")
+    assert exc.value.exit_code == 1
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_resume_with_model(tmp_path: Path) -> None:
+    """Test resume with model override."""
+    storage = EpicStorage(base_dir=tmp_path)
+    mock_executor = MagicMock()
+    mock_executor.run_verification.return_value = (True, None)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    epic_id = "test-model"
+    epic_path = storage.get_current_path(epic_id)
+    state_path = epic_path.with_suffix(".state")
+    d1 = AgentDirective(epic_id=epic_id, phase_id="p1", module_scope=["s"], instructions="i")
+    epic_path.write_text(json.dumps([d1.model_dump()]), encoding="utf-8")
+    report = PhaseReport(phase_id="p1", status=PhaseStatus.STUCK)
+    state_path.write_text(report.model_dump_json(), encoding="utf-8")
+
+    with (
+        patch("jitsu.core.orchestrator.GitProvider"),
+        patch.object(orchestrator, "finish", new_callable=AsyncMock),
+    ):
+        await orchestrator.resume(epic_id, model="new-model")
+        assert orchestrator.executor.model == "new-model"
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_resume_forced(tmp_path: Path) -> None:
+    """Test forced resumption skips verification."""
+    storage = EpicStorage(base_dir=tmp_path)
+    mock_executor = MagicMock()
+    # Verification would fail if called
+    mock_executor.run_verification.return_value = (False, None)
+    orchestrator = JitsuOrchestrator(executor=mock_executor, storage=storage)
+
+    epic_id = "test-forced"
+    epic_path = storage.get_current_path(epic_id)
+    state_path = epic_path.with_suffix(".state")
+    d1 = AgentDirective(epic_id=epic_id, phase_id="p1", module_scope=["s"], instructions="i")
+    epic_path.write_text(json.dumps([d1.model_dump()]), encoding="utf-8")
+    report = PhaseReport(phase_id="p1", status=PhaseStatus.STUCK)
+    state_path.write_text(report.model_dump_json(), encoding="utf-8")
+
+    with (
+        patch("jitsu.core.orchestrator.GitProvider"),
+        patch.object(orchestrator, "finish", new_callable=AsyncMock),
+    ):
+        await orchestrator.resume(epic_id, force=True)
+        # Verify run_verification was NOT called
+        mock_executor.run_verification.assert_not_called()
+        assert not state_path.exists()
 
 
 @pytest.mark.asyncio

@@ -8,6 +8,7 @@ from jitsu.models.core import (
     ContextTarget,
     PhaseReport,
     PhaseStatus,
+    ResumeResult,
     TargetResolutionMode,
 )
 
@@ -134,3 +135,26 @@ def test_phase_report_strictness_and_frozen() -> None:
     # Test frozen
     with pytest.raises(ValidationError):
         report.status = PhaseStatus.FAILED
+
+
+def test_resume_result_model() -> None:
+    """Test the ResumeResult model."""
+    result = ResumeResult(
+        phase_id="phase-001",
+        status=PhaseStatus.SUCCESS,
+        reason="Manual fix applied",
+    )
+    assert result.phase_id == "phase-001"
+    assert result.status == PhaseStatus.SUCCESS
+    assert result.reason == "Manual fix applied"
+
+    # Test defaults
+    result_default = ResumeResult(
+        phase_id="phase-002",
+        status=PhaseStatus.STUCK,
+    )
+    assert result_default.reason is None
+
+    # Test frozen
+    with pytest.raises(ValidationError):
+        result.phase_id = "phase-003"

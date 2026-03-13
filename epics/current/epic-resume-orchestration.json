@@ -1,0 +1,149 @@
+[
+  {
+    "epic_id": "epic-resume-orchestration",
+    "phase_id": "phase-1-data-structures-and-state",
+    "module_scope": [
+      "src/jitsu/models",
+      "src/jitsu/core",
+      "tests/models",
+      "tests/core"
+    ],
+    "instructions": "1. In src/jitsu/models/core.py, define a new Pydantic model `ResumeResult` with fields: `phase_id` (str), `status` (str, enum-like: 'COMPLETED', 'SKIPPED', 'FAILED'), and `reason` (str, optional).\n2. In src/jitsu/core/state.py, extend the `StateManager` class with a method `hydrate_for_resume(self, epic_id: str) -> tuple[dict, list]`. This method should:\n   - Load the state for the given epic_id from storage.\n   - Identify the last STUCK or PENDING phase.\n   - Return a tuple: (current_phase_data, remaining_phases_list).\n   - If no STUCK phase is found, raise a `ValueError`.\n3. Write comprehensive tests in tests/models/test_core.py to validate the `ResumeResult` model.\n4. Write tests in tests/core/test_state.py to validate the new `hydrate_for_resume` method, covering:\n   - Successful hydration from a STUCK state.\n   - Error case when no STUCK phase exists.\n   - Proper extraction of the stuck phase and remaining phases.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/state.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/models/test_core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_state.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not add the `ResumeResult` model to src/jitsu/models/execution.py; it belongs in core.py as it's a core domain object.",
+      "Do not bypass the Pydantic Gatekeeper: ensure all new models are proper Pydantic v2 models with Field definitions.",
+      "Do not hardcode the state file path in `hydrate_for_resume`; use the existing `Storage` class injected into `StateManager`."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "All new tests pass with 100% coverage for the added models and methods.",
+      "The code adheres to the project's linting and type-checking rules.",
+      "The `ResumeResult` model is correctly defined and importable.",
+      "The `hydrate_for_resume` method functions as specified and raises the correct errors."
+    ]
+  },
+  {
+    "epic_id": "epic-resume-orchestration",
+    "phase_id": "phase-2-orchestrator-resume-logic",
+    "module_scope": [
+      "src/jitsu/core/orchestrator.py",
+      "tests/core/test_orchestrator.py"
+    ],
+    "instructions": "Implement the `resume` method in `src/jitsu/core/orchestrator.py` that handles resuming a stuck epic. The method must: 1) Hydrate the current epic state from storage. 2) Verify the stuck phase exists and is in STUCK status. 3) Re-execute the verification commands for the stuck phase to check if it is now resolvable. 4) If verification passes, mark the phase as COMPLETED and execute the remaining phases. 5) If verification fails, maintain STUCK status and raise a descriptive error. Use the existing `execute_phase` method for phase execution. Symmetrically update `tests/core/test_orchestrator.py` to add tests covering: successful resume after manual fix, failed resume verification, and invalid state transitions. Ensure tests mock storage and execution dependencies appropriately.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/storage.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not bypass the JitsuStateManager for state hydration; always use the storage layer.",
+      "Do not hardcode verification commands; use the phase's `verification_commands` from the epic JSON.",
+      "Do not modify the phase status directly without going through the state machine's valid transitions."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The `resume` method in orchestrator.py correctly hydrates state, verifies the stuck phase, and resumes execution.",
+      "All new tests in test_orchestrator.py pass with 100% coverage for the resume logic.",
+      "`just verify` passes all tests and linting."
+    ]
+  },
+  {
+    "epic_id": "epic-resume-orchestration",
+    "phase_id": "phase-3-cli-integration",
+    "module_scope": [
+      "src/jitsu/cli/main.py",
+      "tests/cli/test_main.py"
+    ],
+    "instructions": "Integrate the new `resume` command into the Jitsu CLI in `src/jitsu/cli/main.py`. The command must invoke the orchestrator's resume logic and properly handle the CLI flow. This includes adding a new `resume` function decorated with `@app.command()` that calls the orchestrator's resume method, handles the result, and prints appropriate messages. Ensure the command accepts a `--force` flag to allow resuming even if state validation fails. Update the CLI's help text to reflect the new command. In `tests/cli/test_main.py`, add comprehensive tests for the new resume command, covering normal resume flow, error cases, and the `--force` flag.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not bypass the existing CLI command structure by creating a separate entry point.",
+      "Do not hardcode the state file path; use the existing state management utilities.",
+      "Do not implement resume logic directly in the CLI; delegate to the orchestrator's `resume_execution` method."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The `resume` command is accessible via `jitsu resume` and `jitsu resume --force`.",
+      "All existing and new CLI tests pass with 100% coverage.",
+      "The orchestrator's resume method is called correctly from the CLI."
+    ]
+  }
+]

@@ -50,7 +50,7 @@ class JitsuOrchestrator:
         self.planner = planner
         self.executor = executor or JitsuExecutor()
         self.storage = storage or EpicStorage()
-        self.state_manager = state_manager or JitsuStateManager()
+        self.state_manager = state_manager or JitsuStateManager(storage=self.storage)
         self.on_progress = on_progress
         self._original_branch: str | None = None
         self._sandbox_branch: str | None = None
@@ -468,6 +468,105 @@ class JitsuOrchestrator:
             err=True,
         )
         await self.execute_phases(directives, out=out)
+        await self.finish(out)
+
+    async def resume(self, epic_id: str, *, model: str | None = None, force: bool = False) -> None:
+        """
+        Resume execution of a STUCK epic.
+
+        1. Hydrate state from storage.
+        2. Verify the stuck phase (unless forced).
+        3. If passes, mark SUCCESS and continue with remaining phases.
+        4. If fails, stay STUCK.
+
+        Args:
+            epic_id: The ID of the epic to resume.
+            model: Optional model override.
+            force: Skip verification if True.
+
+        Raises:
+            typer.Exit: On failure to resume.
+
+        """
+        if model:
+            self.executor.model = model
+
+        try:
+            current_dict, remaining_dicts = self.state_manager.hydrate_for_resume(epic_id)
+        except (ValueError, OSError) as e:
+            typer.secho(f"❌ Failed to resume: {e}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from e
+
+        adapter = TypeAdapter(AgentDirective)
+        current_directive = adapter.validate_python(current_dict)
+        remaining_directives = [adapter.validate_python(d) for d in remaining_dicts]
+
+        if not force:
+            typer.secho(
+                f"🔎 Verifying stuck phase: {current_directive.phase_id}",
+                fg=typer.colors.CYAN,
+                err=True,
+            )
+
+            success, details = self.executor.run_verification(
+                current_directive.verification_commands
+            )
+
+            if not success:
+                typer.secho(
+                    f"❌ Phase {current_directive.phase_id} is still failing.",
+                    fg=typer.colors.RED,
+                    bold=True,
+                    err=True,
+                )
+                if details:
+                    typer.secho(f"\nSummary: {details.summary}", fg=typer.colors.YELLOW, err=True)
+                    typer.secho(f"\n{details.trimmed}", fg=typer.colors.RED, err=True)
+                raise typer.Exit(1)
+        else:
+            typer.secho(
+                f"⚠️ Forced resume: Skipping verification for {current_directive.phase_id}",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
+
+        typer.secho(
+            f"✅ Phase {current_directive.phase_id} resolved! Resuming remaining phases...",
+            fg=typer.colors.GREEN,
+            err=True,
+        )
+
+        # Update state: mark current as SUCCESS
+        report = PhaseReport(
+            phase_id=current_directive.phase_id,
+            status=PhaseStatus.SUCCESS,
+            agent_notes="Resolved manually and verified via jitsu resume.",
+        )
+        self.state_manager.update_phase(report)
+
+        # Clean up .state file
+        out = self.storage.get_current_path(epic_id)
+        state_file = out.with_suffix(".state")
+        if state_file.exists():
+            state_file.unlink()
+
+        # Handle branch transitions
+        git = GitProvider(self.executor.workspace_root)
+        self._original_branch = git.get_current_branch()
+        self._sandbox_branch = f"jitsu-run/{epic_id}"
+
+        # If the sandbox branch exists, checkout it.
+        try:
+            git.checkout_branch(self._sandbox_branch)
+        except GitError:
+            # Maybe it doesn't exist? Try creating it if not on it.
+            if git.get_current_branch() != self._sandbox_branch:
+                git.create_and_checkout_branch(self._sandbox_branch)
+
+        # If there are more phases, run them
+        if remaining_directives:
+            await self.execute_phases(remaining_directives, out=out)
+
         await self.finish(out)
 
     async def _handle_quarantine(self) -> None:

@@ -390,6 +390,31 @@ def auto(
     )
 
 
+@app.command()
+def resume(
+    epic_id: Annotated[str, typer.Argument(help="The ID of the epic to resume.")],
+    *,
+    model: Annotated[
+        str | None,
+        typer.Option(
+            "--model",
+            "-m",
+            help="Override the LLM model for the remaining phases.",
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Force resumption even if verification fails.",
+        ),
+    ] = False,
+) -> None:
+    """Resume execution of a previously STUCK epic."""
+    orchestrator = JitsuOrchestrator()
+    anyio.run(partial(orchestrator.resume, epic_id, model=model, force=force))
+
+
 def main() -> None:
     """Entry point for the CLI application."""
     app()

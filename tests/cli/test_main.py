@@ -571,3 +571,35 @@ def test_cli_auto_with_context(
     args, _ = mock_execute.call_args
     # objective, file, context, model, verbose
     assert ctx_file in args[2]
+
+
+@patch("jitsu.cli.main.JitsuOrchestrator", autospec=True)
+def test_cli_resume_success(mock_orch_cls: MagicMock) -> None:
+    """Test 'jitsu resume' calls orchestrator.resume."""
+    mock_orch = mock_orch_cls.return_value
+    mock_orch.resume = AsyncMock()
+
+    result = runner.invoke(app, ["resume", "epic-123"])
+    assert result.exit_code == 0
+    mock_orch.resume.assert_awaited_once_with("epic-123", model=None, force=False)
+
+
+@patch("jitsu.cli.main.JitsuOrchestrator", autospec=True)
+def test_cli_resume_with_options(mock_orch_cls: MagicMock) -> None:
+    """Test 'jitsu resume' with model and force options."""
+    mock_orch = mock_orch_cls.return_value
+    mock_orch.resume = AsyncMock()
+
+    result = runner.invoke(app, ["resume", "epic-123", "--model", "gpt-4", "--force"])
+    assert result.exit_code == 0
+    mock_orch.resume.assert_awaited_once_with("epic-123", model="gpt-4", force=True)
+
+
+@patch("jitsu.cli.main.JitsuOrchestrator", autospec=True)
+def test_cli_resume_failure(mock_orch_cls: MagicMock) -> None:
+    """Test 'jitsu resume' handles orchestrator failure."""
+    mock_orch = mock_orch_cls.return_value
+    mock_orch.resume = AsyncMock(side_effect=typer.Exit(1))
+
+    result = runner.invoke(app, ["resume", "epic-123"])
+    assert result.exit_code == 1
