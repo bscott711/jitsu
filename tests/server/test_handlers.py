@@ -1,6 +1,7 @@
 """Tests for the ToolHandlers class."""
 
 import subprocess
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,7 +12,7 @@ from jitsu.core.state import JitsuStateManager
 from jitsu.models.core import AgentDirective
 from jitsu.server.handlers import ToolHandlers
 
-EXPECTED_TOOL_COUNT = 8
+EXPECTED_TOOL_COUNT = 9
 
 
 @pytest.fixture
@@ -304,3 +305,52 @@ async def test_handle_report_status_stuck(
     assert isinstance(result[0], TextContent)
     assert "Epic HALTED" in result[0].text
     assert state_manager.pending_count == 0
+
+
+@pytest.mark.asyncio
+async def test_handle_plan_epic_success(handlers: ToolHandlers) -> None:
+    """Test successfully planning an epic."""
+    mock_directive = AgentDirective(
+        epic_id="epic-planned",
+        phase_id="phase-1",
+        module_scope=["src"],
+        instructions="Plan",
+    )
+
+    with (
+        patch("jitsu.server.handlers.JitsuPlanner") as mock_planner_cls,
+        patch("jitsu.server.handlers.EpicStorage") as mock_storage_cls,
+    ):
+        mock_planner = mock_planner_cls.return_value
+        mock_planner.generate_plan = AsyncMock(return_value=[mock_directive])
+        mock_planner.directives = [mock_directive]
+
+        mock_storage = mock_storage_cls.return_value
+        mock_storage.get_current_path.return_value = Path("epic-planned.json")
+        mock_storage.rel_path.return_value = "epics/current/epic-planned.json"
+
+        result = await handlers.handle_plan_epic({"prompt": "New epic"})
+
+        assert "Successfully generated epic 'epic-planned'" in result[0].text
+        assert "epics/current/epic-planned.json" in result[0].text
+        mock_planner.generate_plan.assert_called_once()
+        mock_planner.save_plan.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_plan_epic_missing_prompt(handlers: ToolHandlers) -> None:
+    """Test planning an epic without a prompt."""
+    result = await handlers.handle_plan_epic({})
+    assert "Error: Missing 'prompt' argument." in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_plan_epic_failure(handlers: ToolHandlers) -> None:
+    """Test planning an epic when generation fails."""
+    with patch("jitsu.server.handlers.JitsuPlanner") as mock_planner_cls:
+        mock_planner = mock_planner_cls.return_value
+        mock_planner.generate_plan = AsyncMock(return_value=[])
+        mock_planner.directives = []
+
+        result = await handlers.handle_plan_epic({"prompt": "Fail epic"})
+        assert "Error: Failed to generate plan." in result[0].text
