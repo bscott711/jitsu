@@ -24,7 +24,7 @@ async def test_compile_empty_targets() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="do stuff",
     )
     res = await compiler.compile_directive(directive)
@@ -39,7 +39,7 @@ async def test_compile_with_anti_patterns() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="do stuff",
         anti_patterns=["Do not use MD5"],
     )
@@ -61,7 +61,7 @@ async def test_compile_valid_provider() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
         context_targets=[
             ContextTarget(
@@ -86,7 +86,7 @@ async def test_compile_auto_ast_preference() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
         context_targets=[
             ContextTarget(
@@ -117,7 +117,7 @@ async def test_compile_auto_fallback_to_file_on_ast_failure() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
         context_targets=[
             ContextTarget(
@@ -141,7 +141,7 @@ async def test_compile_context_manifest_inclusion() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
         context_targets=[
             ContextTarget(
@@ -167,7 +167,7 @@ async def test_compile_auto_pydantic_trigger() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
         context_targets=[
             ContextTarget(
@@ -193,7 +193,7 @@ async def test_explicit_mode_failure_string_in_manifest() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
         context_targets=[
             ContextTarget(
@@ -219,7 +219,7 @@ async def test_compile_explicit_schema_mode() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
         context_targets=[
             ContextTarget(
@@ -243,7 +243,7 @@ async def test_explicit_mode_missing_provider_failure() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
         context_targets=[
             ContextTarget(
@@ -273,7 +273,7 @@ async def test_compile_with_verification_and_criteria() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="do stuff",
         verification_commands=["just verify"],
         completion_criteria=["All tests pass"],
@@ -294,7 +294,7 @@ async def test_compile_no_verification_commands() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="do stuff",
     )
     res = await compiler.compile_directive(directive)
@@ -353,7 +353,7 @@ async def test_compile_u_curve_ordering() -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="do stuff",
     )
     res = await compiler.compile_directive(directive)

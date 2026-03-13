@@ -6,6 +6,34 @@ import subprocess
 from jitsu.providers.base import BaseProvider
 
 
+class GitError(Exception):
+    """Raised when a git command fails."""
+
+    def __init__(
+        self,
+        returncode: int | None = None,
+        error_output: str | None = None,
+        *,
+        missing: bool = False,
+    ) -> None:
+        """
+        Initialize the GitError with specific context.
+
+        Args:
+            returncode: The exit code of the failed git process.
+            error_output: The stderr or stdout from the failed git process.
+            missing: True if the git executable was not found.
+
+        """
+        if missing:
+            message = "git command not found."
+        elif returncode is not None:
+            message = f"Git command failed with exit code {returncode}: {error_output}"
+        else:
+            message = "A git error occurred."
+        super().__init__(message)
+
+
 class GitProvider(BaseProvider):
     """Provides git-related context (diffs, status) of the current repository."""
 
@@ -22,23 +50,28 @@ class GitProvider(BaseProvider):
             args: The git command arguments.
 
         Returns:
-            str: The output of the git command or an error message.
+            str: The output of the git command.
+
+        Raises:
+            GitError: If the git command fails or git is not installed.
 
         """
         try:
             git_path = shutil.which("git") or "git"
             result = subprocess.run(
                 [git_path, *args],
+                cwd=self.workspace_root,
                 capture_output=True,
                 text=True,
                 check=True,
                 shell=False,
             )
-            return result.stdout.strip()
         except subprocess.CalledProcessError as e:
-            return f"ERROR: Git command failed with exit code {e.returncode}: {e.stderr}"
-        except FileNotFoundError:
-            return "ERROR: git command not found."
+            raise GitError(returncode=e.returncode, error_output=e.stderr or e.stdout) from e
+        except FileNotFoundError as e:
+            raise GitError(missing=True) from e
+        else:
+            return result.stdout.strip()
 
     async def resolve(self, target: str) -> str:
         """
@@ -51,11 +84,86 @@ class GitProvider(BaseProvider):
             str: The resolved context string.
 
         """
-        if target == "status":
-            output = self._run_git(["status", "--short"])
-            return f"### Git Status\n```text\n{output}\n```"
+        try:
+            if target == "status":
+                header = "### Git Status"
+                code_type = "text"
+                args = ["status", "--short"]
+            else:
+                diff_target = target if target and target != "diff" else "HEAD"
+                header = f"### Git Diff: {diff_target}"
+                code_type = "diff"
+                args = ["diff", diff_target]
 
-        # Default to diff
-        diff_target = target if target and target != "diff" else "HEAD"
-        output = self._run_git(["diff", diff_target])
-        return f"### Git Diff: {diff_target}\n```diff\n{output}\n```"
+            output = self._run_git(args)
+        except GitError as e:
+            return f"ERROR: {e}"
+        else:
+            return f"{header}\n```{code_type}\n{output}\n```"
+
+    def get_current_branch(self) -> str:
+        """
+        Get the name of the current git branch.
+
+        Returns:
+            str: The name of the current branch.
+
+        Raises:
+            GitError: If the command fails.
+
+        """
+        return self._run_git(["rev-parse", "--abbrev-ref", "HEAD"])
+
+    def create_and_checkout_branch(self, name: str) -> None:
+        """
+        Create a new branch and check it out.
+
+        Args:
+            name: The name of the new branch.
+
+        Raises:
+            GitError: If the command fails.
+
+        """
+        self._run_git(["checkout", "-b", name])
+
+    def checkout_branch(self, name: str) -> None:
+        """
+        Check out an existing branch.
+
+        Args:
+            name: The name of the branch to check out.
+
+        Raises:
+            GitError: If the command fails.
+
+        """
+        self._run_git(["checkout", name])
+
+    def merge_branch(self, source: str, target: str) -> None:
+        """
+        Merge a source branch into a target branch.
+
+        Args:
+            source: The name of the source branch.
+            target: The name of the target branch.
+
+        Raises:
+            GitError: If the command fails.
+
+        """
+        self.checkout_branch(target)
+        self._run_git(["merge", source])
+
+    def delete_branch(self, name: str) -> None:
+        """
+        Delete a git branch.
+
+        Args:
+            name: The name of the branch to delete.
+
+        Raises:
+            GitError: If the command fails.
+
+        """
+        self._run_git(["branch", "-d", name])

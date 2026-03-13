@@ -1,8 +1,9 @@
 """JitsuOrchestrator: Autonomous planning and execution loop."""
 
+import inspect
 import shutil
+import typing
 from collections.abc import Callable
-from datetime import datetime, timezone
 from pathlib import Path
 
 import anyio
@@ -12,12 +13,14 @@ from anyio.to_thread import run_sync
 from instructor.core.exceptions import InstructorRetryException
 from pydantic import TypeAdapter, ValidationError
 
+from jitsu.config import settings
 from jitsu.core.compiler import ContextCompiler
 from jitsu.core.executor import JitsuExecutor, MonotonicityError
 from jitsu.core.planner import JitsuPlanner
 from jitsu.core.state import JitsuStateManager
 from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective, PhaseReport, PhaseStatus
+from jitsu.providers.git import GitError, GitProvider
 
 
 class JitsuOrchestrator:
@@ -35,26 +38,30 @@ class JitsuOrchestrator:
 
     """
 
+    MAX_RETRIES = 5
+
     def __init__(
         self,
         planner: JitsuPlanner | None = None,
         executor: JitsuExecutor | None = None,
         storage: EpicStorage | None = None,
-        on_progress: Callable[[str], None] | None = None,
+        on_progress: Callable[[str], typing.Any] | None = None,
         state_manager: JitsuStateManager | None = None,
     ) -> None:
         """Initialise the orchestrator with optional DI'd collaborators."""
         self.planner = planner
         self.executor = executor or JitsuExecutor()
         self.storage = storage or EpicStorage()
-        self.state_manager = state_manager or JitsuStateManager()
+        self.state_manager = state_manager or JitsuStateManager(storage=self.storage)
         self.on_progress = on_progress
+        self._original_branch: str | None = None
+        self._sandbox_branch: str | None = None
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    async def run_plan(
+    async def run_plan(  # noqa: PLR0913
         self,
         objective: str,
         files: list[str],
@@ -62,6 +69,8 @@ class JitsuOrchestrator:
         *,
         model: str,
         verbose: bool = False,
+        include_paths: list[str] | None = None,
+        exclude_paths: list[str] | None = None,
     ) -> list[AgentDirective]:
         """
         Run the planner and save the epic JSON to *out*.
@@ -76,6 +85,8 @@ class JitsuOrchestrator:
             out: File path where the resulting epic JSON will be written.
             model: LLM model identifier.
             verbose: Emit extra debug output when ``True``.
+            include_paths: Optional list of file paths to inject into every phase.
+            exclude_paths: Optional list of file paths to strip from every phase.
 
         Returns:
             List of generated ``AgentDirective`` objects.
@@ -88,19 +99,25 @@ class JitsuOrchestrator:
 
         directives: list[AgentDirective] | None = None
 
-        def _progress(msg: str) -> None:
+        async def _progress(msg: str) -> None:
             if self.on_progress:
-                self.on_progress(msg)
+                res = self.on_progress(msg)
+                if inspect.isawaitable(res):
+                    await res
 
         try:
             try:
                 directives = await planner.generate_plan(
-                    model=model, on_progress=_progress, verbose=verbose
+                    model=model,
+                    on_progress=_progress,
+                    verbose=verbose,
+                    include_paths=include_paths,
+                    exclude_paths=exclude_paths,
                 )
             except openai.APIStatusError as e:
                 # 403 = OpenRouter monthly limit, 429 = rate limit
-                if e.status_code in (403, 429) and model != "openai/gpt-oss-120b:free":
-                    backup_model = "openai/gpt-oss-120b:free"
+                if e.status_code in (403, 429) and model != settings.backup_model:
+                    backup_model = settings.backup_model
                     typer.secho(
                         f"\n⚠️ API limit hit for {model}. Falling back to {backup_model}...",
                         fg=typer.colors.YELLOW,
@@ -108,7 +125,11 @@ class JitsuOrchestrator:
                         err=True,
                     )
                     directives = await planner.generate_plan(
-                        model=backup_model, on_progress=_progress, verbose=verbose
+                        model=backup_model,
+                        on_progress=_progress,
+                        verbose=verbose,
+                        include_paths=include_paths,
+                        exclude_paths=exclude_paths,
                     )
                 else:
                     raise
@@ -125,7 +146,7 @@ class JitsuOrchestrator:
         planner.save_plan(out)
         return directives
 
-    async def execute_plan(
+    async def execute_plan(  # noqa: PLR0913
         self,
         objective: str,
         files: list[str],
@@ -133,6 +154,8 @@ class JitsuOrchestrator:
         *,
         model: str,
         verbose: bool = False,
+        include_paths: list[str] | None = None,
+        exclude_paths: list[str] | None = None,
     ) -> list[AgentDirective]:
         """
         Execute the planning phase with a progress bar.
@@ -143,23 +166,51 @@ class JitsuOrchestrator:
             out: File path where the resulting epic JSON will be written.
             model: LLM model identifier.
             verbose: Emit extra debug output when ``True``.
+            include_paths: Optional list of file paths to inject into every phase.
+            exclude_paths: Optional list of file paths to strip from every phase.
 
         Returns:
             List of generated ``AgentDirective`` objects.
 
         """
         with typer.progressbar(length=100, label="Pondering...") as progress:
-            directives = await self.run_plan(objective, files, out, model=model, verbose=verbose)
+            original_on_progress = self.on_progress
+
+            async def _on_progress(msg: str) -> None:
+                progress.label = msg
+                progress.update(0)  # Refresh the label
+                if original_on_progress:
+                    res = original_on_progress(msg)
+                    if inspect.isawaitable(res):
+                        await res
+
+            # Temporarily override self.on_progress for run_plan
+            self.on_progress = _on_progress
+            try:
+                directives = await self.run_plan(
+                    objective,
+                    files,
+                    out,
+                    model=model,
+                    verbose=verbose,
+                    include_paths=include_paths,
+                    exclude_paths=exclude_paths,
+                )
+            finally:
+                self.on_progress = original_on_progress
+
             progress.update(100)
         return directives
 
-    async def execute_run(
+    async def execute_run(  # noqa: PLR0913
         self,
         objective: str,
         files: list[str],
         *,
         model: str,
         verbose: bool = False,
+        include_paths: list[str] | None = None,
+        exclude_paths: list[str] | None = None,
     ) -> None:
         """
         Generate a plan and immediately submit it to the server.
@@ -169,16 +220,28 @@ class JitsuOrchestrator:
             files: Relevant file paths (as strings) for context.
             model: LLM model identifier.
             verbose: Emit extra debug output when ``True``.
+            include_paths: Optional list of file paths to inject into every phase.
+            exclude_paths: Optional list of file paths to strip from every phase.
 
         """
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        out = self.storage.current_dir / f"epic_{timestamp}.json"
-
         typer.secho(
             f"🧠 Step 1: Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True
         )
 
-        await self.execute_plan(objective, files, out, model=model, verbose=verbose)
+        temp_out = self.storage.current_dir / "temp_plan.json"
+        directives = await self.execute_plan(
+            objective,
+            files,
+            temp_out,
+            model=model,
+            verbose=verbose,
+            include_paths=include_paths,
+            exclude_paths=exclude_paths,
+        )
+
+        epic_id = directives[0].epic_id
+        out = self.storage.get_current_path(epic_id)
+        await anyio.Path(temp_out).rename(out)
 
         typer.secho(
             f"✅ Plan successfully generated and saved to {self.storage.rel_path(out)}",
@@ -207,7 +270,7 @@ class JitsuOrchestrator:
             typer.secho(f"❌ Failed to read or move epic file: {e}", fg=typer.colors.RED, err=True)
             raise typer.Exit(1) from e
 
-    async def execute_auto(
+    async def execute_auto(  # noqa: PLR0913
         self,
         objective: str | None = None,
         file: Path | None = None,
@@ -215,6 +278,8 @@ class JitsuOrchestrator:
         *,
         model: str,
         verbose: bool = False,
+        include_paths: list[str] | None = None,
+        exclude_paths: list[str] | None = None,
     ) -> None:
         """
         Execute an epic autonomously, either from an objective or an existing file.
@@ -225,6 +290,8 @@ class JitsuOrchestrator:
             context: Relevant files to provide as context.
             model: LLM model identifier.
             verbose: Emit extra debug output when ``True``.
+            include_paths: Optional list of file paths to inject into every phase.
+            exclude_paths: Optional list of file paths to strip from every phase.
 
         """
         directives: list[AgentDirective]
@@ -267,18 +334,25 @@ class JitsuOrchestrator:
                 )
                 raise typer.Exit(1)
 
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-            out = self.storage.current_dir / f"epic_{timestamp}.json"
-
             file_strings = [str(f) for f in context] if context else []
+            temp_out = self.storage.current_dir / "temp_plan.json"
             typer.secho(
                 f"🧠 Step 1: Generating plan for: '{objective}'", fg=typer.colors.CYAN, err=True
             )
             directives = await self.execute_plan(
-                objective, file_strings, out, model=model, verbose=verbose
+                objective,
+                file_strings,
+                temp_out,
+                model=model,
+                verbose=verbose,
+                include_paths=include_paths,
+                exclude_paths=exclude_paths,
             )
+            epic_id = directives[0].epic_id
+            out = self.storage.get_current_path(epic_id)
+            await anyio.Path(temp_out).rename(out)
 
-        await self.run_autonomous(directives, out)
+        await self.run_autonomous(directives, out, model=model)
 
     async def send_payload(self, payload: bytes, port: int = 8765) -> str:
         """Async helper to send the payload over TCP and await response."""
@@ -333,7 +407,9 @@ class JitsuOrchestrator:
 
             try:
                 with typer.progressbar(length=100, label="Executing...") as progress:
-                    success = await self.executor.execute_directive(directive, prompt)
+                    success = await self.executor.execute_directive(
+                        directive, prompt, max_retries=self.MAX_RETRIES
+                    )
                     progress.update(100)
             except MonotonicityError as e:
                 report = PhaseReport(
@@ -351,13 +427,14 @@ class JitsuOrchestrator:
                     bold=True,
                     err=True,
                 )
+                await self._handle_quarantine()
                 raise typer.Exit(1) from e
 
             if not success:
                 report = PhaseReport(
                     phase_id=directive.phase_id,
-                    status=PhaseStatus.FAILED,
-                    agent_notes="Max retries reached or verification failed.",
+                    status=PhaseStatus.STUCK,
+                    agent_notes=f"Max retries ({self.MAX_RETRIES}) reached or verification failed.",
                 )
                 self.state_manager.update_phase(report)
                 if out:
@@ -369,6 +446,7 @@ class JitsuOrchestrator:
                     bold=True,
                     err=True,
                 )
+                await self._handle_quarantine()
                 raise typer.Exit(1)
 
             typer.secho(
@@ -395,14 +473,19 @@ class JitsuOrchestrator:
                 )
                 raise typer.Exit(1)
 
-    async def finalize(self, out: Path) -> None:
+    async def finish(self, out: Path) -> None:
         """
-        Archive the epic file to the completed directory.
+        Archive the epic file and cleanup sandbox branch.
 
         Args:
             out: The epic JSON file to archive.
 
         """
+        if self._original_branch and self._sandbox_branch:
+            git = GitProvider(self.executor.workspace_root)
+            git.merge_branch(self._sandbox_branch, self._original_branch)
+            git.delete_branch(self._sandbox_branch)
+
         dest = await run_sync(self.storage.archive, out)
 
         typer.secho(
@@ -412,22 +495,168 @@ class JitsuOrchestrator:
             err=True,
         )
 
-    async def run_autonomous(self, directives: list[AgentDirective], out: Path) -> None:
+    async def run_autonomous(
+        self,
+        directives: list[AgentDirective],
+        out: Path,
+        *,
+        model: str | None = None,
+    ) -> None:
         """
         Execute all phases then archive the epic.
 
         Args:
             directives: The phases to run.
             out: The epic JSON file to archive on completion.
+            model: Optional model override.
 
         """
+        if model:
+            self.executor.model = model
+
+        if directives:
+            git = GitProvider(self.executor.workspace_root)
+            self._original_branch = git.get_current_branch()
+            self._sandbox_branch = f"jitsu-run/{directives[0].epic_id}"
+
+            typer.secho(
+                f"🌿 Creating sandbox branch: {self._sandbox_branch}",
+                fg=typer.colors.CYAN,
+                err=True,
+            )
+            git.create_and_checkout_branch(self._sandbox_branch)
+
         typer.secho(
             f"🏃 Step 2: Executing {len(directives)} phase(s) autonomously...",
             fg=typer.colors.CYAN,
             err=True,
         )
         await self.execute_phases(directives, out=out)
-        await self.finalize(out)
+        await self.finish(out)
+
+    async def resume(self, epic_id: str, *, model: str | None = None, force: bool = False) -> None:
+        """
+        Resume execution of a STUCK epic.
+
+        1. Hydrate state from storage.
+        2. Verify the stuck phase (unless forced).
+        3. If passes, mark SUCCESS and continue with remaining phases.
+        4. If fails, stay STUCK.
+
+        Args:
+            epic_id: The ID of the epic to resume.
+            model: Optional model override.
+            force: Skip verification if True.
+
+        Raises:
+            typer.Exit: On failure to resume.
+
+        """
+        if model:
+            self.executor.model = model
+
+        try:
+            current_dict, remaining_dicts = self.state_manager.hydrate_for_resume(epic_id)
+        except (ValueError, OSError) as e:
+            typer.secho(f"❌ Failed to resume: {e}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from e
+
+        adapter = TypeAdapter(AgentDirective)
+        current_directive = adapter.validate_python(current_dict)
+        remaining_directives = [adapter.validate_python(d) for d in remaining_dicts]
+
+        if not force:
+            typer.secho(
+                f"🔎 Verifying stuck phase: {current_directive.phase_id}",
+                fg=typer.colors.CYAN,
+                err=True,
+            )
+
+            success, details = self.executor.run_verification(
+                current_directive.verification_commands
+            )
+
+            if not success:
+                typer.secho(
+                    f"❌ Phase {current_directive.phase_id} is still failing.",
+                    fg=typer.colors.RED,
+                    bold=True,
+                    err=True,
+                )
+                if details:
+                    typer.secho(f"\nSummary: {details.summary}", fg=typer.colors.YELLOW, err=True)
+                    typer.secho(f"\n{details.trimmed}", fg=typer.colors.RED, err=True)
+                raise typer.Exit(1)
+        else:
+            typer.secho(
+                f"⚠️ Forced resume: Skipping verification for {current_directive.phase_id}",
+                fg=typer.colors.YELLOW,
+                err=True,
+            )
+
+        typer.secho(
+            f"✅ Phase {current_directive.phase_id} resolved! Resuming remaining phases...",
+            fg=typer.colors.GREEN,
+            err=True,
+        )
+
+        # Update state: mark current as SUCCESS
+        report = PhaseReport(
+            phase_id=current_directive.phase_id,
+            status=PhaseStatus.SUCCESS,
+            agent_notes="Resolved manually and verified via jitsu resume.",
+        )
+        self.state_manager.update_phase(report)
+
+        # Clean up .state file
+        out = self.storage.get_current_path(epic_id)
+        state_file = out.with_suffix(".state")
+        if state_file.exists():
+            state_file.unlink()
+
+        # Handle branch transitions
+        git = GitProvider(self.executor.workspace_root)
+        self._original_branch = git.get_current_branch()
+        self._sandbox_branch = f"jitsu-run/{epic_id}"
+
+        # If the sandbox branch exists, checkout it.
+        try:
+            git.checkout_branch(self._sandbox_branch)
+        except GitError:
+            # Maybe it doesn't exist? Try creating it if not on it.
+            if git.get_current_branch() != self._sandbox_branch:
+                git.create_and_checkout_branch(self._sandbox_branch)
+
+        # If there are more phases, run them
+        if remaining_directives:
+            await self.execute_phases(remaining_directives, out=out)
+
+        await self.finish(out)
+
+    async def _handle_quarantine(self) -> None:
+        """Commit WIP to sandbox and restore original branch."""
+        if not self._original_branch or not self._sandbox_branch:
+            return
+
+        git = GitProvider(self.executor.workspace_root)
+        try:
+            # Commit WIP
+            just_path = shutil.which("just")
+            if just_path:
+                await anyio.run_process(
+                    [just_path, "commit", "chore(jitsu): HALTED - Max retries exhausted"],
+                    check=False,
+                )
+
+            git.checkout_branch(self._original_branch)
+            typer.secho(
+                f"⚠️ Epic HALTED. Workspace restored to '{self._original_branch}'. WIP preserved in '{self._sandbox_branch}'.",
+                fg=typer.colors.YELLOW,
+                bold=True,
+                err=True,
+            )
+        except (GitError, OSError) as e:
+            typer.secho(f"⚠️ Quarantine failed: {e}", fg=typer.colors.RED, err=True)
 
     # ------------------------------------------------------------------
     # Internal helpers

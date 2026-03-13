@@ -1,0 +1,53 @@
+[
+  {
+    "epic_id": "epic-traceback-context-expansion",
+    "phase_id": "phase-1-auto-expand-context-on-failure",
+    "module_scope": [
+      "src/jitsu/core",
+      "src/jitsu/utils",
+      "tests/core",
+      "tests/utils"
+    ],
+    "instructions": "Implement dynamic context expansion for the Executor's recovery loop. 1. Create a utility (e.g., `src/jitsu/utils/traceback_parser.py`) that uses regex to extract unique file paths from a standard Python testing/execution traceback string. 2. Update the retry/verification loop in `src/jitsu/core/executor.py` or `orchestrator.py` to catch verification failures. 3. Parse the failed command output to extract file paths. 4. Filter these paths: if a path is local to the repository, falls within the phase's `module_scope`, and is NOT already in the active context, dynamically load it (`FULL_SOURCE`) and append it to the context payload sent to the LLM for the retry prompt. 5. Write tests to simulate a verification failure traceback pointing to an out-of-context file and assert that the file is successfully extracted and added to the recovery context. Maintain 100% test coverage.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do NOT load system or standard library files (e.g., `/usr/lib/python...`); strictly filter for local project files.",
+      "Do NOT permanently mutate the original Phase blueprint on disk; only expand the active in-memory context for the retry loop.",
+      "Do NOT bypass the `module_scope` boundary check when adding new files to the context."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "A traceback parsing utility successfully extracts local file paths from error outputs.",
+      "The core execution loop dynamically appends newly discovered, in-scope files to the LLM's recovery context.",
+      "Unit tests explicitly verify the regex parsing and context injection logic.",
+      "The `just verify` command passes with 100% test coverage."
+    ]
+  }
+]

@@ -1,6 +1,7 @@
 """Tests for the ToolHandlers class."""
 
 import subprocess
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,7 +12,7 @@ from jitsu.core.state import JitsuStateManager
 from jitsu.models.core import AgentDirective
 from jitsu.server.handlers import ToolHandlers
 
-EXPECTED_TOOL_COUNT = 8
+EXPECTED_TOOL_COUNT = 9
 
 
 @pytest.fixture
@@ -48,7 +49,7 @@ async def test_handle_get_next_phase_with_data(
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="src/test",
+        module_scope=["src/test"],
         instructions="Do a thing",
     )
     state_manager.queue_directive(directive)
@@ -66,7 +67,7 @@ async def test_handle_report_status_success(
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-success",
-        module_scope="src/test",
+        module_scope=["src/test"],
         instructions="Test",
     )
     state_manager.queue_directive(directive)
@@ -117,7 +118,7 @@ async def test_handle_inspect_queue(
     directive = AgentDirective(
         epic_id="epic-inspect",
         phase_id="phase-inspect",
-        module_scope="src/test",
+        module_scope=["src/test"],
         instructions="Test",
     )
     state_manager.queue_directive(directive)
@@ -192,7 +193,7 @@ async def test_handle_submit_epic_success(
     directive_data = {
         "epic_id": "epic-new",
         "phase_id": "phase-new",
-        "module_scope": "src",
+        "module_scope": ["src"],
         "instructions": "Go",
     }
 
@@ -289,12 +290,12 @@ async def test_handle_report_status_stuck(
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-stuck",
-        module_scope="src",
+        module_scope=["src"],
         instructions="Test",
     )
     state_manager.queue_directive(directive)
     state_manager.queue_directive(
-        AgentDirective(epic_id="epic-1", phase_id="p2", module_scope="s", instructions="i")
+        AgentDirective(epic_id="epic-1", phase_id="p2", module_scope=["s"], instructions="i")
     )
     expected_pending = 2
     assert state_manager.pending_count == expected_pending
@@ -304,3 +305,99 @@ async def test_handle_report_status_stuck(
     assert isinstance(result[0], TextContent)
     assert "Epic HALTED" in result[0].text
     assert state_manager.pending_count == 0
+
+
+@pytest.mark.asyncio
+async def test_handle_plan_epic_success(handlers: ToolHandlers) -> None:
+    """Test successfully planning an epic."""
+    mock_directive = AgentDirective(
+        epic_id="epic-planned",
+        phase_id="phase-1",
+        module_scope=["src"],
+        instructions="Plan",
+    )
+
+    with (
+        patch("jitsu.server.handlers.JitsuPlanner") as mock_planner_cls,
+        patch("jitsu.server.handlers.EpicStorage") as mock_storage_cls,
+    ):
+        mock_planner = mock_planner_cls.return_value
+        mock_planner.generate_plan = AsyncMock(return_value=[mock_directive])
+        mock_planner.directives = [mock_directive]
+
+        mock_storage = mock_storage_cls.return_value
+        mock_storage.get_current_path.return_value = Path("epic-planned.json")
+        mock_storage.rel_path.return_value = "epics/current/epic-planned.json"
+
+        result = await handlers.handle_plan_epic({"prompt": "New epic"})
+
+        assert "Successfully generated epic 'epic-planned'" in result[0].text
+        assert "epics/current/epic-planned.json" in result[0].text
+        mock_planner.generate_plan.assert_called_once()
+        mock_planner.save_plan.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_plan_epic_missing_prompt(handlers: ToolHandlers) -> None:
+    """Test planning an epic without a prompt."""
+    result = await handlers.handle_plan_epic({})
+    assert "Error: Missing 'prompt' argument." in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_plan_epic_failure(handlers: ToolHandlers) -> None:
+    """Test planning an epic when generation fails."""
+    with patch("jitsu.server.handlers.JitsuPlanner") as mock_planner_cls:
+        mock_planner = mock_planner_cls.return_value
+        mock_planner.generate_plan = AsyncMock(return_value=[])
+        mock_planner.directives = []
+
+        result = await handlers.handle_plan_epic({"prompt": "Fail epic"})
+        assert "Error: Failed to generate plan." in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_plan_epic_with_progress(
+    state_manager: JitsuStateManager, context_compiler: ContextCompiler
+) -> None:
+    """Test handle_plan_epic with progress notifications."""
+    mock_server = AsyncMock()
+    handlers = ToolHandlers(
+        state_manager=state_manager, context_compiler=context_compiler, server=mock_server
+    )
+
+    mock_directive = AgentDirective(
+        epic_id="epic-progress",
+        phase_id="p1",
+        module_scope=["src"],
+        instructions="Plan",
+    )
+
+    with (
+        patch("jitsu.server.handlers.JitsuPlanner") as mock_planner_cls,
+        patch("jitsu.server.handlers.EpicStorage") as mock_storage_cls,
+        patch("sys.stderr.write") as mock_stderr,
+        patch("sys.stderr.flush"),
+    ):
+        mock_planner = mock_planner_cls.return_value
+        mock_planner.generate_plan = AsyncMock(return_value=[mock_directive])
+        mock_planner.directives = [mock_directive]
+
+        mock_storage = mock_storage_cls.return_value
+        mock_storage.get_current_path.return_value = Path("epic.json")
+
+        arguments = {"prompt": "Progress test", "_metadata": {"progressToken": "token-123"}}
+        await handlers.handle_plan_epic(arguments)
+
+        # Retrieve the on_progress callback passed to generate_plan
+        _, kwargs = mock_planner.generate_plan.call_args
+        on_progress = kwargs["on_progress"]
+
+        # Call the callback
+        await on_progress("Test message")
+
+        # Verify stderr output
+        mock_stderr.assert_called_with("[* progress] Test message\n")
+
+        # Verify MCP notification
+        mock_server.send_notification.assert_called_once()

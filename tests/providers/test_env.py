@@ -42,7 +42,7 @@ async def test_env_var_integration_with_compiler() -> None:
     directive = AgentDirective(
         epic_id="test-epic",
         phase_id="test-phase",
-        module_scope="test-scope",
+        module_scope=["test-scope"],
         instructions="test-instructions",
         context_targets=[
             ContextTarget(

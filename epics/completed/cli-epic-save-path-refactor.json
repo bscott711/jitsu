@@ -1,0 +1,39 @@
+[
+  {
+    "epic_id": "cli-epic-save-path-refactor",
+    "phase_id": "extract-epic-id-and-update-save-path",
+    "module_scope": [
+      "src/jitsu/cli",
+      "tests/cli"
+    ],
+    "instructions": "Refactor the CLI commands `plan`, `run`, and `auto` in `src/jitsu/cli/main.py` to save the generated epic JSON to `epics/current/{epic_id}.json`.\n\n1.  **Extract `epic_id`**: The commands currently generate a JSON object (either an `EpicJSON` or a list of `AgentDirective` objects). You must parse this generated JSON to extract the top-level `epic_id` field. If the generated object is a list, find the `epic_id` from the first directive in the list.\n\n2.  **Update Save Path**: Replace the hardcoded save path (`epic.json`) with `epics/current/{epic_id}.json`.\n    *   Use `pathlib.Path(\"epics/current\") / f\"{epic_id}.json\"`.\n    *   **CRITICAL**: Create the `epics/current` directory before writing the file using `pathlib.mkdir(parents=True, exist_ok=True)`.\n\n3.  **Update Tests**: Modify the test suite in `tests/cli/test_main.py` to verify the new save behavior.\n    *   Mock the file system or use a temporary directory to assert that the file is written to the correct `epics/current/{epic_id}.json` path.\n    *   Ensure tests cover the directory creation step.\n\nMaintain strict adherence to existing code patterns and error handling. Do not alter the JSON generation logic itself, only the file-saving mechanism.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not hardcode the save path as 'epic.json' at the project root.",
+      "Do not attempt to write the file without first ensuring the 'epics/current' directory exists.",
+      "Do not modify the JSON generation logic or models; only change the file-saving destination."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The 'plan', 'run', and 'auto' CLI commands successfully write epic JSON to 'epics/current/{epic_id}.json'.",
+      "The 'epics/current' directory is created automatically if it does not exist.",
+      "All existing CLI tests pass with the updated save path assertions.",
+      "New tests validate the directory creation and correct file path."
+    ]
+  }
+]

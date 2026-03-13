@@ -1,0 +1,97 @@
+[
+  {
+    "epic_id": "epic-widen-module-scope",
+    "phase_id": "phase-1-refactor-module-scope-list",
+    "module_scope": "",
+    "instructions": "Refactor the `module_scope` field in the Pydantic models (e.g., `AgentDirective` in jitsu.models) to be a `list[str]` instead of a single `str`. Update the boundary security checks in `jitsu.core` (likely inside the Executor or Orchestrator) to validate file edits against a list of allowed prefixes instead of a single string. Update `src/jitsu/prompts.py` so the Planner is instructed to generate a list of strings for `module_scope`. Fix all corresponding tests to ensure 100% test coverage and no linting bypasses.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/__init__.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/prompts.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/models/test_models.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Breaking existing string-based module_scope usages without migrating them in the tests.",
+      "Using `# type: ignore` to bypass Pydantic schema typing errors."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "module_scope is now strongly typed as list[str] in Pydantic models.",
+      "Executor boundary logic validates file edits against multiple prefix boundaries.",
+      "prompts.py instructs Planner to return a list of strings.",
+      "just verify passes cleanly with 100% coverage."
+    ]
+  },
+  {
+    "epic_id": "epic-extract-model-config",
+    "phase_id": "phase-1-centralize-model-names",
+    "module_scope": "",
+    "instructions": "Extract hardcoded LLM model names out of the source code and into a centralized configuration. 1. Create or update a config module (e.g., `src/jitsu/config.py`) using `pydantic-settings` to manage default model names (e.g., `default_planner_model`, `default_executor_model`). 2. Update `src/jitsu/cli.py` and the core execution engine to read these models from the config instead of hardcoding strings. 3. Ensure the CLI `--model` flag properly overrides the config. 4. Update tests to assert that models can be dynamically configured. Ensure 100% test coverage and no linting bypasses.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/config.py",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/test_cli.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Leaving hardcoded provider/model strings in the core execution logic.",
+      "Failing to cover the new configuration loading logic with tests."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "Model names are loaded via a central configuration system/Pydantic BaseSettings.",
+      "CLI and Core modules no longer contain hardcoded model strings.",
+      "just verify passes cleanly with 100% test coverage."
+    ]
+  }
+]

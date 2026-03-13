@@ -1,0 +1,139 @@
+[
+  {
+    "epic_id": "cli-planner-context-injection",
+    "phase_id": "phase-1-models-and-schemas",
+    "module_scope": [
+      "src/jitsu/models",
+      "tests/models"
+    ],
+    "instructions": "Add Pydantic models for context injection configuration and update the Planner's output schema to include include/exclude metadata. Specifically:\n\n1. In `src/jitsu/models/core.py`, add a new `ContextInjectionConfig` Pydantic model with fields:\n   - `include`: list[str] = [] (file paths to inject into every phase)\n   - `exclude`: list[str] = [] (file paths to strip from every phase)\n\n2. In `src/jitsu/models/execution.py`, update the `AgentDirective` model to include a new optional field:\n   - `context_injection`: Optional[ContextInjectionConfig] = None\n\n3. Create corresponding tests in `tests/models/test_core.py` and `tests/models/test_execution.py` that validate:\n   - The new models serialize/deserialize correctly\n   - Default values are set appropriately\n   - The `AgentDirective` model accepts the new optional field\n\n4. Ensure all existing tests continue to pass by running `just verify`.\n\nNote: This phase only adds the data structures; the actual injection/stripping logic will be implemented in a subsequent phase.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/execution.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/models/test_core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/models/test_execution.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not modify any existing model fields; only add new ones to avoid breaking changes",
+      "Do not implement the actual injection/stripping logic in this phase - only define the data structures",
+      "Do not create models outside the designated models module scope"
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "All new Pydantic models are defined with correct types and defaults",
+      "Tests for the new models achieve 100% coverage",
+      "Running `just verify` passes all existing and new tests"
+    ]
+  },
+  {
+    "epic_id": "cli-planner-context-injection",
+    "phase_id": "phase-2-planner-context-logic",
+    "module_scope": [
+      "src/jitsu/core"
+    ],
+    "instructions": "Implement deterministic logic in the Planner to mechanically append included files and strip excluded files from all phase context_targets. This is Phase 2, focusing on the core Planner logic after the CLI flags are parsed. The Planner should receive `include_paths` and `exclude_paths` lists from the orchestrator. It must iterate over every phase's `context_targets` array. For each phase, it must append a new `ContextTarget` (with provider_name='file', target_identifier=path, is_required=true, resolution_mode='FULL_SOURCE') for each path in `include_paths` that is not already present. It must then remove any existing `ContextTarget` whose `target_identifier` exactly matches any path in `exclude_paths`. The logic must be pure and deterministic, not using any LLM or external service. Update the Planner's `compile_phases` method to accept these two optional lists and apply the transformations. Write tests in `tests/core/test_planner.py` to verify this deterministic transformation logic, covering cases: 1) include new files, 2) exclude existing files, 3) combination, 4) no duplicates on include, 5) empty lists.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/execution.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not modify the original phase objects in place; create copies to avoid side effects.",
+      "Do not use string matching or fuzzy logic to identify files for inclusion/exclusion; use exact path matching.",
+      "Do not perform context injection logic anywhere other than the Planner's compile_phases method."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "just verify passes all tests and linting",
+      "Planner's compile_phases method deterministically appends included files and strips excluded files",
+      "Tests in test_planner.py achieve 100% coverage for the new logic"
+    ]
+  },
+  {
+    "epic_id": "cli-planner-context-injection",
+    "phase_id": "phase-3-cli-integration",
+    "module_scope": [
+      "src/jitsu/cli",
+      "src/jitsu/core"
+    ],
+    "instructions": "Update the CLI's `auto` command to accept `--include` and `--exclude` flags. These flags should accept multiple file paths. The parsed paths must be passed to the Planner, which will mechanically inject/exclude them from the generated phases' context_targets.\n\n1. **CLI Changes** (`src/jitsu/cli/main.py`):\n   - Add `--include` and `--exclude` options to the `auto` command. Both should accept multiple values (e.g., `--include file1.py --include file2.py`).\n   - Pass these lists to the Planner via the `PlannerConfig` or a new data structure.\n\n2. **Planner Integration** (`src/jitsu/core/planner.py`):\n   - Modify the Planner's execution to accept include/exclude lists.\n   - After the Planner generates the phases (as a list of AgentDirective dicts), iterate over each phase's `context_targets`.\n   - For each target in `context_targets`, if its `target_identifier` matches any path in the exclude list, remove it.\n   - Then, for each path in the include list, add a new `ContextTarget` (with `provider_name: 'file'`, `resolution_mode: 'FULL_SOURCE'`) to the phase's `context_targets` if it's not already present.\n\n3. **Test Updates** (`tests/cli/test_main.py` and `tests/core/test_planner.py`):\n   - Update tests to verify the new CLI flags and the injection/exclusion logic.\n   - Ensure 100% coverage for the new code paths.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_planner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not ask the LLM to filter or inject context; handle it deterministically in Python code.",
+      "Do not modify the Planner's core prompt generation; only post-process the generated phases.",
+      "Do not forget to handle both include and exclude flags when they are empty or not provided."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The `auto` command accepts `--include` and `--exclude` flags and passes them to the Planner.",
+      "The Planner's output phases have included files injected and excluded files removed from context_targets.",
+      "All new and existing tests pass with 100% coverage."
+    ]
+  }
+]

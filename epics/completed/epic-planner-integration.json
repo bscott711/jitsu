@@ -1,0 +1,50 @@
+[
+  {
+    "epic_id": "mcp-planner-integration",
+    "phase_id": "build-plan-epic-mcp-tool",
+    "module_scope": [
+      "src/jitsu/server",
+      "src/jitsu/core",
+      "tests/server"
+    ],
+    "instructions": "Implement a new MCP tool named 'jitsu_plan_epic' that exposes the JitsuPlanner to the chat agent. 1. Add the tool definition to the MCP server (likely in `src/jitsu/server/server.py` or similar). The tool should accept a single argument: `prompt` (string). 2. Inside the tool handler, instantiate the `JitsuPlanner` and call its planning method with the provided prompt. 3. Reuse the recently built `storage.get_current_path(epic_id)` logic to save the generated epic JSON to disk. 4. Return a success message to the agent containing the `epic_id` and file path, instructing them to call `jitsu_get_next_phase` to begin execution. 5. Add or update tests in `tests/server/` to verify the tool successfully routes the prompt to the Planner and handles the response. Ensure 100% test coverage.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/planner.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/storage.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/server/test_server.py",
+        "is_required": false,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not duplicate the file-saving logic; strictly reuse the storage logic created in the previous epic.",
+      "Do not make the tool synchronous if the underlying Planner requires async/await.",
+      "Do not forget to register the new tool in the MCP server's tool list/registry."
+    ],
+    "completion_criteria": [
+      "The 'jitsu_plan_epic' tool is available via MCP.",
+      "Calling the tool successfully generates a valid epic JSON on disk using the Planner.",
+      "The tool returns the epic_id and path to the agent.",
+      "Tests verify the tool's behavior and maintain 100% coverage.",
+      "The phase is finalized by committing and syncing."
+    ]
+  }
+]

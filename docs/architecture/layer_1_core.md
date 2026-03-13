@@ -1,5 +1,7 @@
 # **Layer 1: Core Engine**
 
+> **Automatic Documentation Guarantee:** This documentation is automatically synchronized by Jitsu's self-documenting workflow as part of its core process.
+
 Layer 1 is the "Engine Room" of Jitsu. It implements the logic required to parse directives, manage the state of the execution queue, and compile optimized JIT context manifests for the agent.
 
 ---
@@ -23,14 +25,27 @@ This logic ensures agents receive the "Skeleton" of the code by default, saving 
 
 ### **`JitsuStateManager`**
 
-The `JitsuStateManager` manages the in-memory state of the entire orchestration loop. It acts as the bridge between the transport layer (MCP/CLI) and the execution history.
+The `JitsuStateManager` manages the persistence of the entire orchestration loop.
 
-#### **Responsibilities**
+- **Queue Management**: Stores pending `AgentDirectives`.
+- **Status Tracking**: Records `PhaseReports` and aggregates progress.
+- **Persistence**: Ensures state survives process restarts via local file storage or SQLite.
 
-- **Queue Management**: Stores pending `AgentDirectives` submitted via IPC.
-- **Phase Handover**: Delivers the next directive to the agent via `get_next_directive()`.
-- **Status Tracking**: Records `PhaseReports` and aggregates progress across an entire Epic.
-- **Epic Awareness**: Tracks remaining phases within an epic to provide the agent with a sense of completion.
+### **`JitsuOrchestrator`**
+
+The high-level manager that coordinates the autonomous loop between planning, execution, and reporting.
+
+### **`JitsuPlanner`**
+
+The "brain" that translates natural language goals into a structured `EpicBlueprint` and `AgentDirectives`.
+
+### **`JitsuExecutor`**
+
+The "hands" of the system. It handles the ReAct loop, tool calling, and the AST-aware recovery cycle when errors occur.
+
+### **`JitsuRunner`**
+
+A utility for executing shell commands and verification steps within the repository context.
 
 ---
 

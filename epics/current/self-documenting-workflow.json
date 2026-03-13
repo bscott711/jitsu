@@ -1,0 +1,147 @@
+[
+  {
+    "epic_id": "self-documenting-workflow",
+    "phase_id": "update-jitsurules-mandate",
+    "module_scope": [
+      "."
+    ],
+    "instructions": "Update the .jitsurules file to add a new mandatory protocol for documentation. This protocol must require that, at the conclusion of every epic or major feature, the executor updates the relevant documentation files (README.md and files under docs/) to reflect the changes. The update must be performed before the final git commit. Integrate this requirement into the existing 'Reporting & Version Control' section.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": ".jitsurules",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not add generic or vague instructions like 'update docs if needed'. The mandate must be explicit and procedural.",
+      "Do not create a new top-level section; integrate the mandate into the existing 'Reporting & Version Control' protocol.",
+      "Do not specify exact documentation file names in the .jitsurules mandate; keep it general (README.md, docs/) to allow for future expansion."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The .jitsurules file contains a clear, mandatory step for documentation updates before the final commit.",
+      "The file passes linting and the project's verification checks."
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "self-documenting-workflow",
+    "phase_id": "update-readme-agentic-excellence",
+    "module_scope": [
+      "README.md"
+    ],
+    "instructions": "Update README.md to add a new section titled 'Agentic Excellence' that describes Jitsu's ability to transform natural language goals into flawlessly implemented epics. Position this section after the existing introductory content but before the 'Architecture Overview' section. The section must include: 1) A compelling description of Jitsu as an autonomous coding agent that translates user intent into complete, tested implementations. 2) A concrete example workflow showing a natural language request \u2192 epic generation \u2192 autonomous execution \u2192 verified completion. 3) Emphasis on the self-documenting nature where documentation updates are mandated as part of the workflow. 4) A note that Jitsu automatically maintains documentation currency as a core process. Use Markdown formatting with appropriate headings, bullet points, and code blocks where needed.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "README.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not place the new section at the end of the README - it must be positioned before the Architecture Overview to catch reader attention early.",
+      "Do not use generic marketing language - the description must be technically precise about Jitsu's actual capabilities and workflow.",
+      "Do not omit the concrete example workflow - abstract claims without demonstration are prohibited."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "README.md contains a new 'Agentic Excellence' section with the specified content and structure.",
+      "The section is positioned after introductory content but before the Architecture Overview.",
+      "The example workflow accurately reflects Jitsu's actual process from epic submission to completion.",
+      "All Markdown formatting renders correctly without broken links or malformed elements."
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "self-documenting-workflow",
+    "phase_id": "update-architecture-overview",
+    "module_scope": [
+      "docs"
+    ],
+    "instructions": "Update the file 'docs/Jitsu Architecture Overview.md' to include a new section titled 'Agentic Excellence'. This section must highlight Jitsu's core capability of transforming natural language goals into flawlessly implemented epics. Emphasize that documentation updates are an automatic, integral part of the Jitsu workflow, mandated by the Jitsu Planner and executed by the Jitsu Executor. Integrate this new section logically within the existing document structure, likely after an introductory overview and before detailed architectural layers. Ensure the tone is confident and reflects Jitsu's autonomous nature.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/Jitsu Architecture Overview.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not add the new section as a disconnected afterthought; it must flow naturally within the document's narrative.",
+      "Do not use vague or marketing language; the description must be technically precise and grounded in Jitsu's documented processes.",
+      "Do not alter the existing technical content of the architecture layers while inserting the new section."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The file 'docs/Jitsu Architecture Overview.md' contains a new, clearly marked 'Agentic Excellence' section.",
+      "The section's content accurately describes Jitsu's natural-language-to-epic pipeline and the mandatory documentation update step.",
+      "Running 'just verify' passes all tests, confirming no unintended changes were made to other parts of the file."
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "self-documenting-workflow",
+    "phase_id": "sync-architecture-docs",
+    "module_scope": [
+      "docs/architecture"
+    ],
+    "instructions": "Sync all four architecture layer documents to accurately reflect the current code structure. For each file (layer_0_domain.md, layer_1_core.md, layer_2_providers.md, layer_3_transport.md), you must: 1) Read the current source files in the corresponding source directories (src/jitsu/models/, src/jitsu/core/, src/jitsu/providers/, src/jitsu/server/) and the existing documentation. 2) Update each architecture document to precisely describe the actual classes, functions, data models, and their relationships as they exist in the code. 3) Add a prominent 'Automatic Documentation Guarantee' section at the top of each file, stating that this documentation is automatically synchronized by Jitsu's self-documenting workflow as part of its core process. Ensure all descriptions are technically accurate and match the codebase.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_0_domain.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_1_core.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_2_providers.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_3_transport.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not fabricate or hallucinate classes, functions, or relationships that do not exist in the source code.",
+      "Do not update the architecture documents without first reading and understanding the corresponding source code.",
+      "Do not remove or obscure the 'Automatic Documentation Guarantee' section from the documentation."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "All four architecture layer documents have been updated with accurate, code-aligned content.",
+      "Each document contains a clear 'Automatic Documentation Guarantee' section.",
+      "The documentation accurately reflects the current state of the source code in the corresponding modules.",
+      "The 'just verify' command passes without errors, confirming code integrity and test coverage."
+    ],
+    "context_injection": null
+  }
+]

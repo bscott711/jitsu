@@ -8,9 +8,10 @@ import openai
 import pytest
 from instructor.core.exceptions import InstructorRetryException
 
+from jitsu.config import settings
 from jitsu.core.executor import JitsuExecutor, MonotonicityError
 from jitsu.models.core import AgentDirective
-from jitsu.models.execution import ExecutionResult, FileEdit
+from jitsu.models.execution import ExecutionResult, FileEdit, ToolRequest
 from jitsu.prompts import (
     EXECUTOR_RECOVERY_PROMPT,
     EXECUTOR_SYSTEM_PROMPT,
@@ -23,7 +24,7 @@ def mock_directive() -> AgentDirective:
     return AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="src",
+        module_scope=["src"],
         instructions="test instructions",
         completion_criteria=["done"],
         verification_commands=["just verify"],
@@ -41,7 +42,7 @@ def test_executor_initialization() -> None:
     mock_client = MagicMock()
     mock_runner = MagicMock()
     executor = JitsuExecutor(client=mock_client, runner=mock_runner)
-    assert executor.model == "openai/gpt-oss-120b:free"
+    assert executor.model == settings.executor_model
     assert executor.client is mock_client
     assert executor.runner is mock_runner
 
@@ -65,7 +66,7 @@ async def test_executor_execute_success(
     # Mock LLM response - filepath MUST start with module_scope ("src")
     filepath = str(tmp_path / "src" / "test.py")
     edit = FileEdit(filepath=filepath, content="print('hello')")
-    result = ExecutionResult(thoughts="Fixed it", edits=[edit])
+    result = ExecutionResult(thoughts="Fixed it", action=[edit])
     mock_client.chat.completions.create.return_value = result
 
     # Mock runner success
@@ -97,7 +98,7 @@ async def test_executor_execute_retry_success(
     # Mock LLM response - filepath MUST start with module_scope ("src")
     filepath = str(tmp_path / "src" / "test.py")
     edit = FileEdit(filepath=filepath, content="print('hello')")
-    result = ExecutionResult(thoughts="Fixed it", edits=[edit])
+    result = ExecutionResult(thoughts="Fixed it", action=[edit])
     mock_client.chat.completions.create.return_value = result
 
     # 1st run fails, 2nd run succeeds
@@ -131,7 +132,7 @@ async def test_executor_execute_failure_monotonicity(
 
     filepath = str(tmp_path / "src" / "test.py")
     edit = FileEdit(filepath=filepath, content="print('hello')")
-    result = ExecutionResult(thoughts="Fixed it", edits=[edit])
+    result = ExecutionResult(thoughts="Fixed it", action=[edit])
     mock_client.chat.completions.create.return_value = result
 
     # Mock runner always fails with same error count
@@ -157,7 +158,7 @@ async def test_executor_llm_exception(
     success = await executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
-    expected_attempts = 4
+    expected_attempts = 6
     assert mock_client.chat.completions.create.call_count == expected_attempts
 
 
@@ -282,7 +283,7 @@ async def test_executor_monotonicity_guard_stagnation(
 ) -> None:
     """Test that MonotonicityError is raised when error count doesn't improve."""
     mock_client = MagicMock()
-    result = ExecutionResult(thoughts="Fixing the issue as requested.", edits=[])
+    result = ExecutionResult(thoughts="Fixing the issue as requested.", action=[])
     mock_client.chat.completions.create.return_value = result
 
     # Consistent 2 errors
@@ -300,7 +301,7 @@ async def test_executor_monotonicity_guard_regression(
 ) -> None:
     """Test that MonotonicityError is raised when error count increases."""
     mock_client = MagicMock()
-    result = ExecutionResult(thoughts="Fixing the issue as requested.", edits=[])
+    result = ExecutionResult(thoughts="Fixing the issue as requested.", action=[])
     mock_client.chat.completions.create.return_value = result
 
     # 1 error then 2 errors
@@ -321,18 +322,18 @@ async def test_executor_scope_guard_on_retry(
 ) -> None:
     """Test that MonotonicityError is raised when editing outside scope on retry."""
     mock_client = MagicMock()
-    directive = mock_directive.model_copy(update={"module_scope": "src/jitsu"})
+    directive = mock_directive.model_copy(update={"module_scope": ["src/jitsu"]})
 
     # 1st attempt: Valid edit
     # 2nd attempt: Invalid edit (outside src/jitsu)
     mock_client.chat.completions.create.side_effect = [
         ExecutionResult(
             thoughts="thought 1",
-            edits=[FileEdit(filepath=str(tmp_path / "src/jitsu/a.py"), content="content")],
+            action=[FileEdit(filepath=str(tmp_path / "src/jitsu/a.py"), content="content")],
         ),
         ExecutionResult(
             thoughts="thought 2",
-            edits=[FileEdit(filepath=str(tmp_path / "other/b.py"), content="content")],
+            action=[FileEdit(filepath=str(tmp_path / "other/b.py"), content="content")],
         ),
     ]
 
@@ -355,7 +356,7 @@ async def test_executor_scope_guard_outside_workspace(
     mock_client.chat.completions.create.side_effect = [
         ExecutionResult(
             thoughts="thought 1",
-            edits=[FileEdit(filepath="/outside/path.py", content="content")],
+            action=[FileEdit(filepath="/outside/path.py", content="content")],
         ),
     ]
 
@@ -365,7 +366,26 @@ async def test_executor_scope_guard_outside_workspace(
     executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
 
     with pytest.raises(MonotonicityError, match="outside workspace_root"):
-        executor.enforce_scope([FileEdit(filepath="/outside/path.py", content="content")], "src")
+        executor.enforce_scope([FileEdit(filepath="/outside/path.py", content="content")], ["src"])
+
+
+@pytest.mark.asyncio
+async def test_executor_scope_guard_multiple_scopes(mock_runner: MagicMock, tmp_path: Path) -> None:
+    """Test that multiple scopes are correctly handled."""
+    executor = JitsuExecutor(runner=mock_runner, workspace_root=tmp_path)
+    module_scope = ["src", "tests"]
+
+    # Valid edits
+    edits = [
+        FileEdit(filepath=str(tmp_path / "src/a.py"), content=""),
+        FileEdit(filepath=str(tmp_path / "tests/b.py"), content=""),
+    ]
+    executor.enforce_scope(edits, module_scope)  # Should not raise
+
+    # Invalid edit
+    invalid_edits = [FileEdit(filepath=str(tmp_path / "other/c.py"), content="")]
+    with pytest.raises(MonotonicityError, match="outside module_scope"):
+        executor.enforce_scope(invalid_edits, module_scope)
 
 
 @pytest.mark.asyncio
@@ -378,7 +398,7 @@ async def test_executor_recovery_includes_ast(
     # Mock LLM response with a .py file edit in scope
     filepath = str(tmp_path / "src" / "failing_logic.py")
     edit = FileEdit(filepath=filepath, content="def fail(): pass")
-    result = ExecutionResult(thoughts="Fixed it", edits=[edit])
+    result = ExecutionResult(thoughts="Fixed it", action=[edit])
     mock_client.chat.completions.create.return_value = result
 
     # Fail first, succeed second
@@ -415,7 +435,7 @@ async def test_executor_recovery_includes_failing_file_ast(
     # Model edits logic.py
     edit_path = str(tmp_path / "src" / "logic.py")
     edit = FileEdit(filepath=edit_path, content="def logic(): pass")
-    result = ExecutionResult(thoughts="Fixed logic", edits=[edit])
+    result = ExecutionResult(thoughts="Fixed logic", action=[edit])
     mock_client.chat.completions.create.return_value = result
 
     # But test_logic.py fails
@@ -456,7 +476,7 @@ async def test_executor_recovery_ignores_external_failing_file(
 ) -> None:
     """Test that recovery prompt ignores AST for failing files outside workspace."""
     mock_client = MagicMock()
-    result = ExecutionResult(thoughts="Fixed", edits=[])
+    result = ExecutionResult(thoughts="Fixed it", action=[])
     mock_client.chat.completions.create.return_value = result
 
     # Failure in some system file
@@ -483,7 +503,7 @@ async def test_executor_execute_failure_no_details(
 ) -> None:
     """Test that directive execution handles missing details gracefully (coverage)."""
     mock_client = MagicMock()
-    result = ExecutionResult(thoughts="Fixed it", edits=[])
+    result = ExecutionResult(thoughts="Fixed it", action=[])
     mock_client.chat.completions.create.return_value = result
 
     executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
@@ -493,3 +513,112 @@ async def test_executor_execute_failure_no_details(
     success = await executor.execute_directive(mock_directive, "compiler output")
 
     assert success is False
+
+
+@pytest.mark.asyncio
+async def test_executor_execute_tool_request(
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
+) -> None:
+    """Test that the executor handles ToolRequest by looping back to LLM."""
+    mock_client = MagicMock()
+
+    # 1st response: ToolRequest
+    # 2nd response: FileEdit
+    filepath = str(tmp_path / "src" / "test.py")
+    edit = FileEdit(filepath=filepath, content="print('hello with tool')")
+    result_tool = ExecutionResult(
+        thoughts="I need to use a tool",
+        action=ToolRequest(tool_name="file", arguments={"target": "src/test.py"}),
+    )
+    result_edit = ExecutionResult(
+        thoughts="Now I can fix it",
+        action=[edit],
+    )
+    mock_client.chat.completions.create.side_effect = [result_tool, result_edit]
+
+    # Mock provider registry and provider
+    with patch("jitsu.core.executor.ProviderRegistry") as mock_registry:
+        mock_provider_cls = MagicMock()
+        mock_provider = mock_provider_cls.return_value
+        mock_provider.resolve = AsyncMock(return_value="mocked file content")
+        mock_registry.get.return_value = mock_provider_cls
+
+        mock_runner.run.return_value = MagicMock(returncode=0)
+
+        executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
+        success = await executor.execute_directive(mock_directive, "compiler output")
+
+    assert success is True
+    expected_calls = 2
+    assert mock_client.chat.completions.create.call_count == expected_calls
+    assert (await anyio.Path(filepath).read_text()) == "print('hello with tool')"
+
+    # Verify ReAct history in the second call
+    second_call_messages = mock_client.chat.completions.create.call_args_list[1][1]["messages"]
+    # Messages: System, User, Assistant(ToolRequest), User(ToolOutput)
+    expected_msg_count = 4
+    assert len(second_call_messages) == expected_msg_count
+    assistant_idx = 2
+    user_idx = 3
+    assert second_call_messages[assistant_idx]["role"] == "assistant"
+    assert "tool_name" in second_call_messages[assistant_idx]["content"]
+    assert "file" in second_call_messages[assistant_idx]["content"]
+    assert second_call_messages[user_idx]["role"] == "user"
+    assert "Tool output:\nmocked file content" in second_call_messages[user_idx]["content"]
+
+
+@pytest.mark.asyncio
+async def test_executor_execute_tool_request_circuit_breaker(
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
+) -> None:
+    """Test that the executor stops after max tool turns."""
+    mock_client = MagicMock()
+
+    # Always return ToolRequest
+    result_tool = ExecutionResult(
+        thoughts="I need more context",
+        action=ToolRequest(tool_name="file", arguments={"target": "src/test.py"}),
+    )
+    mock_client.chat.completions.create.return_value = result_tool
+
+    with patch("jitsu.core.executor.ProviderRegistry") as mock_registry:
+        mock_provider_cls = MagicMock()
+        mock_provider = mock_provider_cls.return_value
+        mock_provider.resolve = AsyncMock(return_value="mocked file content")
+        mock_registry.get.return_value = mock_provider_cls
+
+        executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
+        success = await executor.execute_directive(mock_directive, "compiler output")
+
+    assert success is False
+    # Should stop after 5 tool turns
+    expected_tool_turns = 5
+    assert mock_client.chat.completions.create.call_count == expected_tool_turns
+
+
+@pytest.mark.asyncio
+async def test_executor_execute_tool_request_unknown_tool(
+    mock_directive: AgentDirective, mock_runner: MagicMock, tmp_path: Path
+) -> None:
+    """Test handling of unknown tool requests."""
+    mock_client = MagicMock()
+
+    result_tool = ExecutionResult(
+        thoughts="I need an unknown tool",
+        action=ToolRequest(tool_name="unknown", arguments={"target": "something"}),
+    )
+    result_edit = ExecutionResult(
+        thoughts="Falling back to edit",
+        action=[],
+    )
+    mock_client.chat.completions.create.side_effect = [result_tool, result_edit]
+
+    mock_runner.run.return_value = MagicMock(returncode=0)
+
+    executor = JitsuExecutor(client=mock_client, runner=mock_runner, workspace_root=tmp_path)
+    success = await executor.execute_directive(mock_directive, "compiler output")
+
+    assert success is True
+    # Verify that the error message was sent to the LLM
+    second_call_messages = mock_client.chat.completions.create.call_args_list[1][1]["messages"]
+    assert "Error: Unknown tool 'unknown'" in second_call_messages[3]["content"]

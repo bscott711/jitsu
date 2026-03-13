@@ -1,0 +1,41 @@
+[
+  {
+    "epic_id": "pydantic-validator-integrity",
+    "phase_id": "implement-validators-and-tests",
+    "module_scope": [
+      "src/jitsu/models",
+      "tests/models"
+    ],
+    "instructions": "Add custom field and model validators to core domain models in `src/jitsu/models/core.py` and implement comprehensive tests in `tests/models/test_core.py`.\n\n1. **Fix `AgentDirective.enforce_zero_bypass_verification`**: \n   - Import `field_validator` from `pydantic`.\n   - Ensure the validator correctly checks and appends 'just verify' to `verification_commands` if not already present.\n\n2. **Add `field_validator` to `ContextTarget.provider_name`**:\n   - Create a `@field_validator('provider_name')` that restricts the value to the allowed set: {'file', 'pydantic', 'ast', 'tree'}.\n   - Raise a `ValueError` with a descriptive message if the value is not in the allowed set.\n\n3. **Add `model_validator(mode='after')` to `EpicBlueprint`**:\n   - Ensure that the `phases` list is not empty.\n   - Raise a `ValueError` if `phases` is empty.\n\n4. **Add `model_validator(mode='after')` to `AgentDirective`**:\n   - Ensure that `module_scope` contains at least one non-empty string.\n   - Raise a `ValueError` if the condition is not met.\n\n5. **Update `tests/models/test_core.py`**:\n   - Add test cases for each validator, covering both valid and invalid inputs.\n   - Ensure tests assert the correct error messages and validation behavior.\n   - Use `pytest.raises` to test for expected validation errors.\n\n6. **Verification**:\n   - Run `just verify` to confirm all tests pass and code coverage is 100%.\n   - Ensure no regressions in existing model functionality.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/models/test_core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not use generic validation error messages; provide specific, actionable feedback.",
+      "Do not bypass the Pydantic validation by using `model_construct` or `__dict__` manipulation in tests.",
+      "Do not implement validators as separate functions outside the model class.",
+      "Do not forget to import `field_validator` and `model_validator` from `pydantic`.",
+      "Do not hardcode the allowed provider names as a list inside the validator; use a module-level constant."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "All new validators are implemented and tested.",
+      "`just verify` passes with 100% test coverage.",
+      "No existing tests are broken."
+    ],
+    "context_injection": null
+  }
+]

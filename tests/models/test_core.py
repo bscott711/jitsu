@@ -5,9 +5,12 @@ from pydantic import ValidationError
 
 from jitsu.models.core import (
     AgentDirective,
+    ContextInjectionConfig,
     ContextTarget,
+    EpicBlueprint,
     PhaseReport,
     PhaseStatus,
+    ResumeResult,
     TargetResolutionMode,
 )
 
@@ -27,6 +30,22 @@ def test_target_resolution_mode_enum() -> None:
     assert TargetResolutionMode.STRUCTURE_ONLY.value == "STRUCTURE_ONLY"
     assert TargetResolutionMode.FULL_SOURCE.value == "FULL_SOURCE"
     assert TargetResolutionMode.SCHEMA_ONLY.value == "SCHEMA_ONLY"
+
+
+def test_context_injection_config() -> None:
+    """Test the ContextInjectionConfig model."""
+    config = ContextInjectionConfig(include=["file1.py"], exclude=["file2.py"])
+    assert config.include == ["file1.py"]
+    assert config.exclude == ["file2.py"]
+
+    # Test defaults
+    default_config = ContextInjectionConfig()
+    assert default_config.include == []
+    assert default_config.exclude == []
+
+    # Test frozen
+    with pytest.raises(ValidationError):
+        config.include = ["new.py"]
 
 
 def test_context_target_initialization() -> None:
@@ -66,13 +85,14 @@ def test_agent_directive_defaults() -> None:
     directive = AgentDirective(
         epic_id="epic-001",
         phase_id="phase-001",
-        module_scope="src/auth",
+        module_scope=["src/auth"],
         instructions="Build the auth module.",
     )
     assert directive.epic_id == "epic-001"
     # The default_factory lambdas should be triggered here
     assert directive.context_targets == []
     assert directive.anti_patterns == []
+    assert directive.context_injection is None
 
 
 def test_phase_report_defaults() -> None:
@@ -93,13 +113,27 @@ def test_agent_directive_new_fields() -> None:
     directive = AgentDirective(
         epic_id="epic-001",
         phase_id="phase-001",
-        module_scope="src/auth",
+        module_scope=["src/auth"],
         instructions="Build the auth module.",
         verification_commands=["uv run pytest"],
         completion_criteria=["All tests pass"],
     )
-    assert directive.verification_commands == ["uv run pytest"]
+    assert directive.verification_commands == ["uv run pytest", "just verify"]
     assert directive.completion_criteria == ["All tests pass"]
+
+
+def test_agent_directive_with_injection_config() -> None:
+    """Test AgentDirective with context_injection field."""
+    config = ContextInjectionConfig(include=["inc.py"])
+    directive = AgentDirective(
+        epic_id="epic-001",
+        phase_id="phase-001",
+        module_scope=["src"],
+        instructions="test",
+        context_injection=config,
+    )
+    assert directive.context_injection == config
+    assert directive.context_injection.include == ["inc.py"]
 
 
 def test_phase_report_new_fields() -> None:
@@ -117,7 +151,7 @@ def test_agent_directive_strictness_and_frozen() -> None:
     directive = AgentDirective(
         epic_id="epic-001",
         phase_id="phase-001",
-        module_scope="src/auth",
+        module_scope=["src/auth"],
         instructions="Build the auth module.",
     )
     # Test frozen
@@ -134,3 +168,85 @@ def test_phase_report_strictness_and_frozen() -> None:
     # Test frozen
     with pytest.raises(ValidationError):
         report.status = PhaseStatus.FAILED
+
+
+def test_resume_result_model() -> None:
+    """Test the ResumeResult model."""
+    result = ResumeResult(
+        phase_id="phase-001",
+        status=PhaseStatus.SUCCESS,
+        reason="Manual fix applied",
+    )
+    assert result.phase_id == "phase-001"
+    assert result.status == PhaseStatus.SUCCESS
+    assert result.reason == "Manual fix applied"
+
+    # Test defaults
+    result_default = ResumeResult(
+        phase_id="phase-002",
+        status=PhaseStatus.STUCK,
+    )
+    assert result_default.reason is None
+
+    # Test frozen
+    with pytest.raises(ValidationError):
+        result.phase_id = "phase-003"
+
+
+def test_context_target_invalid_provider() -> None:
+    """Test that ContextTarget rejects invalid provider names."""
+    with pytest.raises(ValidationError, match="Invalid provider name 'invalid'"):
+        ContextTarget(provider_name="invalid", target_identifier="src/main.py")
+
+
+def test_epic_blueprint_empty_phases() -> None:
+    """Test that EpicBlueprint rejects an empty phases list."""
+    with pytest.raises(ValidationError, match="Epic must have at least one phase"):
+        EpicBlueprint(epic_id="epic-001", phases=[])
+
+
+def test_agent_directive_invalid_module_scope() -> None:
+    """Test that AgentDirective rejects empty or invalid module_scope."""
+    # Test empty list
+    with pytest.raises(
+        ValidationError, match="module_scope must contain at least one non-empty string"
+    ):
+        AgentDirective(
+            epic_id="epic-001",
+            phase_id="phase-001",
+            module_scope=[],
+            instructions="test",
+        )
+
+    # Test list with only empty strings
+    with pytest.raises(
+        ValidationError, match="module_scope must contain at least one non-empty string"
+    ):
+        AgentDirective(
+            epic_id="epic-001",
+            phase_id="phase-001",
+            module_scope=["", "  "],
+            instructions="test",
+        )
+
+
+def test_agent_directive_verification_bypass_prevention() -> None:
+    """Test that 'just verify' is automatically added to verification_commands."""
+    directive = AgentDirective(
+        epic_id="epic-001",
+        phase_id="phase-001",
+        module_scope=["src"],
+        instructions="test",
+        verification_commands=["ls -R"],
+    )
+    assert "just verify" in directive.verification_commands
+
+    # Test when it's already there
+    directive2 = AgentDirective(
+        epic_id="epic-001",
+        phase_id="phase-001",
+        module_scope=["src"],
+        instructions="test",
+        verification_commands=["just verify", "other command"],
+    )
+    assert directive2.verification_commands.count("just verify") == 1

@@ -1,0 +1,64 @@
+[
+  {
+    "epic_id": "add-quiet-flag",
+    "phase_id": "implement-skip-tests-flag",
+    "module_scope": [
+      "src/jitsu/core/runner.py",
+      "src/jitsu/cli/main.py",
+      "tests/core/test_runner.py",
+      "tests/cli/test_main.py"
+    ],
+    "instructions": "Implement a --fast flag for the CLI that skips running tests during execution and update the runner to respect this flag. Specifically:\n1. In src/jitsu/cli/main.py, add a --fast/--skip-tests boolean flag to the main CLI app using typer.Option(False, help=\"Skip running tests during execution\").\n2. In src/jitsu/core/runner.py, modify the Runner class to accept a skip_tests boolean parameter in its constructor and store it as self.skip_tests. When self.skip_tests is True, the execute_phase method should bypass the test execution step (the call to _run_tests).\n3. In src/jitsu/core/executor.py, update the create_executor function to accept and pass through a skip_tests parameter to the Runner instance it creates.\n4. In src/jitsu/core/orchestrator.py, update the execute_phase function to accept a skip_tests parameter and pass it through to the executor creation.\n5. In src/jitsu/cli/main.py, ensure the --fast flag value is passed through the call chain: from the CLI command handler to the orchestrator's execute_phase function.\n6. Add corresponding unit tests in tests/core/test_runner.py to verify that when skip_tests=True, the _run_tests method is not called, and when skip_tests=False, it is called.\n7. Add a CLI test in tests/cli/test_main.py to verify the --fast flag is properly parsed and passed through to the execution layer.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/cli/main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/runner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/executor.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_runner.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/cli/test_main.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not add the flag to the CLI without propagating it through the entire call chain (CLI \u2192 orchestrator \u2192 executor \u2192 runner).",
+      "Do not modify the Runner to skip tests by deleting the test execution code; instead, use the conditional skip_tests parameter.",
+      "Do not forget to update both the runner unit tests and the CLI integration tests to cover the new flag behavior."
+    ],
+    "verification_commands": [],
+    "completion_criteria": [
+      "The --fast flag is available in the CLI help output.",
+      "The Runner class respects the skip_tests parameter and conditionally bypasses test execution.",
+      "Unit tests pass verifying the conditional test skipping behavior.",
+      "CLI tests pass verifying the flag parsing and propagation."
+    ],
+    "context_injection": null
+  }
+]

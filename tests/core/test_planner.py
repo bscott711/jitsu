@@ -7,7 +7,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from jitsu.core.planner import JitsuPlanner
-from jitsu.models.core import AgentDirective, EpicBlueprint, PhaseBlueprint
+from jitsu.models.core import (
+    AgentDirective,
+    ContextTarget,
+    EpicBlueprint,
+    PhaseBlueprint,
+    TargetResolutionMode,
+)
+from jitsu.models.execution import PlannerStage, PlannerStatusUpdate
 from jitsu.prompts import PLANNER_MACRO_PROMPT, VERIFICATION_RULE
 
 
@@ -30,7 +37,7 @@ async def test_planner_plan_generation_success() -> None:
     directive = AgentDirective(
         epic_id="e1",
         phase_id="p1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
         completion_criteria=["done"],
         verification_commands=["just verify"],
@@ -54,10 +61,10 @@ async def test_planner_plan_generation_success() -> None:
     assert planner.directives == [directive]
 
     # Verify progress calls
-    expected_calls = 2
+    expected_calls = 6
     assert on_progress_mock.call_count == expected_calls
     on_progress_mock.assert_any_call("Drafting Epic Blueprint...")
-    on_progress_mock.assert_any_call("Elaborating Phase 1 of 1...")
+    on_progress_mock.assert_any_call("Elaborating Phase 1 of 1 (p1)...")
 
     # Verify prompts
     macro_call = mock_client.chat.completions.create.call_args_list[0][1]
@@ -103,9 +110,14 @@ async def test_planner_generation_failure() -> None:
 @pytest.mark.asyncio
 async def test_planner_generation_fallback_prompt() -> None:
     """Test that the planner uses the fallback prompt if the prompt file is missing."""
-    blueprint = EpicBlueprint(epic_id="e1", phases=[])
+    blueprint = EpicBlueprint(
+        epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
+    )
+    directive = AgentDirective(
+        epic_id="e1", phase_id="p1", module_scope=["src"], instructions="test"
+    )
     mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = blueprint
+    mock_client.chat.completions.create.side_effect = [blueprint, directive]
 
     planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
 
@@ -115,8 +127,9 @@ async def test_planner_generation_fallback_prompt() -> None:
     ):
         await planner.generate_plan()
 
-    # Verify it called create
-    mock_client.chat.completions.create.assert_called_once()
+    # Verify it called create (macro + 1 micro)
+    expected_calls = 2
+    assert mock_client.chat.completions.create.call_count == expected_calls
 
 
 @pytest.mark.asyncio
@@ -126,7 +139,7 @@ async def test_planner_save_plan(tmp_path: Path) -> None:
     directive = AgentDirective(
         epic_id="epic-1",
         phase_id="phase-1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
         completion_criteria=["done"],
         verification_commands=["just verify"],
@@ -154,7 +167,7 @@ async def test_planner_generate_plan_verbose() -> None:
     directive = AgentDirective(
         epic_id="e1",
         phase_id="p1",
-        module_scope="test",
+        module_scope=["test"],
         instructions="test",
     )
 
@@ -181,7 +194,9 @@ async def test_planner_generate_plan_verbose() -> None:
 @pytest.mark.asyncio
 async def test_planner_generate_plan_with_jitsurules() -> None:
     """Test that the planner correctly incorporates .jitsurules if present."""
-    blueprint = EpicBlueprint(epic_id="e1", phases=[])
+    blueprint = EpicBlueprint(
+        epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
+    )
     mock_client = MagicMock()
     mock_client.chat.completions.create.return_value = blueprint
 
@@ -199,3 +214,173 @@ async def test_planner_generate_plan_with_jitsurules() -> None:
     system_msg = call["messages"][0]["content"]
     assert "PROJECT RULES (.jitsurules):" in system_msg
     assert "RULE: Do things" in system_msg
+
+
+def test_planner_compile_phases_logic() -> None:
+    """Test the deterministic compile_phases logic."""
+    planner = JitsuPlanner(objective="Test", relevant_files=[])
+
+    initial_targets = [
+        ContextTarget(provider_name="file", target_identifier="keep.py"),
+        ContextTarget(provider_name="file", target_identifier="remove.py"),
+    ]
+    directive = AgentDirective(
+        epic_id="e1",
+        phase_id="p1",
+        module_scope=["src"],
+        instructions="test",
+        context_targets=initial_targets,
+    )
+
+    # 1. Include only
+    transformed = planner.compile_phases([directive], include_paths=["new.py"])
+    targets = transformed[0].context_targets
+    expected_len_3 = 3
+    assert len(targets) == expected_len_3
+    assert any(t.target_identifier == "new.py" for t in targets)
+    assert any(t.target_identifier == "keep.py" for t in targets)
+    assert any(t.target_identifier == "remove.py" for t in targets)
+
+    # 2. Exclude only
+    transformed = planner.compile_phases([directive], exclude_paths=["remove.py"])
+    targets = transformed[0].context_targets
+    expected_len_1 = 1
+    assert len(targets) == expected_len_1
+    assert targets[0].target_identifier == "keep.py"
+
+    # 3. Combination
+    transformed = planner.compile_phases(
+        [directive], include_paths=["new.py"], exclude_paths=["remove.py"]
+    )
+    targets = transformed[0].context_targets
+    expected_len_2 = 2
+    assert len(targets) == expected_len_2
+    assert {t.target_identifier for t in targets} == {"keep.py", "new.py"}
+
+    # 4. No duplicates on include
+    transformed = planner.compile_phases([directive], include_paths=["keep.py"])
+    targets = transformed[0].context_targets
+    assert len(targets) == expected_len_2  # keep.py was already there
+
+    # 5. Empty lists
+    transformed = planner.compile_phases([directive], include_paths=[], exclude_paths=[])
+    assert transformed[0].context_targets == initial_targets
+
+
+@pytest.mark.asyncio
+async def test_planner_generate_plan_with_injection() -> None:
+    """Test that generate_plan correctly applies context injection."""
+    blueprint = EpicBlueprint(
+        epic_id="e1",
+        phases=[PhaseBlueprint(phase_id="p1", description="test phase")],
+    )
+    directive = AgentDirective(
+        epic_id="e1",
+        phase_id="p1",
+        module_scope=["test"],
+        instructions="test",
+        context_targets=[ContextTarget(provider_name="file", target_identifier="old.py")],
+    )
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = [blueprint, directive]
+
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+
+    with (
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
+        plan = await planner.generate_plan(include_paths=["new.py"], exclude_paths=["old.py"])
+
+    expected_len_1 = 1
+    assert len(plan) == expected_len_1
+    targets = plan[0].context_targets
+    assert len(targets) == expected_len_1
+    assert targets[0].target_identifier == "new.py"
+    assert targets[0].resolution_mode == TargetResolutionMode.FULL_SOURCE
+
+
+@pytest.mark.asyncio
+async def test_planner_structured_callback() -> None:
+    """Test the new structured on_status callback."""
+    mock_client = MagicMock()
+    blueprint = EpicBlueprint(
+        epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
+    )
+    mock_client.chat.completions.create.return_value = blueprint
+
+    status_updates = []
+
+    async def on_status(update: PlannerStatusUpdate) -> None:
+        status_updates.append(update)
+
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+
+    with (
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
+        await planner.generate_plan(on_status=on_status)
+
+    assert len(status_updates) > 0
+    assert any(u.stage == PlannerStage.ANALYZING_SCOPE for u in status_updates)
+    assert any(u.stage == PlannerStage.COMPLETE for u in status_updates)
+
+
+@pytest.mark.asyncio
+async def test_planner_sync_callbacks() -> None:
+    """Test sync versions of callbacks in _emit_status."""
+    mock_client = MagicMock()
+    blueprint = EpicBlueprint(
+        epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
+    )
+    mock_client.chat.completions.create.return_value = blueprint
+
+    msgs = []
+
+    def on_progress(msg: str) -> None:
+        msgs.append(msg)
+
+    status_updates = []
+
+    def on_status_sync(update: PlannerStatusUpdate) -> None:
+        status_updates.append(update)
+
+    planner = JitsuPlanner(
+        objective="Test", relevant_files=[], client=mock_client, on_status=on_status_sync
+    )
+
+    with (
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
+        await planner.generate_plan(on_progress=on_progress)
+
+    assert len(msgs) > 0
+    assert len(status_updates) > 0
+
+
+@pytest.mark.asyncio
+async def test_planner_async_legacy_callback() -> None:
+    """Test async legacy on_progress callback."""
+    mock_client = MagicMock()
+    blueprint = EpicBlueprint(
+        epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
+    )
+    mock_client.chat.completions.create.return_value = blueprint
+
+    msgs = []
+
+    async def on_progress(msg: str) -> None:
+        msgs.append(msg)
+
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+
+    with (
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
+        await planner.generate_plan(on_progress=on_progress)
+
+    assert len(msgs) > 0

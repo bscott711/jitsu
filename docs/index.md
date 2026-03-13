@@ -11,6 +11,7 @@ Key pillars of our mission:
 - **Preventing Context Drift**: Using Progressive Disclosure to pull context on-demand.
 - **AST-First Intelligence**: Prioritizing structural skeletons over raw source to save up to 90% of tokens.
 - **Strict Orchestration**: Delivering instructions as validated Pydantic models with explicit Definitions of Done.
+- **Self-Documenting Workflow**: Ensuring documentation always reflects the ground truth of the codebase automatically.
 
 ---
 

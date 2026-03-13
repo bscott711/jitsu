@@ -1,5 +1,7 @@
 # **Layer 3: Transport & Orchestration**
 
+> **Automatic Documentation Guarantee:** This documentation is automatically synchronized by Jitsu's self-documenting workflow as part of its core process.
+
 Layer 3 is the interface between Jitsu and the outside world. It handles the Model Context Protocol (MCP) transport and the Command Line Interface (CLI).
 
 ---
@@ -13,8 +15,8 @@ Jitsu follows a strict separation of concerns between its transport mechanism an
 The `mcp_server.py` module acts strictly as a **transport mechanism**. It handles the MCP lifecycle (stdio/SSE), tool listing, and incoming call routing. Crucially, it **does not** contain business logic.
 
 - **Role**: Listener and Dispatcher.
-- **IPC Daemon**: Spawns a background listener for cross-process communication (via `jitsu submit`).
-- **Delegation**: It delegates all tool execution to the `ToolHandlers` class.
+- **Delegation**: It delegates all tool execution to the `ToolHandlers` class via the `ToolRegistry`.
+- **Server Instance**: Implements the `JitsuMCPServer` which manages the tool definitions and JSON-RPC lifecycle.
 
 ### **`ToolHandlers`: The Execution Layer**
 
@@ -26,6 +28,10 @@ The `ToolHandlers` class encapsulates the actual logic for every Jitsu tool. It 
 ### **`ToolRegistry`: The Router**
 
 Routing is handled by a dedicated `ToolRegistry`. This registry maps tool names to their corresponding logic in `ToolHandlers`, further decoupling the server from the specific tool implementation.
+
+### **`ipc.py`: The Background Daemon**
+
+A background TCP daemon (`jitsu serve`) constantly listens for new epics via `jitsu submit`, injecting them into the running MCP server's state manager.
 
 ---
 

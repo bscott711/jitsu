@@ -1,0 +1,111 @@
+[
+  {
+    "epic_id": "orchestrator-sqlite-state",
+    "phase_id": "sqlstate-schema-and-storage",
+    "module_scope": [
+      "src/jitsu/core/state.py",
+      "src/jitsu/core/storage.py",
+      "tests/core/test_state.py",
+      "tests/core/test_storage.py"
+    ],
+    "instructions": "Implement SQLite-backed persistence for the orchestrator's state.\n\n1. **Update Pydantic Models in `state.py`**: Add a `timestamp` field (datetime) to the `OrchestratorState` model and ensure all fields have proper serialization via `model_config`. Add a new `ExecutionRecord` Pydantic model with fields: `id` (int, primary key), `epic_id` (str), `phase_id` (str), `status` (str), `started_at` (datetime), `completed_at` (Optional[datetime]), `error` (Optional[str]).\n\n2. **Implement `Storage` class in `storage.py`**: Create a `Storage` class that wraps `sqlite3.Connection`. Implement methods:\n   - `__init__(self, db_path: Path | str = \"jitsu_state.db\")`: Opens or creates the SQLite database.\n   - `create_tables(self)`: Creates tables `orchestrator_state` (single row with JSON blob) and `execution_records` (schema from `ExecutionRecord`).\n   - `save_state(self, state: OrchestratorState)`: Upserts the current state as a JSON string in `orchestrator_state`.\n   - `load_state(self) -> Optional[OrchestratorState]`: Loads and deserializes state from `orchestrator_state`.\n   - `log_execution(self, record: ExecutionRecord)`: Inserts an execution record.\n   - `close(self)`: Closes the connection.\n\n3. **Write corresponding unit tests** in `test_state.py` and `test_storage.py` that cover model validation, serialization, and all `Storage` methods including edge cases (e.g., loading when no state exists, handling database errors).",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/state.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/storage.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_state.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_storage.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not use raw SQL strings with string interpolation; use parameterized queries.",
+      "Do not store state as plain text files; use SQLite via the sqlite3 module.",
+      "Do not bypass the Pydantic models for state validation; all data must be validated before persistence."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "All new and existing tests pass via `just verify`.",
+      "The `OrchestratorState` model includes a timestamp field and serializes correctly.",
+      "The `Storage` class successfully creates tables, saves/loads state, and logs execution records in SQLite."
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "orchestrator-sqlite-state",
+    "phase_id": "orchestrator-state-integration",
+    "module_scope": [
+      "src/jitsu/core"
+    ],
+    "instructions": "Integrate the SQLite storage layer into the orchestrator's `execute_plan` function. The orchestrator must persist its state transitions (specifically the `current_stage`, `stages_completed`, `stages_failed`, `error_message`, `last_updated`, and `plan_id`) to the SQLite database after each stage attempt. Use the `Storage` class from `storage.py` and the `OrchestratorState` model from `state.py`. The `execute_plan` method should instantiate a `Storage` object (using the provided `db_path` or a default), then call `storage.write_state(state)` at critical points: after initializing the state, after a stage succeeds, after a stage fails, and when the plan completes or is interrupted. Ensure the state is loaded from the database at the start of `execute_plan` if it exists, allowing for resumption of interrupted plans.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/state.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/storage.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_orchestrator.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_storage.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not bypass the Storage class by writing raw SQL queries directly in the orchestrator.",
+      "Do not create a new database connection on every state update; reuse the Storage instance.",
+      "Do not hardcode the database path; use the configured `db_path` parameter or a sensible default.",
+      "Do not ignore the return value of `storage.write_state()`; handle potential errors.",
+      "Do not forget to load existing state at the start of `execute_plan` for resumption capability."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The `execute_plan` method in `orchestrator.py` imports and uses the `Storage` class.",
+      "State transitions are persisted to SQLite after each stage and at plan start/end.",
+      "All existing tests in `test_orchestrator.py` pass.",
+      "New tests are added to `test_orchestrator.py` to verify state persistence and resumption.",
+      "The `just verify` command runs successfully, indicating all tests and linting pass."
+    ],
+    "context_injection": null
+  }
+]

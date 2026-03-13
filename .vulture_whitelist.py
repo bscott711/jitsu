@@ -23,3 +23,16 @@ TAG_CONTEXT_MANIFEST
 TAG_CONTEXT_DETAIL
 TAG_PRIORITY_RECAP
 TAG_TASK_SPEC
+# GitProvider (Sandbox Workflow)
+get_current_branch
+create_and_checkout_branch
+checkout_branch
+merge_branch
+delete_branch
+label
+
+# Pydantic Validators
+validate_phases_not_empty
+validate_provider_name
+validate_module_scope_not_empty
+enforce_zero_bypass_verification

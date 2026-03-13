@@ -1,7 +1,9 @@
 """Tool handlers for the Jitsu MCP server."""
 
+import contextlib
 import re
 import subprocess
+import sys
 import typing
 from pathlib import Path
 
@@ -10,8 +12,10 @@ from mcp import types
 from pydantic import ValidationError
 
 from jitsu.core.compiler import ContextCompiler
+from jitsu.core.planner import JitsuPlanner
 from jitsu.core.runner import CommandRunner
 from jitsu.core.state import JitsuStateManager
+from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective, PhaseReport, PhaseStatus
 from jitsu.providers import DirectoryTreeProvider, GitProvider, ProviderRegistry
 from jitsu.server.registry import ToolRegistry
@@ -20,10 +24,16 @@ from jitsu.server.registry import ToolRegistry
 class ToolHandlers:
     """Handles tool execution logic for Jitsu."""
 
-    def __init__(self, state_manager: JitsuStateManager, context_compiler: ContextCompiler) -> None:
+    def __init__(
+        self,
+        state_manager: JitsuStateManager,
+        context_compiler: ContextCompiler,
+        server: typing.Any | None = None,  # noqa: ANN401
+    ) -> None:
         """Initialize the tool handlers."""
         self.state_manager = state_manager
         self.context_compiler = context_compiler
+        self.server = server
 
     async def handle_get_next_phase(self) -> list[types.TextContent]:
         """Handle the 'get_next_phase' tool request."""
@@ -138,6 +148,65 @@ class ToolHandlers:
             return [types.TextContent(type="text", text=f"Validation Error: {e!s}")]
         except RuntimeError as e:
             return [types.TextContent(type="text", text=f"Internal Error: {e!s}")]
+
+    async def handle_plan_epic(
+        self, arguments: dict[str, object] | None
+    ) -> list[types.TextContent]:
+        """Handle 'plan_epic' tool request."""
+        if not arguments or "prompt" not in arguments:
+            return [types.TextContent(type="text", text="Error: Missing 'prompt' argument.")]
+
+        prompt = str(arguments["prompt"])
+        relevant_files = typing.cast("list[str]", arguments.get("relevant_files", []))
+
+        async def on_progress(msg: str) -> None:
+            """Safe progress reporting via stderr to avoid JSON-RPC corruption."""
+            sys.stderr.write(f"[* progress] {msg}\n")
+            sys.stderr.flush()
+
+            # Optional: Emit proper MCP progress notification if client supports it
+            token: str | int | None = None
+            if arguments:
+                metadata = arguments.get("_metadata")
+                if isinstance(metadata, dict):
+                    metadata_dict = typing.cast("dict[typing.Any, typing.Any]", metadata)
+                    candidate = metadata_dict.get("progressToken")
+                    if isinstance(candidate, (str, int)):
+                        token = candidate
+
+            if token is not None and self.server:
+                with contextlib.suppress(Exception):
+                    await self.server.send_notification(
+                        types.ProgressNotification(
+                            params=types.ProgressNotificationParams(
+                                progressToken=token,
+                                progress=0,  # Indeterminate
+                                total=None,
+                            )
+                        )
+                    )
+
+        planner = JitsuPlanner(objective=prompt, relevant_files=relevant_files)
+        # 2. Inside the tool handler, instantiate the JitsuPlanner and call its planning method
+        await planner.generate_plan(on_progress=on_progress)
+
+        if not planner.directives:
+            return [types.TextContent(type="text", text="Error: Failed to generate plan.")]
+
+        # 3. Reuse the recently built storage.get_current_path(epic_id) logic
+        epic_id = planner.directives[0].epic_id
+        storage = EpicStorage(Path.cwd())
+        path = storage.get_current_path(epic_id)
+
+        planner.save_plan(path)
+
+        rel_path = storage.rel_path(path)
+        # 4. Return a success message containing the epic_id and file path
+        msg = (
+            f"Successfully generated epic '{epic_id}' at '{rel_path}'.\n\n"
+            "You can now call 'jitsu_get_next_phase' to begin execution of this epic."
+        )
+        return [types.TextContent(type="text", text=msg)]
 
     async def handle_git_status(self) -> list[types.TextContent]:
         """Handle 'git_status' tool request."""
@@ -323,4 +392,27 @@ class ToolHandlers:
                 },
             ),
             self.handle_git_commit,
+        )
+
+        registry.register(
+            types.Tool(
+                name="jitsu_plan_epic",
+                description="Plan a new epic from a high-level prompt.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "prompt": {
+                            "type": "string",
+                            "description": "The high-level objective for the new epic.",
+                        },
+                        "relevant_files": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Optional list of files relevant to the planning task.",
+                        },
+                    },
+                    "required": ["prompt"],
+                },
+            ),
+            self.handle_plan_epic,
         )

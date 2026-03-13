@@ -2,7 +2,18 @@
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+ALLOWED_PROVIDERS = {
+    "file",
+    "pydantic",
+    "ast",
+    "tree",
+    "directory_tree",
+    "git",
+    "env_var",
+    "markdown_ast",
+}
 
 
 class PhaseStatus(StrEnum):
@@ -24,6 +35,15 @@ class TargetResolutionMode(StrEnum):
     SCHEMA_ONLY = "SCHEMA_ONLY"
 
 
+class ContextInjectionConfig(BaseModel):
+    """Configuration for deterministic context injection and exclusion."""
+
+    model_config = ConfigDict(frozen=True)
+
+    include: list[str] = Field(default_factory=list)
+    exclude: list[str] = Field(default_factory=list)
+
+
 class PhaseBlueprint(BaseModel):
     """A high-level blueprint for a single Jitsu phase."""
 
@@ -40,6 +60,14 @@ class EpicBlueprint(BaseModel):
 
     epic_id: str
     phases: list[PhaseBlueprint]
+
+    @model_validator(mode="after")
+    def validate_phases_not_empty(self) -> "EpicBlueprint":
+        """Ensure that the epic has at least one phase."""
+        if not self.phases:
+            msg = "Epic must have at least one phase."
+            raise ValueError(msg)
+        return self
 
 
 class ContextTarget(BaseModel):
@@ -58,6 +86,15 @@ class ContextTarget(BaseModel):
     is_required: bool = True
     resolution_mode: TargetResolutionMode = TargetResolutionMode.AUTO
 
+    @field_validator("provider_name")
+    @classmethod
+    def validate_provider_name(cls, v: str) -> str:
+        """Ensure the provider name is supported."""
+        if v not in ALLOWED_PROVIDERS:
+            msg = f"Invalid provider name '{v}'. Allowed providers are: {', '.join(sorted(ALLOWED_PROVIDERS))}"
+            raise ValueError(msg)
+        return v
+
 
 class AgentDirective(BaseModel):
     """A task directive sent to an AI agent via MCP."""
@@ -66,7 +103,7 @@ class AgentDirective(BaseModel):
 
     epic_id: str
     phase_id: str
-    module_scope: str
+    module_scope: list[str]
     instructions: str
     context_targets: list[ContextTarget] = Field(default=[])
     anti_patterns: list[str] = Field(default=[])
@@ -75,6 +112,23 @@ class AgentDirective(BaseModel):
         description="Commands to verify the phase is complete.",
     )
     completion_criteria: list[str] = Field(default=[])
+    context_injection: ContextInjectionConfig | None = None
+
+    @model_validator(mode="after")
+    def validate_module_scope_not_empty(self) -> "AgentDirective":
+        """Ensure that the module scope is not empty and contains valid paths."""
+        if not self.module_scope or not any(s.strip() for s in self.module_scope):
+            msg = "module_scope must contain at least one non-empty string."
+            raise ValueError(msg)
+        return self
+
+    @field_validator("verification_commands")
+    @classmethod
+    def enforce_zero_bypass_verification(cls, v: list[str]) -> list[str]:
+        """Mechanically guarantee that the verification pipeline cannot be bypassed."""
+        if not any("just verify" in cmd for cmd in v):
+            v.append("just verify")
+        return v
 
 
 class PhaseReport(BaseModel):
@@ -88,3 +142,13 @@ class PhaseReport(BaseModel):
     artifacts_generated: list[str] = Field(default=[])
     agent_notes: str = ""
     verification_output: str = ""
+
+
+class ResumeResult(BaseModel):
+    """The result of a resume operation."""
+
+    model_config = ConfigDict(use_enum_values=True, frozen=True)
+
+    phase_id: str
+    status: PhaseStatus
+    reason: str | None = None

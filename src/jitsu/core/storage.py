@@ -30,6 +30,10 @@ class EpicStorage:
         p.mkdir(parents=True, exist_ok=True)
         return p
 
+    def get_current_path(self, epic_id: str) -> Path:
+        """Return the path for a given epic_id in the current directory."""
+        return self.current_dir / f"{epic_id}.json"
+
     @property
     def completed_dir(self) -> Path:
         """Return the epics/completed directory, creating it if necessary."""

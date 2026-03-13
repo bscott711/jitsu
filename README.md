@@ -13,6 +13,25 @@ Jitsu operates as a deterministic, engineer with a built-in safety net:
 * **Pydantic Gatekeepers:** Ironclad output validation instantly rejects LLM laziness (e.g., \# rest of code here or ...), forcing the model to generate 100% complete, executable code before it ever touches your disk.  
 * **Zero-Bypass Engineering:** Jitsu strictly adheres to a "Zero-Regression" policy, enforcing 100% test coverage with zero \# noqa or \# type: ignore linting bypasses.
 
+## **🤖 Agentic Excellence**
+
+Jitsu is not just a code generator; it is a **self-orchestrating engineer**. It transforms high-level natural language intent into verified, production-ready codebases with zero manual intervention.
+
+### **The Flawless Workflow**
+
+Jitsu handles the heavy lifting of engineering management automatically:
+
+1. **Natural Language Intent:** You provide a goal (e.g., *"Add support for Anthropic LLMs"*).
+2. **Epic Planning:** Jitsu's `Planner` analyzes the codebase and generates a multi-phase `Epic` with strict Pydantic-validated directives.
+3. **JIT Context Compilation:** For each phase, Jitsu surgically compiles the absolute minimum context required, optimized via **U-Curve Attention**.
+4. **Autonomous Execution:** The `Executor` implements the changes, handling complex edits across multiple files.
+5. **Self-Healing Loop:** If a test fails, Jitsu enters a recovery loop, parsing the traceback and AST to fix the regression instantly.
+6. **Self-Documentation:** Jitsu automatically updates `README.md` and `docs/` to ensure documentation matches the new reality.
+7. **Verified Completion:** Final verification via `just verify` ensures 100% coverage and zero technical debt.
+
+> [!NOTE]
+> **Self-Documentation Guarantee:** Jitsu treats documentation as code. Every Epic concluded by Jitsu includes a mandatory step to synchronize architectural docs, ensuring your wiki never goes stale.
+
 ## **🚀 Quick Start**
 
 ### **Installation**

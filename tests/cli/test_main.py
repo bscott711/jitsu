@@ -16,27 +16,51 @@ from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective
 from jitsu.server.client import send_payload
 from jitsu.server.mcp_server import state_manager
+from jitsu.utils.logger import set_quiet
 
 runner = CliRunner()
 
 
 @pytest.fixture(autouse=True)
 def clear_state() -> None:
-    """Clear the global state manager queue before each test."""
+    """Clear the global state manager queue and reset logger before each test."""
     while state_manager.get_next_directive():
         pass
+    set_quiet(enabled=False)
 
 
 @patch("jitsu.cli.main.anyio.run")
 def test_cli_serve(mock_run: MagicMock) -> None:
     """Test the CLI serve command runs the server."""
+    set_quiet(enabled=False)
     result = runner.invoke(app, ["serve"])
 
-    assert result.exit_code == 0, (
-        f"Command failed:\nOUTPUT: {result.output}\nEXC: {result.exception}"
-    )
+    assert result.exit_code == 0
     mock_run.assert_called_once()
     assert "Starting Jitsu MCP Server" in result.output
+
+
+@patch("jitsu.cli.main.anyio.run")
+def test_cli_quiet_flag_suppresses_output(mock_run: MagicMock) -> None:
+    """Test that --quiet suppresses output."""
+    set_quiet(enabled=False)
+    # Use serve as a test case
+    result = runner.invoke(app, ["--quiet", "serve"])
+
+    assert result.exit_code == 0
+    mock_run.assert_called_once()
+    assert "Starting Jitsu MCP Server" not in result.output
+    assert "Listening for IDE agent connections" not in result.output
+
+
+@patch("jitsu.cli.main.anyio.run", side_effect=RuntimeError("Test mock error"))
+def test_cli_quiet_flag_shows_errors(mock_run: MagicMock) -> None:  # noqa: ARG001
+    """Test that --quiet still shows error messages."""
+    set_quiet(enabled=False)
+    result = runner.invoke(app, ["--quiet", "serve"])
+
+    assert result.exit_code == 1
+    assert "Fatal error during server execution: Test mock error" in result.output
 
 
 @patch("jitsu.cli.main.anyio.run", side_effect=KeyboardInterrupt)
@@ -71,7 +95,7 @@ def test_cli_serve_with_valid_epic(mock_run: MagicMock, tmp_path: Path) -> None:
         {
             "epic_id": "test-epic",
             "phase_id": "phase-1",
-            "module_scope": "test",
+            "module_scope": ["test"],
             "instructions": "do the thing",
         }
     ]
@@ -235,14 +259,24 @@ def test_cli_plan_success(mock_orch_cls: MagicMock, tmp_path: Path) -> None:
     """Test successful plan generation via CLI."""
     out_file = tmp_path / "epic.json"
     mock_orch = mock_orch_cls.return_value
-    mock_orch.execute_plan = AsyncMock(return_value=[])
+    # Mock a directive to avoid index error
+    mock_directive = MagicMock(spec=AgentDirective)
+    mock_directive.epic_id = "test-epic"
+    mock_orch.execute_plan.return_value = [mock_directive]
 
     # Trigger callback when execute_plan is called
     async def side_effect(*_args: object, **_kwargs: object) -> list[AgentDirective]:
+        # Create the file that the code expects to exist after planning
+        # In actual call: objective, files, actual_out
+        if len(_args) > 2:  # noqa: PLR2004
+            out_path = _args[2]
+            if isinstance(out_path, Path):
+                await anyio.Path(out_path).write_text("[]", encoding="utf-8")
+
         on_progress = mock_orch_cls.call_args[1].get("on_progress")
         if on_progress:
             on_progress("Task started")
-        return []
+        return [mock_directive]
 
     mock_orch.execute_plan.side_effect = side_effect
 
@@ -255,6 +289,7 @@ def test_cli_plan_success(mock_orch_cls: MagicMock, tmp_path: Path) -> None:
     assert "Using model: gpt-4o" in result.output
     assert "Task started" in result.output
     mock_orch.execute_plan.assert_awaited_once()
+    assert out_file.exists()
 
 
 @patch.object(JitsuOrchestrator, "execute_plan", new_callable=AsyncMock)
@@ -276,6 +311,20 @@ def test_cli_plan_with_files(mock_execute: AsyncMock, tmp_path: Path) -> None:
     ctx_file = tmp_path / "context_file.py"
     ctx_file.touch()
 
+    # Mock a directive to avoid index error
+    mock_directive = MagicMock(spec=AgentDirective)
+    mock_directive.epic_id = "test-epic"
+    mock_execute.return_value = [mock_directive]
+
+    async def side_effect(*_args: object, **_kwargs: object) -> list[AgentDirective]:
+        if len(_args) > 2:  # noqa: PLR2004
+            out_path = _args[2]
+            if isinstance(out_path, Path):
+                await anyio.Path(out_path).write_text("[]", encoding="utf-8")
+        return [mock_directive]
+
+    mock_execute.side_effect = side_effect
+
     result = runner.invoke(
         app, ["plan", "Feature", "--file", str(ctx_file), "--out", str(out_file)]
     )
@@ -283,6 +332,68 @@ def test_cli_plan_with_files(mock_execute: AsyncMock, tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "Using 1 context file" in result.output
     mock_execute.assert_awaited_once()
+
+
+@patch("jitsu.cli.main.JitsuOrchestrator", autospec=True)
+def test_cli_plan_default_path(
+    mock_orch_cls: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that plan uses epics/current/{epic_id}.json by default."""
+    monkeypatch.chdir(tmp_path)
+    mock_orch = mock_orch_cls.return_value
+
+    # Mock a directive with specific epic_id
+    mock_directive = MagicMock(spec=AgentDirective)
+    mock_directive.epic_id = "plan-epic-123"
+    mock_orch.execute_plan = AsyncMock(return_value=[mock_directive])
+
+    # Storage helper
+    mock_orch.storage = EpicStorage(tmp_path)
+
+    async def side_effect(
+        _objective: str, _files: list[str], _out: Path, **_kwargs: object
+    ) -> list[AgentDirective]:
+        # Create the temp file
+        await anyio.Path(_out).write_text("[]", encoding="utf-8")
+        return [mock_directive]
+
+    mock_orch.execute_plan.side_effect = side_effect
+
+    result = runner.invoke(app, ["plan", "Some objective"])
+
+    assert result.exit_code == 0
+    expected_path = tmp_path / "epics" / "current" / "plan-epic-123.json"
+    assert expected_path.exists()
+    assert f"Plan successfully generated and saved to {expected_path}" in result.output
+
+
+@patch("jitsu.cli.main.JitsuOrchestrator")
+def test_cli_auto_with_injection(mock_orch_cls: MagicMock, tmp_path: Path) -> None:
+    """Test the auto command with --include and --exclude flags."""
+    mock_orch = mock_orch_cls.return_value
+    mock_orch.execute_auto = AsyncMock()
+
+    inc_file = tmp_path / "inc.py"
+    inc_file.touch()
+    exc_file = tmp_path / "exc.py"
+
+    result = runner.invoke(
+        app,
+        [
+            "auto",
+            "Objective",
+            "--include",
+            str(inc_file),
+            "--exclude",
+            str(exc_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    mock_orch.execute_auto.assert_called_once()
+    kwargs = mock_orch.execute_auto.call_args[1]
+    assert kwargs["include_paths"] == [str(inc_file)]
+    assert kwargs["exclude_paths"] == [str(exc_file)]
 
 
 @patch("jitsu.cli.main.anyio.run")
@@ -489,6 +600,26 @@ def test_cli_auto_failure(
     mock_execute.assert_awaited_once()
 
 
+@patch("jitsu.cli.main.JitsuOrchestrator", autospec=True)
+def test_cli_auto_progress(mock_orch_cls: MagicMock) -> None:
+    """Test 'jitsu auto' progress reporting."""
+    mock_orch = mock_orch_cls.return_value
+    mock_orch.execute_auto = AsyncMock()
+
+    # Trigger callback when execute_auto is called
+    async def side_effect(*_args: object, **_kwargs: object) -> None:
+        on_progress = mock_orch_cls.call_args[1].get("on_progress")
+        if on_progress:
+            on_progress("Auto progress message")
+
+    mock_orch.execute_auto.side_effect = side_effect
+
+    result = runner.invoke(app, ["auto", "Build something"])
+
+    assert result.exit_code == 0
+    assert "Auto progress message" in result.output
+
+
 def test_cli_auto_missing_args() -> None:
     """Test 'jitsu auto' fails if neither objective nor --file is provided."""
     result = runner.invoke(app, ["auto"])
@@ -513,3 +644,35 @@ def test_cli_auto_with_context(
     args, _ = mock_execute.call_args
     # objective, file, context, model, verbose
     assert ctx_file in args[2]
+
+
+@patch("jitsu.cli.main.JitsuOrchestrator", autospec=True)
+def test_cli_resume_success(mock_orch_cls: MagicMock) -> None:
+    """Test 'jitsu resume' calls orchestrator.resume."""
+    mock_orch = mock_orch_cls.return_value
+    mock_orch.resume = AsyncMock()
+
+    result = runner.invoke(app, ["resume", "epic-123"])
+    assert result.exit_code == 0
+    mock_orch.resume.assert_awaited_once_with("epic-123", model=None, force=False)
+
+
+@patch("jitsu.cli.main.JitsuOrchestrator", autospec=True)
+def test_cli_resume_with_options(mock_orch_cls: MagicMock) -> None:
+    """Test 'jitsu resume' with model and force options."""
+    mock_orch = mock_orch_cls.return_value
+    mock_orch.resume = AsyncMock()
+
+    result = runner.invoke(app, ["resume", "epic-123", "--model", "gpt-4", "--force"])
+    assert result.exit_code == 0
+    mock_orch.resume.assert_awaited_once_with("epic-123", model="gpt-4", force=True)
+
+
+@patch("jitsu.cli.main.JitsuOrchestrator", autospec=True)
+def test_cli_resume_failure(mock_orch_cls: MagicMock) -> None:
+    """Test 'jitsu resume' handles orchestrator failure."""
+    mock_orch = mock_orch_cls.return_value
+    mock_orch.resume = AsyncMock(side_effect=typer.Exit(1))
+
+    result = runner.invoke(app, ["resume", "epic-123"])
+    assert result.exit_code == 1
