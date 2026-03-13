@@ -9,6 +9,30 @@ from jitsu.providers.base import BaseProvider
 class GitError(Exception):
     """Raised when a git command fails."""
 
+    def __init__(
+        self,
+        returncode: int | None = None,
+        error_output: str | None = None,
+        *,
+        missing: bool = False,
+    ) -> None:
+        """
+        Initialize the GitError with specific context.
+
+        Args:
+            returncode: The exit code of the failed git process.
+            error_output: The stderr or stdout from the failed git process.
+            missing: True if the git executable was not found.
+
+        """
+        if missing:
+            message = "git command not found."
+        elif returncode is not None:
+            message = f"Git command failed with exit code {returncode}: {error_output}"
+        else:
+            message = "A git error occurred."
+        super().__init__(message)
+
 
 class GitProvider(BaseProvider):
     """Provides git-related context (diffs, status) of the current repository."""
@@ -43,11 +67,9 @@ class GitProvider(BaseProvider):
                 shell=False,
             )
         except subprocess.CalledProcessError as e:
-            error_msg = f"Git command failed with exit code {e.returncode}: {e.stderr or e.stdout}"
-            raise GitError(error_msg) from e
+            raise GitError(returncode=e.returncode, error_output=e.stderr or e.stdout) from e
         except FileNotFoundError as e:
-            error_msg = "git command not found."
-            raise GitError(error_msg) from e
+            raise GitError(missing=True) from e
         else:
             return result.stdout.strip()
 

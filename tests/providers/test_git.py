@@ -164,3 +164,9 @@ def test_git_not_found_error() -> None:
         with pytest.raises(GitError) as exc:
             provider.get_current_branch()
         assert "git command not found." in str(exc.value)
+
+
+def test_git_error_default_message() -> None:
+    """Test the default GitError message."""
+    error = GitError()
+    assert str(error) == "A git error occurred."
