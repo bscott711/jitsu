@@ -400,4 +400,4 @@ async def test_handle_plan_epic_with_progress(
         mock_stderr.assert_called_with("[* progress] Test message\n")
 
         # Verify MCP notification
-        mock_server.send_notification.assert_called_once()
+        mock_server.request_context.session.send_progress_notification.assert_called_once()

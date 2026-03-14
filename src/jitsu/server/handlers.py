@@ -178,14 +178,9 @@ class ToolHandlers:
 
             if token is not None and self.server:
                 with contextlib.suppress(Exception):
-                    await self.server.send_notification(  # type: ignore[reportAttributeAccessIssue]
-                        types.ProgressNotification(
-                            params=types.ProgressNotificationParams(
-                                progressToken=token,
-                                progress=0,  # Indeterminate
-                                total=None,
-                            )
-                        )
+                    await self.server.request_context.session.send_progress_notification(
+                        progress_token=token,
+                        progress=0.0,  # Indeterminate
                     )
 
         planner = JitsuPlanner(objective=prompt, relevant_files=relevant_files)
