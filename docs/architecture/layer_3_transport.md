@@ -23,7 +23,7 @@ The `mcp_server.py` module acts strictly as a **transport mechanism**. It handle
 The `ToolHandlers` class encapsulates the actual logic for every Jitsu tool. It is "injected" with the necessary core components (`JitsuStateManager` and `ContextCompiler`).
 
 - **Logic Capsulation**: All `handle_*` methods are contained here.
-- **Statelessness**: The handlers operate on the state managed by Layer 1, making them easy to unit test without an active MCP connection.
+- **Statelessness**: The handlers operate on the state managed by Layer 2, making them easy to unit test without an active MCP connection.
 
 ### **`ToolRegistry`: The Router**
 

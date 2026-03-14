@@ -9,8 +9,8 @@
 Jitsu is best understood as an **inversion-of-control layer for IDE agents** — instead of the agent passively receiving static context, it must actively *pull* structured, JIT-compiled directives from Jitsu's MCP server. Its architecture is four layers:
 
 - **Layer 0 (Domain)**: Immutable Pydantic V2 models — `AgentDirective`, `PhaseReport`, `TargetResolutionMode` — forming the zero-dependency communication protocol.
-- **Layer 1 (Core)**: The `ContextCompiler`, `JitsuStateManager`, and `JitsuPlanner` — handles epic lifecycles and U-Curve prompt assembly.
-- **Layer 2 (Providers)**: AST-first filesystem adapters (`ASTProvider`, `PydanticProvider`, `GitProvider`, `DirectoryTreeProvider`) that strip implementation noise from context.
+- **Layer 1 (Providers)**: AST-first filesystem adapters (`ASTProvider`, `PydanticProvider`, `GitProvider`, `DirectoryTreeProvider`) that strip implementation noise from context.
+- **Layer 2 (Core)**: The `ContextCompiler`, `JitsuStateManager`, and `JitsuPlanner` — handles epic lifecycles and U-Curve prompt assembly.
 - **Layer 3 (Transport)**: A pure stdio/JSON-RPC MCP server and minimal Typer CLI exposing orchestration tools.
 
 ---

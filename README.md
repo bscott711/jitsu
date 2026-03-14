@@ -4,7 +4,7 @@
 
 **Jitsu** is a high-performance orchestration layer designed to eliminate **Prompt Debt**, **Context Drift**, and **LLM Laziness** in AI-driven software engineering. It shifts context preparation from the agent's limited window to a powerful Python engine, serving the absolute "ground truth" of your codebase **Just-In-Time (JIT)** directly to your AI IDE.
 
-### **✨ v1.0.0 Architecture Highlights**
+### **✨ v0.4.0 Architecture Highlights**
 
 Jitsu operates as a stateful memory and context engine for your IDE agent:
 

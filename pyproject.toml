@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jitsu"
-version = "0.3.0"
+version = "0.4.0"
 description = "JIT Context & Workflow Orchestrator for AI IDEs via MCP"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -120,14 +120,13 @@ asyncio_mode = "auto"
 root_package = "jitsu"
 
 [[tool.importlinter.contracts]]
-name = "Models should not import from Providers or Server (Domain Driven Design)"
-type = "forbidden"
-source_modules = [
-    "jitsu.models"
-]
-forbidden_modules = [
-    "jitsu.providers",
-    "jitsu.server"
+name = "Jitsu Execution Hierarchy"
+type = "layers"
+layers = [
+    "jitsu.server",      # Layer 3: Server handles transport and calls Core
+    "jitsu.core",        # Layer 2: Core runs the logic and delegates to Providers
+    "jitsu.providers",   # Layer 1: Providers interact with the OS/AST
+    "jitsu.models"       # Layer 0: Models are pure data contracts, depending on nothing
 ]
 
 # ==========================================

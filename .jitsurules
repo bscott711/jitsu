@@ -2,7 +2,7 @@
 
 You are operating under Jitsu orchestration.
 
-1. **Initialization:** At the start of every session or task, you MUST call the jitsu_get_next_phase tool.  
+1. **Initialization:** At the start of every session or task, you MUST call the `jitsu_get_next_phase tool`.  
 2. **Strict Context:** Read the compiled Markdown context provided by Jitsu. This is your "Ground Truth." Do not rely on stale file states or previous conversation memory. If the provided context is insufficient for the task, you MUST use `jitsu_request_context` to fetch the specific file contents or AST structures before writing code.
 3. **Execution:** Execute the instructions within the specified module_scope.  
 4. **Reporting & Version Control:** Once the task is complete and verified, you MUST ensure all relevant documentation (README.md and files under docs/) is updated to reflect your changes. Then, check `jitsu_git_status`. If there are modifications, you MUST commit them using `jitsu_git_commit` using a Conventional Commit message and sync the commit. Finally, you MUST call `jitsu_report_status` with your artifacts and notes.
@@ -10,4 +10,4 @@ You are operating under Jitsu orchestration.
 6. **Protocol Safety (stdio):** Never use `print()` or standard `logging`. The MCP server communicates via JSON-RPC over stdout. Any rogue text on stdout will crash the protocol. All logs, exceptions, and CLI outputs MUST be explicitly routed to `sys.stderr` (e.g., `sys.stderr.write`, `typer.secho(..., err=True)`).
 7. **Execution Environment:** You MUST ALWAYS use `just` commands found in the JustFile for all repository-level execution, testing, and linting. Do not use system `python3`, global `pytest`, or manual `uv run` commands for full verification; instead run `just verify`. Do not manually activate virtual environments or reference `./.venv/bin/python` directly.
 8. **Code Generation:** 1) There are no "here's how you might do X" or similar boilerplate suggestions. Provide fully functioning code in code blocks. 2) If the edit requires only a single line (or two) change provide the context around it with the change clearly denoted so it is easy to drop in place.
-9. **Planning & Queue Management:** If you are explicitly tasked with planning a new feature or epic, you MUST first call `jitsu_get_planning_context` to understand the repository skeleton. Generate the Epic JSON, and then call `jitsu_submit_epic`. You may use `jitsu_inspect_queue` at any time to verify pending directives.
+9. **Planning & Queue Management:** If you are explicitly tasked with planning a new feature or epic, you MUST first call `jitsu_get_planning_context` to understand the repository skeleton. Generate the Epic JSON `jitsu_plan_epic`, and then call `jitsu_submit_epic`. You may use `jitsu_inspect_queue` at any time to verify pending directives.

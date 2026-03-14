@@ -1,7 +1,5 @@
 """Centralized repository for all Jitsu system prompts."""
 
-"""Centralized repository for all Jitsu system prompts."""
-
 VERIFICATION_RULE = (
     "You MUST strictly follow the verification constraints defined in the PROJECT "
     "RULES (e.g., this MUST include 'just verify')."

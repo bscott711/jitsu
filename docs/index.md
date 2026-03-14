@@ -23,13 +23,13 @@ Jitsu is built on a robust, layered foundation to ensure high fidelity and relia
 
 Rigorous Pydantic models defining the communication protocol between the orchestrator and the agent.
 
-### [Layer 1: The Engine (Core & State)](architecture/layer_1_core.md)
-
-The logic layer that parses directives, manages task lifecycles, and compiles JIT context manifests.
-
-### [Layer 2: The Eyes (AST Providers)](architecture/layer_2_providers.md)
+### [Layer 1: The Eyes (AST Providers)](architecture/layer_1_providers.md)
 
 Specialized providers that extract structural skeletons (AST), JSON schemas, and directory trees from the filesystem.
+
+### [Layer 2: The Engine (Core & State)](architecture/layer_2_core.md)
+
+The logic layer that parses directives, manages task lifecycles, and compiles JIT context manifests.
 
 ### [Layer 3: The Transport (MCP Server)](architecture/layer_3_transport.md)
 

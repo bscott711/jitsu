@@ -39,27 +39,26 @@ The zero-dependency foundation of Jitsu defines the communication protocol.
 * **`PhaseReport`**: Structured feedback from the agent, including artifacts and verification results.
 * **`TargetResolutionMode`**: Governs how the ContextCompiler handles specific files (`AUTO`, `STRUCTURE_ONLY`, `SCHEMA_ONLY`, `FULL_SOURCE`).
 
-### **Layer 1: Core & State (The Engine)**
+### **Layer 1: AST-First Providers (The Eyes)**
+
+Providers (`jitsu.providers`) extract information from the filesystem using an AST-first policy.
+
+* **`ASTProvider`**: Strips implementation details from Python files, providing structural skeletons.
+* **`PydanticProvider`**: Uses live reflection to extract JSON schemas from models.
+* **`DirectoryTreeProvider`**: Generates visual representations of the project structure.
+* **`GitProvider`**: Analyzes the active repository using `git diff` and `git status`.
+
+### **Layer 2: Core & State (The Engine)**
 
 The `jitsu.core` module parses directives and manages task state.
 
 * **`ContextCompiler`**: The engine weaves together directives and live codebase state into optimized Markdown prompts using **U-Curve Attention**.
 * **`JitsuStateManager`**: Manages the life cycle of epics and phases, storing pending directives and aggregating completed phase reports.
 
-### **Layer 2: AST-First Providers (The Eyes)**
-
-Providers (`jitsu.providers`) extract information from the filesystem using an AST-first policy.
-
-* **`ASTProvider` (`ast`)**: Strips implementation details from Python files, providing structural skeletons.
-* **`PydanticProvider` (`pydantic`)**: Uses live reflection to extract JSON schemas from models.
-* **`DirectoryTreeProvider` (`tree`)**: Generates visual representations of the project structure.
-* **`GitProvider` (`git`)**: Analyzes the active repository using `git diff` and `git status`.
-
 ### **Layer 3: Transport Layer (MCP Server & CLI)**
 
 The top layer exposes Jitsu tools to IDEs.
 
-* **MCP Server**: Acts purely as a transport mechanism (stdio/JSON-RPC). It delegates all tool execution to a dynamic `ToolRegistry`.
 * **Planning & Execution Tools**: An extensive tool suite (`jitsu_plan_epic`, `jitsu_get_next_phase`, `jitsu_request_context`) allows agents to gather intelligence and progress through epics.
 * **Just-based Git Lifecycle**: Destructive operations are delegated to `just` recipes (`just commit`, `just sync`), providing a controlled security boundary.
 
