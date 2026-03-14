@@ -67,6 +67,7 @@ To use Jitsu in an MCP-compatible IDE (Antigravity, Cursor, Windsurf, etc.):
 For a deep dive into Jitsu's architecture and capabilities, visit our [**Wiki**](docs/index.md).
 
 * [**Architecture Overview**](docs/index.md#4-layer-architecture): The 4-layer stack.
+* [**Ecosystem Landscape & SOTA**](docs/architecture/landscape.md): Comparative analysis vs. SOTA agents.
 * [**CLI Reference**](docs/CLI%20Reference.md): Typer CLI usage for `serve`.
 * [**MCP Tools Reference**](docs/MCP%20Tools%20Reference.md): Detailed documentation for the 9 core orchestrator tools.
 

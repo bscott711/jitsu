@@ -1,0 +1,61 @@
+[
+  {
+    "epic_id": "epic-v040-landscape",
+    "phase_id": "phase-1-create-landscape",
+    "module_scope": [
+      "docs/architecture"
+    ],
+    "instructions": "Create a new file at docs/architecture/landscape.md and populate it with the Jitsu vs. SOTA competitive analysis. The content should include sections on: What Jitsu Actually Is, Core Innovations (U-Curve, AST-First, Structured Directives, Recovery Loop), SOTA Landscape Comparison table, Strengths, and Gaps. Ensure high-quality markdown formatting.",
+    "context_targets": [],
+    "anti_patterns": [
+      "Don't deviate from the provided analysis content.",
+      "Don't forget to include the comparison table."
+    ],
+    "verification_commands": [
+      "test -f docs/architecture/landscape.md"
+    ],
+    "completion_criteria": [
+      "docs/architecture/landscape.md is created with the competitive analysis content."
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "epic-v040-landscape",
+    "phase_id": "phase-2-link-docs",
+    "module_scope": [
+      "README.md",
+      "docs/index.md"
+    ],
+    "instructions": "Update README.md and docs/index.md to link to the new docs/architecture/landscape.md. In README.md, add a link in a relevant section (e.g., Architecture or Philosophy). In docs/index.md, add it to the architecture section of the documentation index.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "README.md",
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/index.md",
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/landscape.md",
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Don't break existing links or formatting.",
+      "Don't add redundant links if they already exist."
+    ],
+    "verification_commands": [
+      "grep 'landscape.md' README.md",
+      "grep 'landscape.md' docs/index.md"
+    ],
+    "completion_criteria": [
+      "README.md contains a working link to the landscape document.",
+      "docs/index.md includes the landscape document in its index."
+    ],
+    "context_injection": null
+  }
+]

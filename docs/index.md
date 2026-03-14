@@ -40,6 +40,7 @@ The MCP server and CLI that exposes Jitsu tools to IDEs like Antigravity, Cursor
 ## Table of Contents
 
 - [**Architecture Overview**](Jitsu%20Architecture%20Overview.md): Deep dive into the design and workflow.
+- [**Ecosystem Landscape & SOTA**](architecture/landscape.md): Comparative analysis vs. SOTA agents.
 - [**CLI Command Reference**](CLI%20Reference.md): Guide to the `serve` command.
 - [**MCP Tools Reference**](MCP%20Tools%20Reference.md): Documentation for the 9 core tools.
 
