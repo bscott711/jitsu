@@ -12,7 +12,7 @@ from mcp.types import TextContent
 from jitsu.models.core import AgentDirective
 from jitsu.server.mcp_server import handle_call_tool, handle_list_tools, run_server, state_manager
 
-EXPECTED_TOOL_COUNT = 9
+EXPECTED_TOOL_COUNT = 10
 
 
 @pytest.mark.asyncio
@@ -30,6 +30,7 @@ async def test_list_tools() -> None:
     assert "jitsu_git_status" in names
     assert "jitsu_git_commit" in names
     assert "jitsu_plan_epic" in names
+    assert "jitsu_agent_plan" in names
 
 
 @pytest.mark.asyncio
@@ -417,3 +418,20 @@ async def test_plan_epic_failure() -> None:
 
         result = await handle_call_tool("jitsu_plan_epic", {"prompt": "Fail epic"})
         assert "Error: Failed to generate plan." in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_agent_plan_success() -> None:
+    """Test the jitsu_agent_plan tool."""
+    result = await handle_call_tool("jitsu_agent_plan", {"objective": "Test objective"})
+    assert isinstance(result[0], TextContent)
+    assert "Use your native reasoning to plan this objective: Test objective" in result[0].text
+    assert "AgentDirective" in result[0].text
+    assert '"epic_id"' in result[0].text  # Part of the schema
+
+
+@pytest.mark.asyncio
+async def test_agent_plan_missing_args() -> None:
+    """Test jitsu_agent_plan with missing arguments."""
+    result = await handle_call_tool("jitsu_agent_plan", {})
+    assert "Error: Missing 'objective' argument." in result[0].text
