@@ -1,9 +1,0 @@
-# Jitsu Justfile
-default: verify
-
-verify:
-	@echo "🧹 Verifying project..."
-	ruff check .
-	ruff format --check .
-	pyright .
-	pytest

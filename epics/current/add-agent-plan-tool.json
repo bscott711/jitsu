@@ -1,0 +1,45 @@
+[
+  {
+    "epic_id": "add-agent-plan-tool",
+    "phase_id": "phase-1-implement-tool-and-tests",
+    "module_scope": [
+      "src/jitsu/server/mcp_server.py",
+      "tests/server/test_server.py"
+    ],
+    "instructions": "Implement the jitsu_agent_plan MCP tool in src/jitsu/server/mcp_server.py. The tool must:\n1. Accept a single parameter: objective (str).\n2. Import AgentDirective from src/jitsu/models/core.py.\n3. Use AgentDirective.model_json_schema() to generate the JSON schema.\n4. Return a formatted string: 'Use your native reasoning to plan this objective: {objective}. You must generate a JSON array of AgentDirectives strictly matching this schema: {schema_json}. Write the resulting JSON directly to epics/planned/ using your file-writing capabilities. Do not execute the epic yet.'\n\nUpdate tests/server/test_server.py to cover this new tool with comprehensive tests that ensure 100% coverage. Tests should verify the tool's parameter acceptance, correct import, schema generation, and formatted output. Mock any external dependencies as needed.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/server/test_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/models/core.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not make any LLM API calls or external service requests within the tool implementation.",
+      "Do not bypass the Pydantic Gatekeeper by manually constructing JSON schema instead of using model_json_schema().",
+      "Do not hardcode the schema string; it must be dynamically generated from the AgentDirective model."
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The jitsu_agent_plan tool is implemented and returns the exact formatted string as specified.",
+      "tests/server/test_server.py includes tests covering the new tool with 100% coverage.",
+      "Running 'just verify' passes all tests and linting without errors."
+    ],
+    "context_injection": null
+  }
+]

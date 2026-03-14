@@ -1,4 +1,4 @@
-# **Layer 2: AST-First Providers**
+# **Layer 1: AST-First Providers**
 
 > **Automatic Documentation Guarantee:** This documentation is automatically synchronized by Jitsu's self-documenting workflow as part of its core process.
 

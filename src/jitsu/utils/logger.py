@@ -13,18 +13,6 @@ class LogManager:
     def __init__(self) -> None:
         """Initialize the logger manager context."""
         self._configured_loggers: set[str] = set()
-        self._quiet: bool = False
-
-    def is_quiet(self) -> bool:
-        """Check if quiet mode is enabled."""
-        return self._quiet
-
-    def set_quiet(self, *, enabled: bool) -> None:
-        """Set the quiet mode for all configured loggers."""
-        self._quiet = enabled
-        level = logging.ERROR if enabled else logging.INFO
-        for name in self._configured_loggers:
-            logging.getLogger(name).setLevel(level)
 
     def get_logger(self, name: str = "jitsu") -> logging.Logger:
         """
@@ -44,8 +32,7 @@ class LogManager:
         logger = logging.getLogger(name)
 
         if name not in self._configured_loggers:
-            level = logging.ERROR if self._quiet else logging.INFO
-            logger.setLevel(level)
+            logger.setLevel(logging.INFO)
             # CRITICAL: Do not propagate to the root logger. If another package
             # sets up a root logger on stdout, it would catch our logs and crash MCP.
             logger.propagate = False
@@ -73,27 +60,6 @@ def get_logger(name: str = "jitsu") -> logging.Logger:
     return _manager.get_logger(name)
 
 
-def set_quiet(*, enabled: bool) -> None:
-    """Toggle quiet mode globally."""
-    _manager.set_quiet(enabled=enabled)
-
-
-def is_quiet() -> bool:
-    """Check if quiet mode is enabled globally."""
-    return _manager.is_quiet()
-
-
 def secho(message: str, **kwargs: Any) -> None:  # noqa: ANN401
-    """
-    Wrap typer.secho to respect the global quiet mode.
-
-    If quiet mode is enabled, only messages with fg=typer.colors.RED
-    (errors) will be printed.
-    """
-    if _manager.is_quiet():
-        # Only allow red (errors) or explicit error-like colors
-        fg = kwargs.get("fg")
-        if fg != typer.colors.RED:
-            return
-
+    """Wrap typer.secho."""
     typer.secho(message, **kwargs)

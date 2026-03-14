@@ -391,7 +391,7 @@ async def test_handle_plan_epic_with_progress(
 
         # Retrieve the on_progress callback passed to generate_plan
         _, kwargs = mock_planner.generate_plan.call_args
-        on_progress = kwargs["on_progress"]
+        on_progress = kwargs["options"].on_progress
 
         # Call the callback
         await on_progress("Test message")
@@ -400,4 +400,4 @@ async def test_handle_plan_epic_with_progress(
         mock_stderr.assert_called_with("[* progress] Test message\n")
 
         # Verify MCP notification
-        mock_server.send_notification.assert_called_once()
+        mock_server.request_context.session.send_progress_notification.assert_called_once()

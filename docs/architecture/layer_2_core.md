@@ -1,4 +1,4 @@
-# **Layer 1: Core Engine**
+# **Layer 2: Core Engine**
 
 > **Automatic Documentation Guarantee:** This documentation is automatically synchronized by Jitsu's self-documenting workflow as part of its core process.
 
@@ -31,17 +31,9 @@ The `JitsuStateManager` manages the persistence of the entire orchestration loop
 - **Status Tracking**: Records `PhaseReports` and aggregates progress.
 - **Persistence**: Ensures state survives process restarts via local file storage or SQLite.
 
-### **`JitsuOrchestrator`**
-
-The high-level manager that coordinates the autonomous loop between planning, execution, and reporting.
-
 ### **`JitsuPlanner`**
 
-The "brain" that translates natural language goals into a structured `EpicBlueprint` and `AgentDirectives`.
-
-### **`JitsuExecutor`**
-
-The "hands" of the system. It handles the ReAct loop, tool calling, and the AST-aware recovery cycle when errors occur.
+The "brain" that translates natural language goals into a structured `EpicBlueprint` and `AgentDirectives`. This logic powers the `jitsu_plan_epic` MCP tool.
 
 ### **`JitsuRunner`**
 
@@ -55,6 +47,6 @@ Layer 1 facilitates the following loop:
 
 1. **State Manager** receives an Epic.
 2. **Agent** pulls the next `AgentDirective`.
-3. **Compiler** resolves the requested `ContextTargets` via Layer 2 Providers.
+3. **Compiler** resolves the requested `ContextTargets` via Layer 1 Providers.
 4. **Agent** executes work and returns a `PhaseReport`.
 5. **State Manager** updates the status and prepares the next phase.

@@ -1,12 +1,12 @@
 # Jitsu MCP Tools Reference
 
-Jitsu exposes a suite of tools via the Model Context Protocol (MCP) to allow IDE agents (Antigravity, Cursor, Windsurf) to self-orchestrate and pull context dynamically.
+Jitsu exposes a suite of **9 core tools** via the Model Context Protocol (MCP) to allow IDE agents to self-orchestrate and pull context dynamically.
 
 ## 1. Orchestration & Queue Management
 
 ### `jitsu_get_next_phase`
 
-- **Description**: Pulls the next `AgentDirective` from the server's internal queue. This is the primary entry point for agent execution. It automatically compiles the required context using the AST-first fallback compiler.
+- **Description**: Pulls the next `AgentDirective` from the server's internal queue. This is the primary entry point for agent execution. It automatically compiles the required context using the AST-first **ContextCompiler**.
 - **Usage**: Call this *first* when starting a new session or after reporting a successful phase.
 
 ### `jitsu_report_status`
@@ -17,12 +17,11 @@ Jitsu exposes a suite of tools via the Model Context Protocol (MCP) to allow IDE
   - `status` (enum): `SUCCESS`, `FAILED`, `STUCK`.
   - `artifacts_generated` (array, optional): Files created or modified.
   - `agent_notes` (string, optional): Context for the next phase or human review.
-  - `verification_output` (string, optional): Output from `just verify`.
+  - `verification_output` (string, optional): Output from the verification step (e.g., `just verify`).
 
 ### `jitsu_inspect_queue`
 
-- **Description**: Returns a simplified list of all pending phases currently in the state manager.
-- **Usage**: Useful for an agent to understand its remaining workload.
+- **Description**: Returns a simplified list of all pending phases currently in the state manager's queue.
 
 ## 2. Dynamic Context & Progressive Disclosure
 
@@ -31,19 +30,26 @@ Jitsu exposes a suite of tools via the Model Context Protocol (MCP) to allow IDE
 - **Description**: Allows an agent to request additional context "Just-In-Time" if the initial phase directive didn't include enough information.
 - **Parameters**:
   - `target_identifier` (string): The symbol, file, or tree path.
-  - `provider_name` (string): Options include `file`, `pydantic`, `ast`, `tree`, `env_var`, `git`, `markdown_ast`. Defaults to `file`.
+  - `provider_name` (string): Options include `file`, `pydantic`, `ast`, `tree`, `env_var`, `git`. Defaults to `file`.
 
 ### `jitsu_get_planning_context`
 
 - **Description**: Bootstraps the agent for self-orchestration by providing a broad repository skeleton (`DirectoryTreeProvider`) and the contents of `.jitsurules`.
 - **Usage**: Call this before generating an epic implementation plan.
 
-## 3. Self-Orchestration
+## 3. Planning & Submission
+
+### `jitsu_plan_epic`
+
+- **Description**: A multi-pass planning tool that transforms a high-level natural language prompt into a structured, validated `Epic` (a list of `AgentDirectives`).
+- **Parameters**:
+  - `prompt` (string): The user's objective (e.g., "Refactor the auth module").
+  - `relevant_files` (array, optional): A list of files to specifically analyze during planning.
 
 ### `jitsu_submit_epic`
 
-- **Description**: Allows an agent to dynamically submit an array of `AgentDirective` JSON objects directly into the server's queue.
-- **Usage**: Used to spawn sub-tasks or implement an epic without dropping back to the CLI.
+- **Description**: Allows an agent to submit an array of `AgentDirective` objects directly into the server's queue.
+- **Usage**: Used to load a generated plan into the orchestrator's state.
 
 ## 4. Git Lifecycle Management
 
@@ -53,8 +59,7 @@ Jitsu exposes a suite of tools via the Model Context Protocol (MCP) to allow IDE
 
 ### `jitsu_git_commit`
 
-- **Description**: Commits all active changes using a strict format.
+- **Description**: Commits all active changes and optionally syncs them.
 - **Parameters**:
   - `message` (string): A Conventional Commit message (e.g., `feat: added routing`).
   - `sync` (boolean): If true, runs `git push` after committing.
-- **Note**: This delegates to the repository's `just message` and `just commit` recipes to ensure security and pre-commit hooks are respected.

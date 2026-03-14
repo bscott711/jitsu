@@ -1,6 +1,6 @@
 # **Jitsu**
 
-Welcome to the **Jitsu** documentation. Jitsu is an **AST-first, strictly-typed AI orchestrator** designed to eliminate "Prompt Debt" and "Context Drift" in AI-capable IDEs.
+Welcome to the **Jitsu** documentation. Jitsu is a **JIT Context & Workflow Orchestrator** designed to eliminate "Prompt Debt" and "Context Drift" in AI-capable IDEs.
 
 ## Our Mission
 
@@ -17,33 +17,32 @@ Key pillars of our mission:
 
 ## 4-Layer Architecture
 
-Jitsu is built on a robust, layered foundation to ensure high fidelity and autonomous execution:
+Jitsu is built on a robust, layered foundation to ensure high fidelity and reliable orchestration:
 
-### [Layer 0: The Domain (Models)](Jitsu%20Architecture%20Overview.md#layer-0-strict-pydantic-models-the-core)
+### [Layer 0: The Domain (Models)](architecture/layer_0_domain.md)
 
 Rigorous Pydantic models defining the communication protocol between the orchestrator and the agent.
 
-### [Layer 1: The Engine (Core & State)](Jitsu%20Architecture%20Overview.md#layer-1-core--state-the-engine)
-
-The logic layer that parses directives, manages task lifecycles, and compiles JIT context manifests.
-
-### [Layer 2: The Eyes (AST Providers)](Jitsu%20Architecture%20Overview.md#layer-2-ast-first-providers-the-eyes)
+### [Layer 1: The Eyes (AST Providers)](architecture/layer_1_providers.md)
 
 Specialized providers that extract structural skeletons (AST), JSON schemas, and directory trees from the filesystem.
 
-### [Layer 3: The Transport (MCP Server)](Jitsu%20Architecture%20Overview.md#layer-3-self-orchestrating-mcp-server-the-transport-layer)
+### [Layer 2: The Engine (Core & State)](architecture/layer_2_core.md)
 
-The self-orchestrating MCP server and CLI that exposes Jitsu tools to IDEs like Antigravity, Cursor, and Windsurf.
+The logic layer that parses directives, manages task lifecycles, and compiles JIT context manifests.
+
+### [Layer 3: The Transport (MCP Server)](architecture/layer_3_transport.md)
+
+The MCP server and CLI that exposes Jitsu tools to IDEs like Antigravity, Cursor, and Windsurf via stdio.
 
 ---
 
 ## Table of Contents
 
-- [**Architecture Overview**](Jitsu%20Architecture%20Overview.md): Deep dive into the 1.0 design and autonomous loop.
-- [**CLI Command Reference**](CLI%20Reference.md): Guide to `init`, `serve`, `submit`, and `queue` commands.
-- [**MCP Tools Reference**](MCP%20Tools%20Reference.md): Documentation for the 8 default tools shipped with the Jitsu orchestrator.
-- [**Lead Dev Understanding**](Lead%20Dev%20Understanding.md): High-level concepts for project leads.
-- [**Module Audit**](module_audit/index.md): Automated architecture and dependency audits.
+- [**Architecture Overview**](Jitsu%20Architecture%20Overview.md): Deep dive into the design and workflow.
+- [**Ecosystem Landscape & SOTA**](architecture/landscape.md): Comparative analysis vs. SOTA agents.
+- [**CLI Command Reference**](CLI%20Reference.md): Guide to the `serve` command.
+- [**MCP Tools Reference**](MCP%20Tools%20Reference.md): Documentation for the 9 core tools.
 
 ---
 

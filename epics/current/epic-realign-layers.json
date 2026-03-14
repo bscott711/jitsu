@@ -1,0 +1,65 @@
+[
+  {
+    "epic_id": "epic-realign-layers",
+    "phase_id": "phase-migrate-docs",
+    "module_scope": ["docs/"],
+    "instructions": "Rename architecture documentation files and update all internal references and layer definitions to reflect the new hierarchy: Layer 0 (Models), Layer 1 (Providers), Layer 2 (Core), Layer 3 (Server).\n\n1.  **Rename Files**:\n    *   Rename `docs/architecture/layer_1_core.md` to `docs/architecture/layer_2_core.md`.\n    *   Rename `docs/architecture/layer_2_providers.md` to `docs/architecture/layer_1_providers.md`.\n\n2.  **Update `docs/architecture/landscape.md`**:\n    *   Swap the definitions for Layer 1 and Layer 2 in the 'What Jitsu Actually Is' section.\n    *   Ensure Layer 1 is 'Providers' and Layer 2 is 'Core'.\n\n3.  **Update `docs/index.md`**:\n    *   Swap the sections for Layer 1 and Layer 2.\n    *   Update the links to point to the renamed files (`layer_1_providers.md` and `layer_2_core.md`).\n\n4.  **Update `docs/Jitsu Architecture Overview.md`**:\n    *   Swap the subsections for Layer 1 and Layer 2 in the 'Architecture Layers' section.\n    *   Ensure descriptions match the new numbering.\n\n5.  **Update Layer-Specific Docs**:\n    *   In `docs/architecture/layer_1_providers.md` (formerly layer_2): Update header to 'Layer 1: AST-First Providers'.\n    *   In `docs/architecture/layer_2_core.md` (formerly layer_1): Update header to 'Layer 2: Core Engine' and update references to 'Layer 1 Providers' in the 'Orchestration Loop' section.\n    *   In `docs/architecture/layer_3_transport.md`: Update reference in 'ToolHandlers' section to 'state managed by Layer 2'.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/landscape.md",
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/index.md",
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/Jitsu Architecture Overview.md",
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_1_core.md",
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_2_providers.md",
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_3_transport.md",
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "completion_criteria": [
+      "Layer 1 and Layer 2 documentation files are renamed successfully.",
+      "All high-level documentation (Landscape, Index, Overview) reflects the new layer hierarchy.",
+      "Internal links and headers within the layer-specific files are correct."
+    ]
+  },
+  {
+    "epic_id": "epic-realign-layers",
+    "phase_id": "phase-update-configs",
+    "module_scope": ["pyproject.toml"],
+    "instructions": "Update the architectural enforcement configuration to match the new layer numbering.\n\n1.  **Update `pyproject.toml`**:\n    *   In the `[tool.importlinter.contracts]` section, update the comments for `jitsu.core` to 'Layer 2' and `jitsu.providers` to 'Layer 1'.\n\n2.  **Verify Integrity**:\n    *   Run `just verify` to ensure the import linter still validates the unidirectional graph (server -> core -> providers -> models) and that all tests pass.\n    *   Confirm 100% coverage and zero linting/typing errors.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "pyproject.toml",
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "verification_commands": [
+      "just verify"
+    ],
+    "completion_criteria": [
+      "`pyproject.toml` correctly labels the layers in its import linter configuration.",
+      "`just verify` passes with 100% coverage and no architectural violations."
+    ]
+  }
+]

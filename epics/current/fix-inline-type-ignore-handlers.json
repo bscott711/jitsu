@@ -1,0 +1,45 @@
+[
+  {
+    "epic_id": "fix-inline-type-ignore-handlers",
+    "phase_id": "investigate-and-fix-type-ignore",
+    "module_scope": [
+      "src/jitsu/server"
+    ],
+    "instructions": "Investigate the type ignore at handlers.py:181. The issue is: `await self.server.send_notification(  # type: ignore[reportAttributeAccessIssue]`. Determine the root cause by analyzing the `mcp.server.Server` type and the `send_notification` method. The fix must be type-safe, removing the inline ignore. If the issue is due to a missing attribute on the Server class, ensure proper typing via inheritance or a protocol. If it's a scope issue, adjust the type hints accordingly. The final code must pass `just lint`.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/handlers.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/mcp_server.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/server/test_handlers.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not add a new `# type: ignore` comment to suppress the error.",
+      "Do not change the method signature of `send_notification` in a way that breaks existing callers.",
+      "Do not import raw `mcp.server` types into the core layer; maintain provider isolation."
+    ],
+    "verification_commands": [
+      "just lint",
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The inline `# type: ignore[reportAttributeAccessIssue]` is removed from handlers.py:181.",
+      "All type checks pass with `just lint`.",
+      "All tests pass with `just verify`."
+    ],
+    "context_injection": null
+  }
+]

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import anyio
 from mcp import types
+from mcp.server import Server
 from pydantic import ValidationError
 
 from jitsu.core.compiler import ContextCompiler
@@ -17,6 +18,7 @@ from jitsu.core.runner import CommandRunner
 from jitsu.core.state import JitsuStateManager
 from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective, PhaseReport, PhaseStatus
+from jitsu.models.execution import PlannerOptions
 from jitsu.providers import DirectoryTreeProvider, GitProvider, ProviderRegistry
 from jitsu.server.registry import ToolRegistry
 
@@ -28,7 +30,7 @@ class ToolHandlers:
         self,
         state_manager: JitsuStateManager,
         context_compiler: ContextCompiler,
-        server: typing.Any | None = None,  # noqa: ANN401
+        server: Server | None = None,
     ) -> None:
         """Initialize the tool handlers."""
         self.state_manager = state_manager
@@ -176,19 +178,14 @@ class ToolHandlers:
 
             if token is not None and self.server:
                 with contextlib.suppress(Exception):
-                    await self.server.send_notification(
-                        types.ProgressNotification(
-                            params=types.ProgressNotificationParams(
-                                progressToken=token,
-                                progress=0,  # Indeterminate
-                                total=None,
-                            )
-                        )
+                    await self.server.request_context.session.send_progress_notification(
+                        progress_token=token,
+                        progress=0.0,  # Indeterminate
                     )
 
         planner = JitsuPlanner(objective=prompt, relevant_files=relevant_files)
         # 2. Inside the tool handler, instantiate the JitsuPlanner and call its planning method
-        await planner.generate_plan(on_progress=on_progress)
+        await planner.generate_plan(options=PlannerOptions(on_progress=on_progress))
 
         if not planner.directives:
             return [types.TextContent(type="text", text="Error: Failed to generate plan.")]
