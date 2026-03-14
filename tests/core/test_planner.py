@@ -14,7 +14,11 @@ from jitsu.models.core import (
     PhaseBlueprint,
     TargetResolutionMode,
 )
-from jitsu.models.execution import PlannerStage, PlannerStatusUpdate
+from jitsu.models.execution import (
+    PlannerOptions,
+    PlannerStage,
+    PlannerStatusUpdate,
+)
 from jitsu.prompts import PLANNER_MACRO_PROMPT, VERIFICATION_RULE
 
 
@@ -54,7 +58,7 @@ async def test_planner_plan_generation_success() -> None:
         patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
     ):
-        plan = await planner.generate_plan(on_progress=on_progress_mock)
+        plan = await planner.generate_plan(options=PlannerOptions(on_progress=on_progress_mock))
 
     assert len(plan) == 1
     assert plan[0].epic_id == "e1"
@@ -181,7 +185,7 @@ async def test_planner_generate_plan_verbose() -> None:
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
         patch("jitsu.core.planner.typer.secho") as mock_secho,
     ):
-        await planner.generate_plan(verbose=True)
+        await planner.generate_plan(options=PlannerOptions(verbose=True))
 
     # Verify debug info was printed
     assert mock_secho.called
@@ -291,7 +295,9 @@ async def test_planner_generate_plan_with_injection() -> None:
         patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
     ):
-        plan = await planner.generate_plan(include_paths=["new.py"], exclude_paths=["old.py"])
+        plan = await planner.generate_plan(
+            options=PlannerOptions(include_paths=["new.py"], exclude_paths=["old.py"])
+        )
 
     expected_len_1 = 1
     assert len(plan) == expected_len_1
@@ -321,7 +327,7 @@ async def test_planner_structured_callback() -> None:
         patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
     ):
-        await planner.generate_plan(on_status=on_status)
+        await planner.generate_plan(options=PlannerOptions(on_status=on_status))
 
     assert len(status_updates) > 0
     assert any(u.stage == PlannerStage.ANALYZING_SCOPE for u in status_updates)
@@ -355,7 +361,7 @@ async def test_planner_sync_callbacks() -> None:
         patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
     ):
-        await planner.generate_plan(on_progress=on_progress)
+        await planner.generate_plan(options=PlannerOptions(on_progress=on_progress))
 
     assert len(msgs) > 0
     assert len(status_updates) > 0
@@ -381,6 +387,6 @@ async def test_planner_async_legacy_callback() -> None:
         patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
     ):
-        await planner.generate_plan(on_progress=on_progress)
+        await planner.generate_plan(options=PlannerOptions(on_progress=on_progress))
 
     assert len(msgs) > 0

@@ -5,7 +5,7 @@ import json
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Protocol, get_args, runtime_checkable
+from typing import Any, get_args
 
 import anyio
 import typer
@@ -19,7 +19,12 @@ from jitsu.models.core import (
     EpicBlueprint,
     TargetResolutionMode,
 )
-from jitsu.models.execution import PlannerStage, PlannerStatusUpdate
+from jitsu.models.execution import (
+    PlannerOptions,
+    PlannerStage,
+    PlannerStatusCallback,
+    PlannerStatusUpdate,
+)
 from jitsu.prompts import (
     PLANNER_BASE_PROMPT,
     PLANNER_MACRO_PROMPT,
@@ -29,15 +34,6 @@ from jitsu.prompts import (
 from jitsu.providers.tree import DirectoryTreeProvider
 
 logger = logging.getLogger(__name__)
-
-
-@runtime_checkable
-class PlannerStatusCallback(Protocol):
-    """Protocol for planner status update callbacks."""
-
-    async def __call__(self, update: PlannerStatusUpdate) -> None:
-        """Handle a status update."""
-        ...
 
 
 class JitsuPlanner:
@@ -94,18 +90,13 @@ class JitsuPlanner:
             if inspect.isawaitable(res):
                 await res
 
-    async def generate_plan(  # noqa: PLR0913
+    async def generate_plan(
         self,
-        model: str | None = None,
-        on_progress: Callable[[str], Any] | None = None,
-        *,
-        verbose: bool = False,
-        include_paths: list[str] | None = None,
-        exclude_paths: list[str] | None = None,
-        on_status: PlannerStatusCallback | None = None,
+        options: PlannerOptions | None = None,
     ) -> list[AgentDirective]:
         """Query the LLM and generate a validated list of directives using two passes."""
-        _model = model or settings.planner_model
+        opts = options or PlannerOptions()
+        _model = opts.model or settings.planner_model
         client = self._client if self._client is not None else LLMClientFactory.create()
 
         # Extract allowed provider names for prompt engineering
@@ -137,8 +128,8 @@ class JitsuPlanner:
             PlannerStage.ANALYZING_SCOPE,
             "Analyzing project scope...",
             10.0,
-            on_progress,
-            on_status,
+            opts.on_progress,
+            opts.on_status,
         )
 
         # Pass 1: Macro - Generate Epic Blueprint
@@ -146,8 +137,8 @@ class JitsuPlanner:
             PlannerStage.DRAFTING_PHASES,
             "Drafting Epic Blueprint...",
             20.0,
-            on_progress,
-            on_status,
+            opts.on_progress,
+            opts.on_status,
         )
 
         blueprint_system_prompt = base_system_prompt + PLANNER_MACRO_PROMPT
@@ -161,7 +152,7 @@ class JitsuPlanner:
             ],
         )
 
-        if verbose:
+        if opts.verbose:
             typer.secho("\n[DEBUG] Epic Blueprint:", fg=typer.colors.YELLOW, bold=True, err=True)
             typer.secho(blueprint.model_dump_json(indent=2), fg=typer.colors.YELLOW, err=True)
 
@@ -169,8 +160,8 @@ class JitsuPlanner:
             PlannerStage.ANALYZING_SCOPE,
             "Analyzing module scope and drafting phases...",
             40.0,
-            on_progress,
-            on_status,
+            opts.on_progress,
+            opts.on_status,
         )
 
         # Pass 2: Micro - Elaborate each phase
@@ -181,8 +172,8 @@ class JitsuPlanner:
                 PlannerStage.DRAFTING_PHASES,
                 f"Elaborating Phase {i + 1} of {len(blueprint.phases)} ({phase.phase_id})...",
                 progress,
-                on_progress,
-                on_status,
+                opts.on_progress,
+                opts.on_status,
             )
 
             phase_system_prompt = (
@@ -205,7 +196,7 @@ class JitsuPlanner:
                 ],
             )
 
-            if verbose:
+            if opts.verbose:
                 typer.secho(
                     f"\n[DEBUG] Phase {i + 1} Directive ({phase.phase_id}):",
                     fg=typer.colors.CYAN,
@@ -220,17 +211,17 @@ class JitsuPlanner:
             PlannerStage.VALIDATING_SCHEMA,
             "Validating schema and finalizing project scope...",
             90.0,
-            on_progress,
-            on_status,
+            opts.on_progress,
+            opts.on_status,
         )
 
         # Apply deterministic context injection/exclusion
         self.directives = self.compile_phases(
-            self.directives, include_paths=include_paths, exclude_paths=exclude_paths
+            self.directives, include_paths=opts.include_paths, exclude_paths=opts.exclude_paths
         )
 
         await self._emit_status(
-            PlannerStage.COMPLETE, "Planning complete.", 100.0, on_progress, on_status
+            PlannerStage.COMPLETE, "Planning complete.", 100.0, opts.on_progress, opts.on_status
         )
 
         return self.directives
