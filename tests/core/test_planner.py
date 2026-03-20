@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from jitsu.core.client import LLMClientFactory
 from jitsu.core.planner import JitsuPlanner
 from jitsu.models.core import (
     AgentDirective,
@@ -20,6 +21,12 @@ from jitsu.models.execution import (
     PlannerStatusUpdate,
 )
 from jitsu.prompts import PLANNER_MACRO_PROMPT, TOOLCHAIN_CONSTRAINTS, VERIFICATION_RULE
+
+
+@pytest.fixture(autouse=True)
+def _clean_cache() -> None:
+    """Clear LLMClientFactory cache before each test."""
+    LLMClientFactory.clear_cache()
 
 
 @pytest.mark.asyncio
