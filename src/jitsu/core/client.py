@@ -1,12 +1,10 @@
-"""Factory for creating an instructor-wrapped LLM client."""
+"""Factory for creating a raw AsyncOpenAI LLM client."""
 
 import os
 import threading
 from typing import ClassVar
 
 import dotenv
-import instructor
-from instructor.core.client import Instructor
 from openai import AsyncOpenAI
 
 
@@ -16,20 +14,20 @@ class LLMClientFactory:
     DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
     # Class-level cache for singleton behavior
-    _instance_cache: ClassVar[dict[str, Instructor]] = {}
+    _instance_cache: ClassVar[dict[str, AsyncOpenAI]] = {}
     _lock: ClassVar[threading.Lock] = threading.Lock()
     _env_loaded: ClassVar[bool] = False
 
     @classmethod
-    def create(cls, base_url: str = DEFAULT_BASE_URL) -> Instructor:
+    def create(cls, base_url: str = DEFAULT_BASE_URL) -> AsyncOpenAI:
         """
-        Load environment once, then return cached instructor client.
+        Load environment once, then return cached AsyncOpenAI client.
 
         Args:
             base_url: The base URL for the OpenAI-compatible API.
 
         Returns:
-            A cached instructor client.
+            A cached AsyncOpenAI client.
 
         Raises:
             RuntimeError: If the OPENROUTER_API_KEY environment variable is not set.
@@ -57,12 +55,10 @@ class LLMClientFactory:
                 msg = "OPENROUTER_API_KEY environment variable is not set"
                 raise RuntimeError(msg)
 
-            client = instructor.from_openai(
-                AsyncOpenAI(
-                    base_url=base_url,
-                    api_key=api_key,
-                ),
-                mode=instructor.Mode.JSON,
+            # FIX: Return raw AsyncOpenAI client, not Instructor-wrapped
+            client = AsyncOpenAI(
+                base_url=base_url.strip(),  # Also fix trailing whitespace in URL
+                api_key=api_key,
             )
             cls._instance_cache[base_url] = client
             return client
