@@ -10,6 +10,7 @@ thoughts
 
 # Pytest Fixtures
 clear_state
+_clean_cache
 
 # Prompts
 TAG_INSTRUCTIONS

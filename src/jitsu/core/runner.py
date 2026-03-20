@@ -3,10 +3,33 @@
 import shlex
 import shutil
 import subprocess
+from functools import lru_cache
 
 
 class CommandRunner:
     """Encapsulates subprocess calls with dynamic binary resolution."""
+
+    @staticmethod
+    @lru_cache(maxsize=32)
+    def _resolve_binary(binary: str) -> str:
+        """
+        Resolve binary path with LRU caching.
+
+        Args:
+            binary: The binary name to resolve (e.g., "just", "git").
+
+        Returns:
+            The full path to the binary.
+
+        Raises:
+            FileNotFoundError: If the binary cannot be found in PATH.
+
+        """
+        resolved = shutil.which(binary)
+        if resolved is None:
+            msg = f"Executable '{binary}' not found in PATH."
+            raise FileNotFoundError(msg)
+        return resolved
 
     @staticmethod
     def run(cmd: str, *, check: bool = False) -> subprocess.CompletedProcess[str]:
@@ -29,13 +52,7 @@ class CommandRunner:
 
         """
         args = shlex.split(cmd)
-        binary = args[0]
-
-        resolved = shutil.which(binary)
-        if resolved is None:
-            msg = f"Executable '{binary}' not found in PATH."
-            raise FileNotFoundError(msg)
-        args[0] = resolved
+        args[0] = CommandRunner._resolve_binary(args[0])
 
         return subprocess.run(
             args,
@@ -62,13 +79,7 @@ class CommandRunner:
 
         """
         resolved_args = list(args)
-        binary = resolved_args[0]
-
-        resolved = shutil.which(binary)
-        if resolved is None:
-            msg = f"Executable '{binary}' not found in PATH."
-            raise FileNotFoundError(msg)
-        resolved_args[0] = resolved
+        resolved_args[0] = CommandRunner._resolve_binary(resolved_args[0])
 
         return subprocess.run(
             resolved_args,
@@ -76,3 +87,13 @@ class CommandRunner:
             text=True,
             check=check,
         )
+
+    @staticmethod
+    def clear_binary_cache() -> None:
+        """
+        Clear the binary resolution cache.
+
+        Useful for testing or when PATH changes during execution.
+
+        """
+        CommandRunner._resolve_binary.cache_clear()
