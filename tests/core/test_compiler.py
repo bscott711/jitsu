@@ -469,3 +469,12 @@ async def test_compile_required_target_failure() -> None:
     # Verify the [FAILED] marker appears for required targets
     assert "### [FAILED] missing.py" in res
     assert "Unknown provider 'file' or resolution failed for 'missing.py'." in res
+
+
+@pytest.mark.asyncio
+async def test_resolve_targets_empty() -> None:
+    """Test that _resolve_targets returns empty lists with no input targets."""
+    compiler = ContextCompiler()
+    parts, manifest = await compiler._resolve_targets([])
+    assert parts == []
+    assert manifest == []
