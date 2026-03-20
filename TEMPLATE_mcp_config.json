@@ -1,0 +1,19 @@
+{
+    "mcpServers": {
+        "jitsu": {
+            "command": "bash",
+            "args": [
+                "-c",
+                "cd /Users/minesbioimaging/dev/jitsu && uv run jitsu serve"
+            ],
+            "env": {
+                "HOME": "/Users/minesbioimaging",
+                "LOGNAME": "minesbioimaging",
+                "PATH": "/Users/minesbioimaging/.npm/_npx/5a9d879542beca3a/node_modules/.bin:/Users/minesbioimaging/dev/jitsu/node_modules/.bin:/Users/minesbioimaging/dev/node_modules/.bin:/Users/minesbioimaging/node_modules/.bin:/Users/node_modules/.bin:/node_modules/.bin:/Users/minesbioimaging/.nvm/versions/node/v23.11.0/lib/node_modules/npm/node_modules/@npmcli/run-script/lib/node-gyp-bin:/Users/minesbioimaging/.antigravity/antigravity/bin:/Users/minesbioimaging/bin:/Users/minesbioimaging/.nvm/versions/node/v23.11.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/opt/X11/bin:/Library/Apple/usr/bin:/Users/minesbioimaging/.antigravity/antigravity/bin:/Users/minesbioimaging/bin:/Users/minesbioimaging/.nvm/versions/node/v23.11.0/bin:/Users/minesbioimaging/.local/bin:/Users/minesbioimaging/go/bin",
+                "SHELL": "/bin/zsh",
+                "TERM": "xterm-256color",
+                "USER": "minesbioimaging"
+            }
+        }
+    }
+}

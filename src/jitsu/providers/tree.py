@@ -26,6 +26,11 @@ class DirectoryTreeProvider(BaseProvider):
         ".ruff_cache",
         "node_modules",
         "epics",
+        ".complexipy_cache",
+        ".import_linter_cache",
+        ".DS_Store",
+        ".vscode",
+        ".coverage",
     }
 
     @property
