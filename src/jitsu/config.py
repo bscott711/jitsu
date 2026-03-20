@@ -11,8 +11,8 @@ class JitsuSettings(BaseSettings):
     or a .env file.
     """
 
-    planner_model: str = "openrouter/hunter-alpha"
-    executor_model: str = "openrouter/hunter-alpha"
+    planner_model: str = "nvidia/nemotron-3-super-120b-a12b:free"
+    executor_model: str = "nvidia/nemotron-3-super-120b-a12b:free"
     backup_model: str = "stepfun/step-3.5-flash:free"
 
     # Support reading from .env or jitsu.toml (via pydantic-settings)

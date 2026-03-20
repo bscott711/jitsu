@@ -62,6 +62,7 @@ class JitsuPlanner:
         self._client = client
         self.on_status = on_status
         self.directives: list[AgentDirective] = []
+        self.epic_id: str | None = None
 
     async def _emit_status(
         self,
@@ -152,6 +153,8 @@ class JitsuPlanner:
             ],
         )
 
+        self.epic_id = blueprint.epic_id
+
         if opts.verbose:
             typer.secho("\n[DEBUG] Epic Blueprint:", fg=typer.colors.YELLOW, bold=True, err=True)
             typer.secho(blueprint.model_dump_json(indent=2), fg=typer.colors.YELLOW, err=True)
@@ -165,7 +168,7 @@ class JitsuPlanner:
         )
 
         # Pass 2: Micro - Elaborate each phase
-        self.directives: list[AgentDirective] = []
+        self.directives = []
         for i, phase in enumerate(blueprint.phases):
             progress = 40.0 + (50.0 * (i / len(blueprint.phases)))
             await self._emit_status(

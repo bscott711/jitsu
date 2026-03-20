@@ -19,11 +19,18 @@ context_compiler = ContextCompiler()
 # Initialize the MCP Server
 app = Server("jitsu")
 
+# ✅ Define tool_registry BEFORE using it in decorators
+tool_registry = ToolRegistry()
+
+# Initialize handlers and register all tools
+handlers = ToolHandlers(state_manager, context_compiler, server=app)
+handlers.register_all(tool_registry)
+
 
 @app.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
     """List available Jitsu tools."""
-    return tool_registry.get_tools()
+    return tool_registry.get_tools()  # ✅ Now works
 
 
 @app.call_tool()
@@ -34,24 +41,16 @@ async def handle_call_tool(
     return await tool_registry.execute(name, arguments)
 
 
-tool_registry = ToolRegistry()
-
-# Initialize handlers and register all tools
-handlers = ToolHandlers(state_manager, context_compiler, server=app)
-handlers.register_all(tool_registry)
-
-
 async def handle_agent_plan(arguments: dict[str, object] | None) -> list[types.TextContent]:
     """Handle the 'jitsu_agent_plan' tool request."""
     if not arguments or "objective" not in arguments:
         return [types.TextContent(type="text", text="Error: Missing 'objective' argument.")]
 
     objective = str(arguments["objective"])
-
     schema_json = json.dumps(AgentDirective.model_json_schema(), indent=2)
 
     msg = (
-        f"Use your native reasoning to plan this objective: {objective}. "
+        f"Use `jitsu / plan_epic` to plan this objective: {objective}. "
         f"You must generate a JSON array of AgentDirectives strictly matching this schema: {schema_json}. "
         f"Write the resulting JSON directly to epics/planned/ using your file-writing capabilities. "
         f"Do not execute the epic yet."
@@ -59,6 +58,7 @@ async def handle_agent_plan(arguments: dict[str, object] | None) -> list[types.T
     return [types.TextContent(type="text", text=msg)]
 
 
+# Register the legacy agent plan tool
 tool_registry.register(
     types.Tool(
         name="jitsu_agent_plan",

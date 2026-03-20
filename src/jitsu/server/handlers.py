@@ -109,11 +109,9 @@ class ToolHandlers:
         self, _arguments: dict[str, object] | None
     ) -> list[types.TextContent]:
         """Handle 'get_planning_context' tool request."""
-        # 1. Get repo skeleton
         tree_provider = DirectoryTreeProvider(Path.cwd())
         skeleton = await tree_provider.resolve(".")
 
-        # 2. Read .jitsurules
         rules_path = anyio.Path(Path.cwd()) / ".jitsurules"
         if await rules_path.exists():
             rules_content = await rules_path.read_text()
@@ -151,6 +149,77 @@ class ToolHandlers:
         except RuntimeError as e:
             return [types.TextContent(type="text", text=f"Internal Error: {e!s}")]
 
+    def _extract_progress_token(self, arguments: dict[str, object] | None) -> str | int | None:
+        """Extract progress token from arguments metadata."""
+        if not arguments:
+            return None
+
+        metadata = arguments.get("_metadata")
+        if not isinstance(metadata, dict):
+            return None
+
+        metadata_dict = typing.cast("dict[typing.Any, typing.Any]", metadata)
+        candidate = metadata_dict.get("progressToken")
+
+        if isinstance(candidate, (str, int)):
+            return candidate
+        return None
+
+    async def _send_progress_notification(self, token: str | int | None, message: str) -> None:
+        """Send progress notification to MCP client if supported."""
+        sys.stderr.write(f"[* progress] {message}\n")
+        sys.stderr.flush()
+
+        if token is not None and self.server:
+            with contextlib.suppress(Exception):
+                await self.server.request_context.session.send_progress_notification(
+                    progress_token=token,
+                    progress=0.0,
+                )
+
+    async def _create_progress_callback(
+        self, arguments: dict[str, object] | None
+    ) -> typing.Callable[[str], typing.Awaitable[None]]:
+        """Create a progress callback closure with captured token."""
+        token = self._extract_progress_token(arguments)
+
+        async def on_progress(msg: str) -> None:
+            await self._send_progress_notification(token, msg)
+
+        return on_progress
+
+    async def _execute_plan_workflow(
+        self,
+        prompt: str,
+        relevant_files: list[str],
+        on_progress: typing.Callable[[str], typing.Awaitable[None]],
+    ) -> tuple[str, str] | None:
+        """
+        Execute the full planning workflow.
+
+        Returns:
+            Tuple of (epic_id, rel_path) on success, None on failure.
+
+        """
+        planner = JitsuPlanner(objective=prompt, relevant_files=relevant_files)
+        await planner.generate_plan(options=PlannerOptions(on_progress=on_progress))
+
+        if not planner.directives:
+            return None
+
+        if not planner.epic_id:
+            return None
+
+        storage = EpicStorage(Path.cwd())
+        path = storage.get_current_path(planner.epic_id)
+        planner.save_plan(path)
+        rel_path = storage.rel_path(path)
+
+        for directive in planner.directives:
+            self.state_manager.queue_directive(directive)
+
+        return (planner.epic_id, rel_path)
+
     async def handle_plan_epic(
         self, arguments: dict[str, object] | None
     ) -> list[types.TextContent]:
@@ -161,44 +230,13 @@ class ToolHandlers:
         prompt = str(arguments["prompt"])
         relevant_files = typing.cast("list[str]", arguments.get("relevant_files", []))
 
-        async def on_progress(msg: str) -> None:
-            """Safe progress reporting via stderr to avoid JSON-RPC corruption."""
-            sys.stderr.write(f"[* progress] {msg}\n")
-            sys.stderr.flush()
+        on_progress = await self._create_progress_callback(arguments)
+        result = await self._execute_plan_workflow(prompt, relevant_files, on_progress)
 
-            # Optional: Emit proper MCP progress notification if client supports it
-            token: str | int | None = None
-            if arguments:
-                metadata = arguments.get("_metadata")
-                if isinstance(metadata, dict):
-                    metadata_dict = typing.cast("dict[typing.Any, typing.Any]", metadata)
-                    candidate = metadata_dict.get("progressToken")
-                    if isinstance(candidate, (str, int)):
-                        token = candidate
-
-            if token is not None and self.server:
-                with contextlib.suppress(Exception):
-                    await self.server.request_context.session.send_progress_notification(
-                        progress_token=token,
-                        progress=0.0,  # Indeterminate
-                    )
-
-        planner = JitsuPlanner(objective=prompt, relevant_files=relevant_files)
-        # 2. Inside the tool handler, instantiate the JitsuPlanner and call its planning method
-        await planner.generate_plan(options=PlannerOptions(on_progress=on_progress))
-
-        if not planner.directives:
+        if result is None:
             return [types.TextContent(type="text", text="Error: Failed to generate plan.")]
 
-        # 3. Reuse the recently built storage.get_current_path(epic_id) logic
-        epic_id = planner.directives[0].epic_id
-        storage = EpicStorage(Path.cwd())
-        path = storage.get_current_path(epic_id)
-
-        planner.save_plan(path)
-
-        rel_path = storage.rel_path(path)
-        # 4. Return a success message containing the epic_id and file path
+        epic_id, rel_path = result
         msg = (
             f"Successfully generated epic '{epic_id}' at '{rel_path}'.\n\n"
             "You can now call 'jitsu_get_next_phase' to begin execution of this epic."
@@ -219,7 +257,6 @@ class ToolHandlers:
         message = str(arguments["message"])
         sync = bool(arguments.get("sync", False))
 
-        # Conventional Commit Enforcement
         pattern = (
             r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|deps)(\(.+\))?!?: .+$"
         )
@@ -232,10 +269,9 @@ class ToolHandlers:
             ]
 
         try:
-            # Delegate to JustFile recipes via CommandRunner (no hardcoded paths)
             recipe = "sync" if sync else "commit"
             res = CommandRunner.run_args(["just", recipe, message], check=True)
-            del res  # result not needed on success
+            del res
 
             msg = f"Successfully committed{' and pushed' if sync else ''} changes."
             return [types.TextContent(type="text", text=msg)]
