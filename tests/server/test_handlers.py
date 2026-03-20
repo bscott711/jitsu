@@ -1,6 +1,8 @@
 """Tests for the ToolHandlers class."""
 
+import json
 import subprocess
+import typing
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,7 +14,7 @@ from jitsu.core.state import JitsuStateManager
 from jitsu.models.core import AgentDirective
 from jitsu.server.handlers import ToolHandlers
 
-EXPECTED_TOOL_COUNT = 9
+EXPECTED_TOOL_COUNT = 10
 
 
 @pytest.fixture
@@ -190,7 +192,7 @@ async def test_handle_submit_epic_success(
     handlers: ToolHandlers, state_manager: JitsuStateManager
 ) -> None:
     """Test successfully submitting an epic."""
-    directive_data = {
+    directive_data: dict[str, object] = {
         "epic_id": "epic-new",
         "phase_id": "phase-new",
         "module_scope": ["src"],
@@ -387,7 +389,10 @@ async def test_handle_plan_epic_with_progress(
         mock_storage = mock_storage_cls.return_value
         mock_storage.get_current_path.return_value = Path("epic.json")
 
-        arguments = {"prompt": "Progress test", "_metadata": {"progressToken": "token-123"}}
+        arguments: dict[str, object] = {
+            "prompt": "Progress test",
+            "_metadata": {"progressToken": "token-123"},
+        }
         await handlers.handle_plan_epic(arguments)
 
         # Retrieve the on_progress callback passed to generate_plan
@@ -414,7 +419,7 @@ async def test_extract_progress_token_none_args(handlers: ToolHandlers) -> None:
 async def test_extract_progress_token_invalid_candidate(handlers: ToolHandlers) -> None:
     """Test extracting progress token with an invalid candidate type."""
     arguments = {"_metadata": {"progressToken": ["not", "a", "string"]}}
-    assert handlers._extract_progress_token(arguments) is None
+    assert handlers._extract_progress_token(typing.cast("dict[str, object]", arguments)) is None
 
 
 @pytest.mark.asyncio
@@ -428,3 +433,121 @@ async def test_execute_plan_workflow_no_epic_id(handlers: ToolHandlers) -> None:
 
         result = await handlers._execute_plan_workflow("test", [], AsyncMock())
         assert result is None
+
+
+@pytest.mark.asyncio
+async def test_handle_check_coverage_success(handlers: ToolHandlers) -> None:
+    """Test successful coverage check with JSON output."""
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+
+    mock_json: dict[str, typing.Any] = {
+        "files": {"test_module.py": {"missing_lines": [1, 2, 3, 5]}}
+    }
+
+    with (
+        patch("anyio.Path.exists", AsyncMock(return_value=True)),
+        patch("anyio.Path.read_text", AsyncMock(return_value=json.dumps(mock_json))),
+        patch("anyio.Path.unlink", AsyncMock()),
+        patch("jitsu.core.runner.CommandRunner.run_args", return_value=mock_result),
+    ):
+        result = await handlers.handle_check_coverage(
+            {"test_file_path": "test_file.py", "module_scope": ["test_module"]}
+        )
+        assert isinstance(result[0], TextContent)
+        expected = {"test_module.py": [1, 2, 3, 5]}
+        assert json.loads(result[0].text) == expected
+
+
+@pytest.mark.asyncio
+async def test_handle_check_coverage_no_missing(handlers: ToolHandlers) -> None:
+    """Test coverage check with no missing lines."""
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+    mock_json: dict[str, typing.Any] = {"files": {"test_module.py": {"missing_lines": []}}}
+
+    with (
+        patch("anyio.Path.exists", AsyncMock(return_value=True)),
+        patch("anyio.Path.read_text", AsyncMock(return_value=json.dumps(mock_json))),
+        patch("anyio.Path.unlink", AsyncMock()),
+        patch("jitsu.core.runner.CommandRunner.run_args", return_value=mock_result),
+    ):
+        result = await handlers.handle_check_coverage(
+            {"test_file_path": "test_file.py", "module_scope": ["test_module"]}
+        )
+        assert isinstance(result[0], TextContent)
+        assert result[0].text == "{}"
+
+
+@pytest.mark.asyncio
+async def test_handle_check_coverage_file_not_found(handlers: ToolHandlers) -> None:
+    """Test coverage check when test file is missing."""
+    with patch("anyio.Path.exists", AsyncMock(return_value=False)):
+        result = await handlers.handle_check_coverage(
+            {"test_file_path": "non_existent.py", "module_scope": ["test_module"]}
+        )
+        assert "Test file not found" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_check_coverage_empty_scope(handlers: ToolHandlers) -> None:
+    """Test coverage check with empty module scope."""
+    with patch("anyio.Path.exists", AsyncMock(return_value=True)):
+        result = await handlers.handle_check_coverage(
+            {"test_file_path": "test_file.py", "module_scope": []}
+        )
+        assert "module_scope' cannot be empty" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_check_coverage_missing_args(handlers: ToolHandlers) -> None:
+    """Test coverage check with missing arguments."""
+    result = await handlers.handle_check_coverage({})
+    assert "Missing 'test_file_path' or 'module_scope'" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_check_coverage_pytest_error(handlers: ToolHandlers) -> None:
+    """Test coverage check when pytest fails unexpectedly."""
+    mock_result = MagicMock()
+    mock_result.stdout = ""
+    mock_result.stderr = "Internal Pytest Error"
+    mock_result.returncode = 2
+
+    with (
+        patch("anyio.Path.exists", AsyncMock(return_value=True)),
+        patch("anyio.Path.unlink", AsyncMock()),
+        patch("jitsu.core.runner.CommandRunner.run_args", return_value=mock_result),
+    ):
+        result = await handlers.handle_check_coverage(
+            {"test_file_path": "test_file.py", "module_scope": ["test_module"]}
+        )
+        assert "Pytest failed" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_check_coverage_internal_error(handlers: ToolHandlers) -> None:
+    """Test coverage check with an unexpected exception."""
+    # This specifically triggers the Exception catch block
+    with patch("anyio.Path.exists", AsyncMock(side_effect=RuntimeError("Unexpected"))):
+        result = await handlers.handle_check_coverage(
+            {"test_file_path": "test_file.py", "module_scope": ["test_module"]}
+        )
+        assert "Unexpected" in result[0].text
+
+
+@pytest.mark.asyncio
+async def test_handle_check_coverage_json_not_found(handlers: ToolHandlers) -> None:
+    """Test coverage check when JSON file is not generated."""
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+
+    with (
+        patch("anyio.Path.exists", AsyncMock(side_effect=[True, False, False])),
+        patch("anyio.Path.unlink", AsyncMock()),
+        patch("jitsu.core.runner.CommandRunner.run_args", return_value=mock_result),
+    ):
+        result = await handlers.handle_check_coverage(
+            {"test_file_path": "test_file.py", "module_scope": ["test_module"]}
+        )
+        assert "Coverage JSON file was not generated" in result[0].text

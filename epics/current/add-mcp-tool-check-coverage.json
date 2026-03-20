@@ -1,0 +1,29 @@
+[
+  {
+    "epic_id": "add-mcp-tool-check-coverage",
+    "phase_id": "add-jitsu-check-coverage-tool",
+    "module_scope": [
+      "src/jitsu/server",
+      "tests/server"
+    ],
+    "instructions": "Add the jitsu_check_coverage MCP tool by implementing the handler function in src/jitsu/server/handlers.py, registering the tool in src/jitsu/server/registry.py, and writing unit tests in tests/server/test_handlers.py and tests/server/test_registry.py.\n\nCOVERAGE SPEC:\nThe jitsu_check_coverage tool takes two arguments:\n  - test_file_path: str (absolute or relative path to a test file)\n  - module_scope: List[str] (list of directory paths or module names to measure coverage on)\nIt runs a scoped pytest with coverage on the given test file and module scope, parses the coverage JSON report to extract missing line numbers per file, and returns a dictionary mapping file paths (relative to the repository root) to lists of missing line numbers (integers). If no lines are missing, it returns an empty dictionary.\n\nTYPE CONTRACTS:\n  test_file_path: str\n  module_scope: List[str]\n  returns: Dict[str, List[int]]\n\nSteps for src/jitsu/server/handlers.py:\n  1. Import necessary modules: subprocess, json, tempfile, os, typing (List, Dict)\n  2. Define an async function `jitsu_check_coverage` with the specified signature.\n  3. Inside the function:\n      a. Create a temporary file for the JSON coverage report.\n      b. Construct the pytest command: \n           ['pytest', \n            f'--cov={",
+    "context_targets": [],
+    "anti_patterns": [
+      "Do not bypass the coverage measurement by returning hardcoded missing lines.",
+      "Do not leave temporary files on the filesystem after the tool execution.",
+      "Do not run the pytest command without specifying the module scope, which could lead to measuring coverage on the entire project and causing context bloat."
+    ],
+    "verification_commands": [
+      "uv run ruff check src/jitsu/server/handlers.py src/jitsu/server/registry.py tests/server/test_handlers.py tests/server/test_registry.py -q",
+      "uv run pyright src/jitsu/server/handlers.py src/jitsu/server/registry.py tests/server/test_handlers.py tests/server/test_registry.py",
+      "uv run pytest tests/server/test_handlers.py tests/server/test_registry.py -q --tb=short",
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The ruff and pyright checks pass on the changed files.",
+      "The unit tests for the handlers and registry pass.",
+      "The tool returns the expected output when given a test file and module scope (as verified by the unit tests)."
+    ],
+    "context_injection": null
+  }
+]

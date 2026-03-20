@@ -3,6 +3,7 @@
 import inspect
 import json
 import logging
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, get_args
@@ -145,14 +146,26 @@ class JitsuPlanner:
 
         blueprint_system_prompt = base_system_prompt + PLANNER_MACRO_PROMPT
 
-        blueprint = client.chat.completions.create(
+        # Bypass Instructor and use raw OpenAI client
+        raw_response = client.client.chat.completions.create(
             model=_model,
-            response_model=EpicBlueprint,
             messages=[
                 {"role": "system", "content": blueprint_system_prompt},
                 {"role": "user", "content": user_message},
             ],
         )
+        raw_content = raw_response.choices.message.content or "{}"
+
+        # Extract everything between the first and last curly brace
+        match = re.search(r"\{.*\}", raw_content, re.DOTALL)
+        json_str = match.group(0) if match else raw_content
+
+        try:
+            parsed_data = json.loads(json_str)
+            blueprint = EpicBlueprint.model_validate(parsed_data)
+        except (json.JSONDecodeError, ValueError) as e:
+            msg = f"Failed to parse EpicBlueprint from raw output:\n{raw_content}"
+            raise RuntimeError(msg) from e
 
         self.epic_id = blueprint.epic_id
 
@@ -191,14 +204,25 @@ class JitsuPlanner:
                 + f"\n{VERIFICATION_RULE}\n\n{TOOLCHAIN_CONSTRAINTS}\n"
             )
 
-            directive = client.chat.completions.create(
+            # Bypass Instructor and use raw OpenAI client
+            raw_response = client.client.chat.completions.create(
                 model=_model,
-                response_model=AgentDirective,
                 messages=[
                     {"role": "system", "content": phase_system_prompt},
                     {"role": "user", "content": user_message},
                 ],
             )
+            raw_content = raw_response.choices.message.content or "{}"
+
+            match = re.search(r"\{.*\}", raw_content, re.DOTALL)
+            json_str = match.group(0) if match else raw_content
+
+            try:
+                parsed_data = json.loads(json_str)
+                directive = AgentDirective.model_validate(parsed_data)
+            except (json.JSONDecodeError, ValueError) as e:
+                msg = f"Failed to parse AgentDirective from raw output:\n{raw_content}"
+                raise RuntimeError(msg) from e
 
             if opts.verbose:
                 typer.secho(

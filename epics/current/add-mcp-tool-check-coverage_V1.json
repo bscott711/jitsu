@@ -1,0 +1,55 @@
+[
+  {
+    "epic_id": "add-mcp-tool-check-coverage",
+    "phase_id": "implement-jitsu-check-coverage-tool",
+    "module_scope": [
+      "src/jitsu/server",
+      "tests/server"
+    ],
+    "instructions": "COVERAGE SPEC:\n- The new function `jitsu_check_coverage` must be fully covered by unit tests in `tests/server/test_handlers.py`.\n- Unit tests must cover: normal case (missing lines present), edge case (no missing lines), edge case (test file not found), and edge case (invalid module scope).\n\nTYPE CONTRACTS:\n- The function `jitsu_check_coverage` must have the following type signature:\n    async def jitsu_check_coverage(test_file: str, module_scope: List[str]) -> List[int]:\n- It must return a list of integers representing the missing line numbers.\n- In case of error (e.g., file not found, invalid scope), it should raise an appropriate exception (e.g., FileNotFoundError, ValueError) to be handled by the MCP framework.\n\nSTEPS:\n1. In `src/jitsu/server/handlers.py`:\n   - Import List from typing.\n   - Add the asynchronous function `jitsu_check_coverage` with the specified signature.\n   - Inside the function:\n        * Construct the pytest command: ['pytest', test_file, '--cov', ','.join(module_scope), '--cov-report', 'term-missing']\n        * Use subprocess.run to execute the command, capturing stdout and stderr.\n        * Parse the output to find the line(s) under 'MISSING' in the coverage report.\n        * Extract the line numbers (as integers) from the missing line ranges (e.g., '1-3, 5' -> [1,2,3,5]).\n        * Return the list of missing line numbers.\n        * If the test file does not exist, raise FileNotFoundError.\n        * If the module_scope is empty or invalid, raise ValueError.\n   - Ensure the function is properly typed and includes a docstring.\n\n2. In `src/jitsu/server/registry.py`:\n   - Locate the MCP tool registration section (likely a dictionary or list named `TOOL_REGISTRY` or similar).\n   - Add an entry for the new tool: \n        \"jitsu_check_coverage\": (\n            \"src.jitsu.server.handlers:jitsu_check_coverage\",\n            {\n                \"description\": \"Run scoped pytest coverage and return missing line numbers.\",\n                \"parameters\": {\n                    \"type\": \"object\",\n                    \"properties\": {\n                        \"test_file\": {\"type\": \"string\"},\n                        \"module_scope\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}\n                    },\n                    \"required\": [\"test_file\", \"module_scope\"]\n                }\n            }\n        )\n   - Ensure the registration follows the existing pattern and does not break existing tools.\n\n3. In `tests/server/test_handlers.py`:\n   - Import the jitsu_check_coverage function from src.jitsu.server.handlers.\n   - Use unittest.mock to patch subprocess.run.\n   - Write test cases:\n        * Test normal case: mock subprocess.run to return stdout containing missing lines (e.g., 'Missed: 1, 3, 5') and assert the function returns [1,3,5].\n        * Test no missing lines: mock subprocess.run to return stdout with no missing lines (or 'No missing lines') and assert the function returns [].\n        * Test file not found: mock subprocess.run to raise FileNotFoundError and assert the function propagates it.\n        * Test invalid module scope: mock subprocess.run to return non-zero exit code and stderr indicating invalid scope, and assert the function raises ValueError.\n   - Ensure all tests pass.\n\nANTI-PATTERNS (do NOT do the following):\n1. Do not bypass the Pydantic Gatekeeper by directly accessing validation logic in the core layer; use only the provider interfaces.\n2. Do not hardcode paths or dependencies; use the test_file and module_scope parameters dynamically.\n3. Do not omit error handling; always catch subprocess exceptions and re-raise as appropriate MCP-compatible errors.\n\nVERIFICATION COMMANDS:\n- uv run ruff check src/jitsu/server/handlers.py src/jitsu/server/registry.py tests/server/test_handlers.py -q\n- uv run pyright src/jitsu/server/handlers.py src/jitsu/server/registry.py tests/server/test_handlers.py\n- uv run pytest tests/server/test_handlers.py -q --tb=short --cov=jitsu.server.handlers\n\nCOMPLETION CRITERIA:\n- The function `jitsu_check_coverage` is correctly implemented in src/jitsu/server/handlers.py with proper type hints.\n- The tool is registered in src/jitsu/server/registry.py without breaking existing registrations.\n- All unit tests in tests/server/test_handlers.py pass.\n- Verification commands (ruff, pyright, pytest) pass without errors.\n",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/handlers.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/registry.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/server/test_handlers.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/server/test_registry.py",
+        "is_required": true,
+        "resolution_mode": "STRUCTURE_ONLY"
+      }
+    ],
+    "anti_patterns": [
+      "Do not bypass the Pydantic Gatekeeper by directly accessing validation logic in the core layer; use only the provider interfaces.",
+      "Do not hardcode paths or dependencies; use the test_file and module_scope parameters dynamically.",
+      "Do not omit error handling; always catch subprocess exceptions and re-raise as appropriate MCP-compatible errors."
+    ],
+    "verification_commands": [
+      "uv run ruff check src/jitsu/server/handlers.py src/jitsu/server/registry.py tests/server/test_handlers.py -q",
+      "uv run pyright src/jitsu/server/handlers.py src/jitsu/server/registry.py tests/server/test_handlers.py",
+      "uv run pytest tests/server/test_handlers.py -q --tb=short --cov=jitsu.server.handlers",
+      "just verify"
+    ],
+    "completion_criteria": [
+      "The function `jitsu_check_coverage` is correctly implemented in src/jitsu/server/handlers.py with proper type hints.",
+      "The tool is registered in src/jitsu/server/registry.py without breaking existing registrations.",
+      "All unit tests in tests/server/test_handlers.py pass.",
+      "Verification commands (ruff, pyright, pytest) pass without errors."
+    ],
+    "context_injection": null
+  }
+]

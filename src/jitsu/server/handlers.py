@@ -1,13 +1,16 @@
 """Tool handlers for the Jitsu MCP server."""
 
 import contextlib
+import json
 import re
 import subprocess
 import sys
+import tempfile
 import typing
 from pathlib import Path
 
 import anyio
+from anyio import to_thread
 from mcp import types
 from mcp.server import Server
 from pydantic import ValidationError
@@ -249,6 +252,72 @@ class ToolHandlers:
         res = await provider.resolve("status")
         return [types.TextContent(type="text", text=res)]
 
+    async def handle_check_coverage(
+        self, arguments: dict[str, object] | None
+    ) -> list[types.TextContent]:
+        """Handle the 'jitsu_check_coverage' tool request."""
+        try:
+            error_msg: str | None = None
+            result_text: str | None = None
+
+            if (
+                not arguments
+                or "test_file_path" not in arguments
+                or "module_scope" not in arguments
+            ):
+                error_msg = "Error in check_coverage: Missing 'test_file_path' or 'module_scope'."
+            else:
+                test_file = str(arguments["test_file_path"])
+                module_scope = typing.cast("list[str]", arguments["module_scope"])
+
+                if not await anyio.Path(test_file).exists():
+                    error_msg = f"Error in check_coverage: Test file not found: {test_file}"
+                elif not module_scope:
+                    error_msg = "Error in check_coverage: 'module_scope' cannot be empty."
+                else:
+                    result_text = await self._run_scoped_coverage(test_file, module_scope)
+
+            msg = error_msg or result_text or "Error: Unexpected empty result."
+            return [types.TextContent(type="text", text=msg)]
+
+        except Exception as e:  # noqa: BLE001
+            return [types.TextContent(type="text", text=f"Error in check_coverage: {e!s}")]
+
+    async def _run_scoped_coverage(self, test_file: str, module_scope: list[str]) -> str:
+        """Run pytest with scoped coverage and return JSON string of results."""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            temp_path = tmp.name
+
+        try:
+            cmd = [
+                "pytest",
+                "--cov=" + ",".join(module_scope),
+                "--cov-report=json:" + temp_path,
+                test_file,
+            ]
+            res = await to_thread.run_sync(lambda: CommandRunner.run_args(cmd, check=False))
+
+            if res.returncode not in (0, 1):
+                return f"Error in check_coverage: Pytest failed ({res.returncode}):\n{res.stderr or res.stdout}"
+
+            path_obj = anyio.Path(temp_path)
+            if not await path_obj.exists():
+                return "Error in check_coverage: Coverage JSON file was not generated."
+
+            content = await path_obj.read_text()
+            data = json.loads(content)
+            missing = {
+                p: i["missing_lines"]
+                for p, i in data.get("files", {}).items()
+                if i.get("missing_lines")
+            }
+
+            return json.dumps(missing)
+        finally:
+            path_obj = anyio.Path(temp_path)
+            if await path_obj.exists():
+                await path_obj.unlink()
+
     def handle_git_commit(self, arguments: dict[str, object] | None) -> list[types.TextContent]:
         """Handle 'git_commit' tool request."""
         if not arguments or "message" not in arguments:
@@ -448,4 +517,20 @@ class ToolHandlers:
                 },
             ),
             self.handle_plan_epic,
+        )
+
+        registry.register(
+            types.Tool(
+                name="jitsu_check_coverage",
+                description="Run scoped pytest coverage and return missing line numbers.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "test_file_path": {"type": "string"},
+                        "module_scope": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["test_file_path", "module_scope"],
+                },
+            ),
+            self.handle_check_coverage,
         )
