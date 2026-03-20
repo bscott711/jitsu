@@ -388,6 +388,7 @@ async def test_plan_epic_success() -> None:
         mock_planner = mock_planner_cls.return_value
         mock_planner.generate_plan = AsyncMock(return_value=[mock_directive])
         mock_planner.directives = [mock_directive]
+        mock_planner.epic_id = "epic-planned"
 
         mock_storage = mock_storage_cls.return_value
         mock_storage.get_current_path.return_value = Path("epic-planned.json")
@@ -425,7 +426,7 @@ async def test_agent_plan_success() -> None:
     """Test the jitsu_agent_plan tool."""
     result = await handle_call_tool("jitsu_agent_plan", {"objective": "Test objective"})
     assert isinstance(result[0], TextContent)
-    assert "Use your native reasoning to plan this objective: Test objective" in result[0].text
+    assert "Use `jitsu / plan_epic` to plan this objective: Test objective" in result[0].text
     assert "AgentDirective" in result[0].text
     assert '"epic_id"' in result[0].text  # Part of the schema
 

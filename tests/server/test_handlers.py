@@ -324,6 +324,7 @@ async def test_handle_plan_epic_success(handlers: ToolHandlers) -> None:
         mock_planner = mock_planner_cls.return_value
         mock_planner.generate_plan = AsyncMock(return_value=[mock_directive])
         mock_planner.directives = [mock_directive]
+        mock_planner.epic_id = "epic-planned"
 
         mock_storage = mock_storage_cls.return_value
         mock_storage.get_current_path.return_value = Path("epic-planned.json")
@@ -401,3 +402,29 @@ async def test_handle_plan_epic_with_progress(
 
         # Verify MCP notification
         mock_server.request_context.session.send_progress_notification.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_extract_progress_token_none_args(handlers: ToolHandlers) -> None:
+    """Test extracting progress token with None arguments."""
+    assert handlers._extract_progress_token(None) is None  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_extract_progress_token_invalid_candidate(handlers: ToolHandlers) -> None:
+    """Test extracting progress token with an invalid candidate type."""
+    arguments = {"_metadata": {"progressToken": ["not", "a", "string"]}}
+    assert handlers._extract_progress_token(arguments) is None  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_execute_plan_workflow_no_epic_id(handlers: ToolHandlers) -> None:
+    """Test executing plan workflow when epic_id is missing."""
+    with patch("jitsu.server.handlers.JitsuPlanner") as mock_planner_cls:
+        mock_planner = mock_planner_cls.return_value
+        mock_planner.generate_plan = AsyncMock()
+        mock_planner.directives = [MagicMock()]
+        mock_planner.epic_id = None  # Missing epic_id
+
+        result = await handlers._execute_plan_workflow("test", [], AsyncMock())  # noqa: SLF001
+        assert result is None
