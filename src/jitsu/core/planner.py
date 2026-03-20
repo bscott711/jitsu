@@ -29,6 +29,7 @@ from jitsu.prompts import (
     PLANNER_BASE_PROMPT,
     PLANNER_MACRO_PROMPT,
     PLANNER_MICRO_PROMPT,
+    TOOLCHAIN_CONSTRAINTS,
     VERIFICATION_RULE,
 )
 from jitsu.providers.tree import DirectoryTreeProvider
@@ -187,7 +188,7 @@ class JitsuPlanner:
                     phase_description=phase.description,
                     allowed_providers=allowed_providers,
                 )
-                + f"\n{VERIFICATION_RULE}\n"
+                + f"\n{VERIFICATION_RULE}\n\n{TOOLCHAIN_CONSTRAINTS}\n"
             )
 
             directive = client.chat.completions.create(

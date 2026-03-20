@@ -19,7 +19,7 @@ from jitsu.models.execution import (
     PlannerStage,
     PlannerStatusUpdate,
 )
-from jitsu.prompts import PLANNER_MACRO_PROMPT, VERIFICATION_RULE
+from jitsu.prompts import PLANNER_MACRO_PROMPT, TOOLCHAIN_CONSTRAINTS, VERIFICATION_RULE
 
 
 @pytest.mark.asyncio
@@ -390,3 +390,56 @@ async def test_planner_async_legacy_callback() -> None:
         await planner.generate_plan(options=PlannerOptions(on_progress=on_progress))
 
     assert len(msgs) > 0
+
+
+@pytest.mark.asyncio
+async def test_generate_plan_injects_toolchain_constraints() -> None:
+    """Verify TOOLCHAIN_CONSTRAINTS is injected into the micro-planning prompt."""
+    mock_client = MagicMock()
+
+    # 1. Setup mock
+    mock_blueprint = EpicBlueprint(
+        epic_id="test-epic", phases=[PhaseBlueprint(phase_id="phase-1", description="test phase")]
+    )
+    mock_directive = AgentDirective(
+        epic_id="test-epic",
+        phase_id="phase-1",
+        module_scope=["src"],
+        instructions="test instructions",
+        completion_criteria=["done"],
+        verification_commands=["uv run pytest"],
+    )
+
+    mock_client.chat.completions.create.side_effect = [mock_blueprint, mock_directive]
+
+    # 2. Execute
+    planner = JitsuPlanner(
+        objective="Test objective",
+        relevant_files=["test.py"],
+        client=mock_client,
+    )
+
+    with (
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+    ):
+        await planner.generate_plan()
+
+    # 3. Assert client was called twice
+    expected_call_count = 2
+    assert mock_client.chat.completions.create.call_count == expected_call_count
+
+    # 4. ✅ FIX: Index into call_args_list to get the second call (micro-planning)
+    second_call = mock_client.chat.completions.create.call_args_list[1]
+    call_kwargs = second_call.kwargs
+    messages = call_kwargs.get("messages", [])
+
+    # 5. Safely find the system message
+    system_message = ""
+    for msg in messages:
+        if isinstance(msg, dict) and msg.get("role") == "system":
+            system_message = msg.get("content", "")
+            break
+
+    # 6. Verify the toolchain constraints were successfully injected
+    assert TOOLCHAIN_CONSTRAINTS in system_message

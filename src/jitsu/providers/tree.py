@@ -20,8 +20,12 @@ class DirectoryTreeProvider(BaseProvider):
         ".git",
         "__pycache__",
         ".venv",
+        "venv",
         ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
         "node_modules",
+        "epics",
     }
 
     @property

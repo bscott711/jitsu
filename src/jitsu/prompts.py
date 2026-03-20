@@ -1,8 +1,18 @@
 """Centralized repository for all Jitsu system prompts."""
 
 VERIFICATION_RULE = (
-    "You MUST strictly follow the verification constraints defined in the PROJECT "
-    "RULES (e.g., this MUST include 'just verify')."
+    "You MUST use strictly scoped verification. NEVER use the global 'just verify' "
+    "command during phase execution, as it bloats the context window. You MUST "
+    "target ONLY the specific files modified in the module_scope."
+)
+
+TOOLCHAIN_CONSTRAINTS = (
+    "You are operating in a Python 3.12 environment. All generated code MUST be strictly typed. "
+    "You MUST include a 'COVERAGE SPEC' and 'TYPE CONTRACTS' section in your generated phase instructions. "
+    "To prevent context bloat, your verification_commands MUST use quiet flags and target specific files: "
+    "1. `uv run ruff check <file> -q` "
+    "2. `uv run pyright <file>` "
+    "3. `uv run pytest <test_file> -q --tb=short --cov=<module>`"
 )
 
 # XML Vocabulary for U-Curve Architecture & Constraint Enforcement
@@ -47,8 +57,8 @@ You must return a JSON array of objects matching this strict schema:
       }}
     ],
     "anti_patterns": ["string (what NOT to do)"],
-    "verification_commands": ["just verify"],
-    "completion_criteria": ["string (how to know it is done)", "Example: just commit and just sync are successful"]
+    "verification_commands": ["uv run pytest tests/path/to/test.py -q --tb=short"],
+    "completion_criteria": ["string (how to know it is done)", "Example: scoped pytest passes with 100% coverage"]
   }}
 ]
 
