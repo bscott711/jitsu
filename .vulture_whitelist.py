@@ -35,3 +35,7 @@ enforce_zero_bypass_verification
 
 # Mock/Testing
 side_effect
+
+# Planner Lifecycle (Unused in current refactor)
+VALIDATING_SCHEMA
+verbose

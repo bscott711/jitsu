@@ -23,6 +23,15 @@ from jitsu.models.execution import (
 from jitsu.prompts import PLANNER_MACRO_PROMPT, TOOLCHAIN_CONSTRAINTS, VERIFICATION_RULE
 
 
+def mock_response(model_instance: object) -> MagicMock:
+    """Create a mock OpenAI chat completion response from a Pydantic model."""
+    mock = MagicMock()
+    choice = MagicMock()
+    choice.message.content = model_instance.model_dump_json()  # type: ignore
+    mock.choices = [choice]
+    return mock
+
+
 @pytest.fixture(autouse=True)
 def _clean_cache() -> None:
     """Clear LLMClientFactory cache before each test."""
@@ -55,7 +64,10 @@ async def test_planner_plan_generation_success() -> None:
     )
 
     mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = [blueprint, directive]
+    mock_client.client.chat.completions.create.side_effect = [
+        mock_response(blueprint),
+        mock_response(directive),
+    ]
 
     on_progress_mock = MagicMock()
 
@@ -72,14 +84,16 @@ async def test_planner_plan_generation_success() -> None:
     assert planner.directives == [directive]
 
     # Verify progress calls
-    expected_calls = 6
+    expected_calls = 4
     assert on_progress_mock.call_count == expected_calls
-    on_progress_mock.assert_any_call("Drafting Epic Blueprint...")
-    on_progress_mock.assert_any_call("Elaborating Phase 1 of 1 (p1)...")
+    on_progress_mock.assert_any_call("Analyzing scope...")
+    on_progress_mock.assert_any_call("Drafting Blueprint...")
+    on_progress_mock.assert_any_call("Elaborating Phase 1 (p1)...")
+    on_progress_mock.assert_any_call("Planning complete.")
 
     # Verify prompts
-    macro_call = mock_client.chat.completions.create.call_args_list[0][1]
-    micro_call = mock_client.chat.completions.create.call_args_list[1][1]
+    macro_call = mock_client.client.chat.completions.create.call_args_list[0][1]
+    micro_call = mock_client.client.chat.completions.create.call_args_list[1][1]
 
     macro_system = macro_call["messages"][0]["content"]
     assert PLANNER_MACRO_PROMPT in macro_system
@@ -106,7 +120,7 @@ async def test_planner_missing_api_key() -> None:
 async def test_planner_generation_failure() -> None:
     """Test that the planner allows generation exceptions to bubble up."""
     mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = Exception("API error")
+    mock_client.client.chat.completions.create.side_effect = Exception("API error")
 
     planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
 
@@ -128,7 +142,10 @@ async def test_planner_generation_fallback_prompt() -> None:
         epic_id="e1", phase_id="p1", module_scope=["src"], instructions="test"
     )
     mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = [blueprint, directive]
+    mock_client.client.chat.completions.create.side_effect = [
+        mock_response(blueprint),
+        mock_response(directive),
+    ]
 
     planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
 
@@ -140,7 +157,7 @@ async def test_planner_generation_fallback_prompt() -> None:
 
     # Verify it called create (macro + 1 micro)
     expected_calls = 2
-    assert mock_client.chat.completions.create.call_count == expected_calls
+    assert mock_client.client.chat.completions.create.call_count == expected_calls
 
 
 @pytest.mark.asyncio
@@ -183,23 +200,21 @@ async def test_planner_generate_plan_verbose() -> None:
     )
 
     mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = [blueprint, directive]
+    mock_client.client.chat.completions.create.side_effect = [
+        mock_response(blueprint),
+        mock_response(directive),
+    ]
 
     planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
 
     with (
         patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
         patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
-        patch("jitsu.core.planner.typer.secho") as mock_secho,
     ):
-        await planner.generate_plan(options=PlannerOptions(verbose=True))
+        await planner.generate_plan(options=PlannerOptions())
 
-    # Verify debug info was printed
-    assert mock_secho.called
-    # Check for specific strings
-    calls = [str(call.args[0]) for call in mock_secho.call_args_list]
-    assert any("[DEBUG] Epic Blueprint:" in s for s in calls)
-    assert any("[DEBUG] Phase 1 Directive (p1):" in s for s in calls)
+    # Features like verbose/typer were removed from the core planner, so we just verify it runs
+    assert planner.directives[0].instructions == directive.instructions
 
 
 @pytest.mark.asyncio
@@ -209,7 +224,12 @@ async def test_planner_generate_plan_with_jitsurules() -> None:
         epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
     )
     mock_client = MagicMock()
-    mock_client.chat.completions.create.return_value = blueprint
+    mock_client.client.chat.completions.create.side_effect = [
+        mock_response(blueprint),
+        mock_response(
+            AgentDirective(epic_id="e1", phase_id="p1", module_scope=["src"], instructions="test")
+        ),
+    ]
 
     planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
 
@@ -221,7 +241,7 @@ async def test_planner_generate_plan_with_jitsurules() -> None:
         await planner.generate_plan()
 
     # Verify the system prompt contains the rules
-    call = mock_client.chat.completions.create.call_args[1]
+    call = mock_client.client.chat.completions.create.call_args[1]
     system_msg = call["messages"][0]["content"]
     assert "PROJECT RULES (.jitsurules):" in system_msg
     assert "RULE: Do things" in system_msg
@@ -294,7 +314,10 @@ async def test_planner_generate_plan_with_injection() -> None:
     )
 
     mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = [blueprint, directive]
+    mock_client.client.chat.completions.create.side_effect = [
+        mock_response(blueprint),
+        mock_response(directive),
+    ]
 
     planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
 
@@ -321,7 +344,12 @@ async def test_planner_structured_callback() -> None:
     blueprint = EpicBlueprint(
         epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
     )
-    mock_client.chat.completions.create.return_value = blueprint
+    mock_client.client.chat.completions.create.side_effect = [
+        mock_response(blueprint),
+        mock_response(
+            AgentDirective(epic_id="e1", phase_id="p1", module_scope=["src"], instructions="test")
+        ),
+    ]
 
     status_updates = []
 
@@ -348,7 +376,12 @@ async def test_planner_sync_callbacks() -> None:
     blueprint = EpicBlueprint(
         epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
     )
-    mock_client.chat.completions.create.return_value = blueprint
+    mock_client.client.chat.completions.create.side_effect = [
+        mock_response(blueprint),
+        mock_response(
+            AgentDirective(epic_id="e1", phase_id="p1", module_scope=["src"], instructions="test")
+        ),
+    ]
 
     msgs = []
 
@@ -381,7 +414,12 @@ async def test_planner_async_legacy_callback() -> None:
     blueprint = EpicBlueprint(
         epic_id="e1", phases=[PhaseBlueprint(phase_id="p1", description="d1")]
     )
-    mock_client.chat.completions.create.return_value = blueprint
+    mock_client.client.chat.completions.create.side_effect = [
+        mock_response(blueprint),
+        mock_response(
+            AgentDirective(epic_id="e1", phase_id="p1", module_scope=["src"], instructions="test")
+        ),
+    ]
 
     msgs = []
 
@@ -417,7 +455,10 @@ async def test_generate_plan_injects_toolchain_constraints() -> None:
         verification_commands=["uv run pytest"],
     )
 
-    mock_client.chat.completions.create.side_effect = [mock_blueprint, mock_directive]
+    mock_client.client.chat.completions.create.side_effect = [
+        mock_response(mock_blueprint),
+        mock_response(mock_directive),
+    ]
 
     # 2. Execute
     planner = JitsuPlanner(
@@ -434,11 +475,11 @@ async def test_generate_plan_injects_toolchain_constraints() -> None:
 
     # 3. Assert client was called twice
     expected_call_count = 2
-    assert mock_client.chat.completions.create.call_count == expected_call_count
+    assert mock_client.client.chat.completions.create.call_count == expected_call_count
 
     # 4. Extract kwargs from the second call (index 1)
     # call_args_list is a list of call objects, so we must index it to get the specific call
-    call_args_list = mock_client.chat.completions.create.call_args_list
+    call_args_list = mock_client.client.chat.completions.create.call_args_list
     second_call = call_args_list[1]
     call_kwargs = second_call.kwargs
     messages = call_kwargs.get("messages", [])
@@ -452,3 +493,30 @@ async def test_generate_plan_injects_toolchain_constraints() -> None:
 
     # 6. Verify the toolchain constraints were successfully injected
     assert TOOLCHAIN_CONSTRAINTS in system_message
+
+
+@pytest.mark.asyncio
+async def test_planner_missing_client_safety() -> None:
+    """Test RuntimeError when underlying client is None."""
+    mock_client = MagicMock()
+    mock_client.client = None
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+    with pytest.raises(RuntimeError, match="Underlying LLM client is not initialized"):
+        await planner.generate_plan()
+
+
+@pytest.mark.asyncio
+async def test_planner_parse_json_error() -> None:
+    """Test RuntimeError when JSON parsing fails."""
+    planner = JitsuPlanner(objective="Test", relevant_files=[])
+    with pytest.raises(RuntimeError, match="Failed to parse"):
+        planner._parse_llm_json("invalid json", EpicBlueprint)
+
+
+@pytest.mark.asyncio
+async def test_planner_parse_validation_error() -> None:
+    """Test RuntimeError when Pydantic validation fails."""
+    planner = JitsuPlanner(objective="Test", relevant_files=[])
+    # Empty JSON will fail validation for EpicBlueprint (requires epic_id)
+    with pytest.raises(RuntimeError, match="Failed to parse"):
+        planner._parse_llm_json("{}", EpicBlueprint)
