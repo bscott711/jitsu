@@ -407,14 +407,14 @@ async def test_handle_plan_epic_with_progress(
 @pytest.mark.asyncio
 async def test_extract_progress_token_none_args(handlers: ToolHandlers) -> None:
     """Test extracting progress token with None arguments."""
-    assert handlers._extract_progress_token(None) is None  # noqa: SLF001
+    assert handlers._extract_progress_token(None) is None
 
 
 @pytest.mark.asyncio
 async def test_extract_progress_token_invalid_candidate(handlers: ToolHandlers) -> None:
     """Test extracting progress token with an invalid candidate type."""
     arguments = {"_metadata": {"progressToken": ["not", "a", "string"]}}
-    assert handlers._extract_progress_token(arguments) is None  # noqa: SLF001
+    assert handlers._extract_progress_token(arguments) is None
 
 
 @pytest.mark.asyncio
@@ -426,5 +426,5 @@ async def test_execute_plan_workflow_no_epic_id(handlers: ToolHandlers) -> None:
         mock_planner.directives = [MagicMock()]
         mock_planner.epic_id = None  # Missing epic_id
 
-        result = await handlers._execute_plan_workflow("test", [], AsyncMock())  # noqa: SLF001
+        result = await handlers._execute_plan_workflow("test", [], AsyncMock())
         assert result is None

@@ -75,7 +75,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # S101: Allow use of `assert` in tests
 # PGH003: Allow blanket type ignores in tests (needed to test strict validation failures)
-"tests/**/*" = ["S101", "PGH003"]
+"tests/**/*" = ["S101", "PGH003", "SLF001"]
 ".vulture_whitelist.py" = ["ALL"]
 
 [tool.ruff.format]

@@ -429,12 +429,14 @@ async def test_generate_plan_injects_toolchain_constraints() -> None:
     expected_call_count = 2
     assert mock_client.chat.completions.create.call_count == expected_call_count
 
-    # 4. ✅ FIX: Index into call_args_list to get the second call (micro-planning)
-    second_call = mock_client.chat.completions.create.call_args_list[1]
+    # 4. Extract kwargs from the second call (index 1)
+    # call_args_list is a list of call objects, so we must index it to get the specific call
+    call_args_list = mock_client.chat.completions.create.call_args_list
+    second_call = call_args_list[1]
     call_kwargs = second_call.kwargs
     messages = call_kwargs.get("messages", [])
 
-    # 5. Safely find the system message
+    # 5. Safely find the system message without ["content"] lookups
     system_message = ""
     for msg in messages:
         if isinstance(msg, dict) and msg.get("role") == "system":
