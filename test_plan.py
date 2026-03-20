@@ -1,6 +1,7 @@
 """Test script for verifying Jitsu Planner latency and output."""
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -29,8 +30,9 @@ async def main() -> None:
     typer.echo("🚀 Booting Jitsu Planner...")
 
     api_key = os.getenv("OPENROUTER_API_KEY")
-    status = "YES" if api_key else "NO (Check your .env file!)"
-    typer.echo(f"🔑 OPENROUTER_API_KEY detected: {status}")
+    if not api_key:
+        typer.secho("❌ Error: OPENROUTER_API_KEY not found in .env", fg=typer.colors.RED)
+        return
 
     planner = JitsuPlanner(
         objective=prompt,
@@ -41,17 +43,22 @@ async def main() -> None:
         ],
     )
 
-    typer.echo("🧠 Sending prompt to OpenRouter/Nvidia...")
+    typer.echo("🧠 Sending prompt to OpenRouter/Nvidia (Now with Async Parallelism)...")
 
     start_time = time.perf_counter()
 
     try:
+        # generate_plan returns a list[AgentDirective]
         plan = await planner.generate_plan()
         end_time = time.perf_counter()
 
         typer.echo(f"\n⏱️  LLM Generation Latency: {end_time - start_time:.2f} seconds")
-        typer.echo("✅ Epic Plan Generated Successfully!")
-        typer.echo(plan.model_dump_json(indent=2) if plan else "[]")
+        typer.echo(f"✅ Epic Plan Generated with {len(plan)} phases!")
+
+        # Display the first phase as a sample
+        if plan:
+            typer.echo("Sample Phase Output:")
+            typer.echo(json.dumps([directive.model_dump() for directive in plan], indent=2))
 
     except Exception:
         typer.secho("\n❌ CRITICAL PLANNER FAILURE ❌", fg=typer.colors.RED, bold=True)

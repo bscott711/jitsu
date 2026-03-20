@@ -7,7 +7,7 @@ from typing import ClassVar
 import dotenv
 import instructor
 from instructor.core.client import Instructor
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 
 class LLMClientFactory:
@@ -58,7 +58,7 @@ class LLMClientFactory:
                 raise RuntimeError(msg)
 
             client = instructor.from_openai(
-                OpenAI(
+                AsyncOpenAI(
                     base_url=base_url,
                     api_key=api_key,
                 ),
