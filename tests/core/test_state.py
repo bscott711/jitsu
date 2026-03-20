@@ -109,3 +109,47 @@ def test_state_manager_on_stuck() -> None:
     assert manager.pending_count == 0
     assert len(manager.completed_reports) == 1
     assert manager.completed_reports[0].status == PhaseStatus.STUCK
+
+
+def test_state_manager_remaining_count_o1() -> None:
+    """Test that get_remaining_count is O(1) and accurate after queue ops."""
+    manager = JitsuStateManager()
+
+    # Queue multiple epics
+    d1 = AgentDirective(epic_id="epic-1", phase_id="p1", module_scope=["s"], instructions="i")
+    d2 = AgentDirective(epic_id="epic-1", phase_id="p2", module_scope=["s"], instructions="i")
+    d3 = AgentDirective(epic_id="epic-2", phase_id="p3", module_scope=["s"], instructions="i")
+    manager.queue_directive(d1)
+    manager.queue_directive(d2)
+    manager.queue_directive(d3)
+
+    # O(1) lookups should be instant and accurate
+    expected_runs = 2
+    assert manager.get_remaining_count("epic-1") == expected_runs
+    assert manager.get_remaining_count("epic-2") == 1
+    assert manager.get_remaining_count("epic-3") == 0  # Non-existent epic
+
+    # Pop one and verify counter decrements
+    manager.get_next_directive()
+    assert manager.get_remaining_count("epic-1") == 1
+
+
+def test_state_manager_clear_queue_resets_counters() -> None:
+    """Test that clear_queue() and on_stuck() reset epic counters."""
+    manager = JitsuStateManager()
+
+    d1 = AgentDirective(epic_id="epic-1", phase_id="p1", module_scope=["s"], instructions="i")
+    manager.queue_directive(d1)
+    assert manager.get_remaining_count("epic-1") == 1
+
+    # clear_queue should reset counters
+    manager.clear_queue()
+    assert manager.get_remaining_count("epic-1") == 0
+
+    # Test on_stuck also clears
+    manager.queue_directive(d1)
+    assert manager.get_remaining_count("epic-1") == 1
+
+    report = PhaseReport(phase_id="p1", status=PhaseStatus.STUCK, agent_notes="Stuck")
+    manager.on_stuck(report)
+    assert manager.get_remaining_count("epic-1") == 0

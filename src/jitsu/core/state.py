@@ -11,6 +11,8 @@ class JitsuStateManager:
         self._queue: list[AgentDirective] = []
         self._reports: list[PhaseReport] = []
         self._phase_to_epic: dict[str, str] = {}
+        # NEW: Track remaining counts per epic for O(1) lookup
+        self._epic_remaining: dict[str, int] = {}
 
     def queue_directive(self, directive: AgentDirective) -> None:
         """
@@ -22,6 +24,9 @@ class JitsuStateManager:
         """
         self._queue.append(directive)
         self._phase_to_epic[directive.phase_id] = directive.epic_id
+        # NEW: Increment counter for this epic
+        epic_id = directive.epic_id
+        self._epic_remaining[epic_id] = self._epic_remaining.get(epic_id, 0) + 1
 
     def get_next_directive(self) -> AgentDirective | None:
         """
@@ -33,7 +38,14 @@ class JitsuStateManager:
         """
         if not self._queue:
             return None
-        return self._queue.pop(0)
+        directive = self._queue.pop(0)
+        # NEW: Decrement counter for this epic
+        epic_id = directive.epic_id
+        if epic_id in self._epic_remaining:
+            self._epic_remaining[epic_id] -= 1
+            if self._epic_remaining[epic_id] <= 0:
+                del self._epic_remaining[epic_id]
+        return directive
 
     def update_phase_status(self, report: PhaseReport) -> str | None:
         """
@@ -58,6 +70,8 @@ class JitsuStateManager:
 
         """
         self.update_phase_status(report)
+        # NEW: Clear epic counters when queue is cleared
+        self._epic_remaining.clear()
         self.clear_queue()
 
     def get_remaining_count(self, epic_id: str) -> int:
@@ -68,10 +82,10 @@ class JitsuStateManager:
             epic_id: The ID of the epic to filter by.
 
         Returns:
-            int: The count of pending phases for that epic.
+            int: The count of pending phases for that epic. O(1) lookup.
 
         """
-        return sum(1 for d in self._queue if d.epic_id == epic_id)
+        return self._epic_remaining.get(epic_id, 0)
 
     def get_pending_phases(self) -> list[dict[str, str]]:
         """
@@ -87,6 +101,8 @@ class JitsuStateManager:
         """Clear all pending directives from the queue."""
         self._queue.clear()
         self._phase_to_epic.clear()
+        # NEW: Clear counters too
+        self._epic_remaining.clear()
 
     @property
     def pending_count(self) -> int:
