@@ -126,8 +126,14 @@ class AgentDirective(BaseModel):
     @classmethod
     def enforce_zero_bypass_verification(cls, v: list[str]) -> list[str]:
         """Mechanically guarantee that the verification pipeline cannot be bypassed."""
-        if not any("just verify" in cmd for cmd in v):
-            v.append("just verify")
+        # Strip out the global command if the LLM hallucinated it
+        v = [cmd for cmd in v if cmd != "just verify"]
+
+        if not v:
+            msg = (
+                "verification_commands cannot be empty. Must include strictly scoped verification."
+            )
+            raise ValueError(msg)
         return v
 
 

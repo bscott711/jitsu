@@ -1,17 +1,18 @@
 """Generates a sequence of AgentDirectives using an LLM."""
 
+import asyncio
 import inspect
 import json
 import logging
 import re
+import uuid
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar, get_args
+from typing import Any, get_args
 
 import anyio
 import typer
 from openai import AsyncOpenAI
-from pydantic import BaseModel, ValidationError
 
 from jitsu.config import settings
 from jitsu.core.client import LLMClientFactory
@@ -19,6 +20,7 @@ from jitsu.models.core import (
     AgentDirective,
     ContextTarget,
     EpicBlueprint,
+    PhaseBlueprint,
     TargetResolutionMode,
 )
 from jitsu.models.execution import (
@@ -38,7 +40,77 @@ from jitsu.providers.tree import DirectoryTreeProvider
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T", bound=BaseModel)
+
+class JitsuFuzzyParser:
+    """Extracts structured data safely from XML-tagged LLM output."""
+
+    @staticmethod
+    def extract_tag(text: str, tag: str, default: str = "") -> str:
+        """Extract content from an XML-like tag, handling missing closing tags."""
+        pattern = rf"<{tag}>(.*?)(?:</{tag}>|<(?=[a-zA-Z_]+>)|$)"
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        return match.group(1).strip() if match else default
+
+    @classmethod
+    def parse_blueprint(cls, text: str) -> EpicBlueprint:
+        """Extract the macro blueprint."""
+        epic_id = cls.extract_tag(text, "epic_id", f"epic-{uuid.uuid4().hex[:6]}")
+        phases = []
+        phase_blocks = re.findall(r"<phase>(.*?)</phase>", text, re.IGNORECASE | re.DOTALL)
+
+        for block in phase_blocks:
+            pid = cls.extract_tag(block, "phase_id")
+            desc = cls.extract_tag(block, "description")
+            if pid:
+                phases.append(PhaseBlueprint(phase_id=pid, description=desc))
+
+        return EpicBlueprint(epic_id=epic_id, phases=phases)
+
+    @classmethod
+    def parse_directive(cls, text: str, epic_id: str, phase_id: str) -> AgentDirective:
+        """Extract the micro directive."""
+        scope_raw = cls.extract_tag(text, "module_scope")
+        scope_list = [s.strip() for s in scope_raw.split(",")] if scope_raw else []
+
+        targets_raw = cls.extract_tag(text, "context_targets")
+        target_list = [t.strip() for t in targets_raw.split("\n") if t.strip()]
+
+        context_targets = [
+            ContextTarget(
+                provider_name="file",
+                target_identifier=t,
+                is_required=True,
+                resolution_mode=TargetResolutionMode.FULL_SOURCE,
+            )
+            for t in target_list
+        ]
+
+        anti_patterns = [
+            a.strip().lstrip("-* ")
+            for a in cls.extract_tag(text, "anti_patterns").split("\n")
+            if a.strip()
+        ]
+        verification = [
+            v.strip()
+            for v in cls.extract_tag(text, "verification_commands").split("\n")
+            if v.strip()
+        ]
+        completion = [
+            c.strip().lstrip("-* ")
+            for c in cls.extract_tag(text, "completion_criteria").split("\n")
+            if c.strip()
+        ]
+
+        return AgentDirective(
+            epic_id=epic_id,
+            phase_id=phase_id,
+            module_scope=scope_list,
+            instructions=cls.extract_tag(text, "instructions", "No instructions provided."),
+            context_targets=context_targets,
+            anti_patterns=anti_patterns,
+            verification_commands=verification,
+            completion_criteria=completion,
+        )
 
 
 class JitsuPlanner:
@@ -51,6 +123,7 @@ class JitsuPlanner:
         client: AsyncOpenAI | None = None,
         on_status: PlannerStatusCallback | None = None,
     ) -> None:
+        """Initialize the planner with an objective and context."""
         self.objective = objective
         self.relevant_files = relevant_files
         self._client = client
@@ -66,6 +139,7 @@ class JitsuPlanner:
         on_progress: Callable[[str], Any] | None = None,
         on_status: PlannerStatusCallback | None = None,
     ) -> None:
+        """Centralized emitter for status updates."""
         callback = on_status or self.on_status
         if callback:
             update = PlannerStatusUpdate(
@@ -82,72 +156,63 @@ class JitsuPlanner:
             if inspect.isawaitable(res):
                 await res
 
-    async def _generate_with_retry(
+    async def _elaborate_phase(
         self,
+        index: int,
+        phase: PhaseBlueprint,
+        blueprint: EpicBlueprint,
+        base_prompt: str,
+        user_message: str,
+        allowed_providers: str,
+        _model: str,
         client: AsyncOpenAI,
-        model: str,
-        messages: list[dict[str, str]],
-        response_model: type[T],
-        max_retries: int = 3,
-    ) -> T:
-        """Raw generation with regex JSON extraction and validation retry loop."""
-        # Inject the schema requirement into the last message (usually user prompt)
-        schema = json.dumps(response_model.model_json_schema())
-
-        # FIX 1: messages is a list, so we must access an index (e.g., the last message)
-        messages[-1]["content"] += (
-            f"\n\nYou MUST output your response as a valid JSON object matching this schema:\n{schema}"
+        opts: PlannerOptions,
+    ) -> AgentDirective:
+        """Elaborate a single phase concurrently."""
+        progress = 40.0 + (50.0 * (index / max(1, len(blueprint.phases))))
+        await self._emit_status(
+            PlannerStage.DRAFTING_PHASES,
+            f"Elaborating Phase {index + 1} ({phase.phase_id})...",
+            progress,
+            opts.on_progress,
+            opts.on_status,
         )
 
-        for attempt in range(max_retries):
-            # FIX 2: Raw OpenAI client - no response_model parameter
-            response = await client.chat.completions.create(
-                model=model,
-                messages=messages,
+        phase_prompt = (
+            base_prompt
+            + PLANNER_MICRO_PROMPT.format(
+                epic_id=blueprint.epic_id,
+                phase_id=phase.phase_id,
+                phase_description=phase.description,
+                allowed_providers=allowed_providers,
             )
+            + f"\n{VERIFICATION_RULE}\n\n{TOOLCHAIN_CONSTRAINTS}\n"
+        )
 
-            # FIX 3: Access choices[0].message.content for raw OpenAI response
-            content = response.choices[0].message.content or ""
-
-            # Attempt to extract JSON block from markdown, or fallback to raw content
-            match = re.search(r"```(?:json)?\s*(.*?)\s*```", content, re.DOTALL)
-            json_str = match.group(1) if match else content
-
-            try:
-                # Strip leading/trailing whitespace that might break json parsing
-                return response_model.model_validate_json(json_str.strip())
-            except ValidationError as e:
-                logger.warning(f"Validation failed on attempt {attempt + 1}: {e}")
-                if attempt == max_retries - 1:
-                    logger.error(
-                        f"Failed to parse LLM output after {max_retries} attempts.\nRaw Output:\n{content}"
-                    )
-                    raise
-
-                # Feed the error back to the LLM to fix
-                messages.append({"role": "assistant", "content": content})
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"Your previous response failed JSON validation:\n{e}\n\nPlease fix the errors and provide valid JSON.",
-                    }
-                )
+        response = await client.chat.completions.create(
+            model=_model,
+            messages=[
+                {"role": "system", "content": phase_prompt},
+                {"role": "user", "content": user_message},
+            ],
+        )
+        # FIX: Access choices[0].message.content (not choices.message)
+        content = response.choices[0].message.content or ""
+        return JitsuFuzzyParser.parse_directive(content, blueprint.epic_id, phase.phase_id)
 
     async def generate_plan(
         self,
         options: PlannerOptions | None = None,
     ) -> list[AgentDirective]:
+        """Query the LLM and generate a validated list of directives using parallel passes."""
         opts = options or PlannerOptions()
         _model = opts.model or settings.planner_model
 
-        # FIX 4: Ensure we get a raw AsyncOpenAI client, not Instructor
         if self._client is not None:
             client = self._client
         else:
-            client = LLMClientFactory.create()
-            # If it's still an instructor client, unwrap it
-            if hasattr(client, "client") and isinstance(client.client, AsyncOpenAI):
-                client = client.client
+            factory_client = LLMClientFactory.create()
+            client = factory_client.client if hasattr(factory_client, "client") else factory_client
 
         allowed_providers = ", ".join(
             get_args(ContextTarget.model_fields["provider_name"].annotation)
@@ -186,17 +251,17 @@ class JitsuPlanner:
             opts.on_status,
         )
 
-        blueprint_system_prompt = base_system_prompt + PLANNER_MACRO_PROMPT
-        blueprint = await self._generate_with_retry(
-            client=client,
+        blueprint_resp = await client.chat.completions.create(
             model=_model,
             messages=[
-                {"role": "system", "content": blueprint_system_prompt},
+                {"role": "system", "content": base_system_prompt + PLANNER_MACRO_PROMPT},
                 {"role": "user", "content": user_message},
             ],
-            response_model=EpicBlueprint,
         )
 
+        # FIX: Access choices[0].message.content (not choices.message)
+        content = blueprint_resp.choices[0].message.content or ""
+        blueprint = JitsuFuzzyParser.parse_blueprint(content)
         self.epic_id = blueprint.epic_id
 
         if opts.verbose:
@@ -205,59 +270,32 @@ class JitsuPlanner:
 
         await self._emit_status(
             PlannerStage.ANALYZING_SCOPE,
-            "Analyzing module scope and drafting phases...",
+            "Drafting phases...",
             40.0,
             opts.on_progress,
             opts.on_status,
         )
 
-        # Pass 2: Micro - Elaborate each phase
-        self.directives = []
-        for i, phase in enumerate(blueprint.phases):
-            progress = 40.0 + (50.0 * (i / len(blueprint.phases)))
-            await self._emit_status(
-                PlannerStage.DRAFTING_PHASES,
-                f"Elaborating Phase {i + 1} of {len(blueprint.phases)} ({phase.phase_id})...",
-                progress,
-                opts.on_progress,
-                opts.on_status,
+        # Pass 2: Micro - Elaborate phases in parallel
+        tasks = [
+            self._elaborate_phase(
+                i,
+                phase,
+                blueprint,
+                base_system_prompt,
+                user_message,
+                allowed_providers,
+                _model,
+                client,
+                opts,
             )
-
-            phase_system_prompt = (
-                base_system_prompt
-                + PLANNER_MICRO_PROMPT.format(
-                    epic_id=blueprint.epic_id,
-                    phase_id=phase.phase_id,
-                    phase_description=phase.description,
-                    allowed_providers=allowed_providers,
-                )
-                + f"\n{VERIFICATION_RULE}\n\n{TOOLCHAIN_CONSTRAINTS}\n"
-            )
-
-            directive = await self._generate_with_retry(
-                client=client,
-                model=_model,
-                messages=[
-                    {"role": "system", "content": phase_system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-                response_model=AgentDirective,
-            )
-
-            if opts.verbose:
-                typer.secho(
-                    f"\n[DEBUG] Phase {i + 1} Directive ({phase.phase_id}):",
-                    fg=typer.colors.CYAN,
-                    bold=True,
-                    err=True,
-                )
-                typer.secho(directive.model_dump_json(indent=2), fg=typer.colors.CYAN, err=True)
-
-            self.directives.append(directive)
+            for i, phase in enumerate(blueprint.phases)
+        ]
+        self.directives = list(await asyncio.gather(*tasks))
 
         await self._emit_status(
             PlannerStage.VALIDATING_SCHEMA,
-            "Validating schema and finalizing project scope...",
+            "Finalizing scope...",
             90.0,
             opts.on_progress,
             opts.on_status,
@@ -280,6 +318,7 @@ class JitsuPlanner:
         include_paths: list[str] | None = None,
         exclude_paths: list[str] | None = None,
     ) -> list[AgentDirective]:
+        """Inject or exclude context paths from the generated directives."""
         if not include_paths and not exclude_paths:
             return directives
 
@@ -315,6 +354,7 @@ class JitsuPlanner:
         return transformed_directives
 
     def save_plan(self, path: str | Path) -> None:
+        """Save the generated plan to disk as a JSON file."""
         file_path = Path(path).resolve()
         file_path.parent.mkdir(parents=True, exist_ok=True)
         json_data = [d.model_dump() for d in self.directives]
