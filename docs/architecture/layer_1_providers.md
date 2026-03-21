@@ -27,13 +27,18 @@ The `ProviderRegistry` allows for the dynamic registration and discovery of cont
 
 ### **Types of Providers**
 
+Jitsu utilizes 10 core tool components to resolve context:
+
 - **AST Provider (`ast`)**: The primary provider for Python files. Uses the `ast` module to extract structural information.
 - **Pydantic Provider (`pydantic`)**: Uses live reflection to generate JSON schemas from Pydantic models.
 - **FileState Provider (`file`)**: A raw-text fallback when full implementation is required.
 - **Git Provider (`git`)**: Integrates live repository state (diffs, status) into the context.
 - **Tree Provider (`tree`)**: Generates visual directory structures for navigational context.
-- **Markdown AST Provider (`markdown`)**: Extracts headings and code blocks from large markdown files.
-- **Env Var Provider (`env`)**: Safely exposes necessary environment configurations.
+- **Markdown AST Provider (`markdown_ast`)**: Extracts headings and code blocks from large markdown files.
+- **Env Var Provider (`env_var`)**: Safely exposes necessary environment configurations.
+- **Base Metadata**: Provides the foundation for all provider implementations.
+- **Provider Registry**: The central discovery mechanism for context resolution.
+- **Context Compiler**: Orchestrates providers to generate JIT prompt manifests.
 
 ---
 

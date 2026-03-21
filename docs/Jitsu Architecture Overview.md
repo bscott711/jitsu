@@ -29,7 +29,7 @@ Jitsu is designed to empower **Agentic Excellence**—the transition from passiv
 
 ## **Architecture Layers**
 
-Jitsu operates through a strict four-layer Domain-Driven Design designed to maximize fidelity and code decoupling.
+Jitsu operates through a strict five-layer Domain-Driven Design designed to maximize fidelity and code decoupling.
 
 ### **Layer 0: Strict Pydantic Models (The Domain)**
 
@@ -55,12 +55,19 @@ The `jitsu.core` module parses directives and manages task state.
 * **`ContextCompiler`**: The engine weaves together directives and live codebase state into optimized Markdown prompts using **U-Curve Attention**.
 * **`JitsuStateManager`**: Manages the life cycle of epics and phases, storing pending directives and aggregating completed phase reports.
 
-### **Layer 3: Transport Layer (MCP Server & CLI)**
+### **Layer 3: Transport Layer (MCP Server)**
 
 The top layer exposes Jitsu tools to IDEs.
 
 * **Planning & Execution Tools**: An extensive tool suite of 10 core tools (including `jitsu_plan_epic`, `jitsu_check_coverage`, and `jitsu_get_next_phase`) allows agents to gather intelligence, verify coverage, and progress through epics.
 * **Just-based Git Lifecycle**: Destructive operations are delegated to `just` recipes (`just commit`, `just sync`), providing a controlled security boundary.
+
+### **Layer 4: CLI (The Bridge)**
+
+The entry point for the user and integration with IDEs.
+
+* **Typer CLI**: Minimalist CLI (`jitsu serve`) to start the orchestration server.
+* **Global Configuration**: Manages environment variables and project-level settings.
 
 ---
 
@@ -85,3 +92,19 @@ graph TD
     F --> G[git_commit]
     G --> H[report_status]
     H --> D
+
+---
+
+## **Integrated Tool Collection**
+
+Jitsu exposes a suite of **10 core tool components** that power its orchestration:
+1. `ast`: Structural analysis and skeleton extraction.
+2. `env_var`: Secure environment context resolution.
+3. `file`: Raw text fallback for full source resolution.
+4. `git`: Real-time repository state and lifecycle.
+5. `markdown_ast`: Structural parsing of large documents.
+6. `pydantic`: Schema-first intelligence for models.
+7. `tree`: Navigational directory skeletonization.
+8. `base`: The foundation for all provider implementations.
+9. `registry`: Discovery and routing for tool handlers and providers.
+10. `compiler`: Progressive disclosure and prompt weaving engine.

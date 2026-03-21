@@ -35,9 +35,21 @@ The `JitsuStateManager` manages the persistence of the entire orchestration loop
 
 The "brain" that translates natural language goals into a structured `EpicBlueprint` and `AgentDirectives`. This logic powers the `jitsu_plan_epic` MCP tool.
 
-### **`JitsuRunner`**
+### **`CommandRunner`**
 
-A utility for executing shell commands and verification steps within the repository context.
+A utility for executing shell commands and verification steps within the repository context, ensuring that all actions match the "Definition of Done."
+
+### **`JitsuClient`**
+
+Handles the interaction with external LLMs for planning and reasoning, abstracting the provider-specific details (e.g., OpenAI).
+
+### **`EpicStorage`**
+
+A disk-persistent storage layer for saving and loading planned epics as JSON files.
+
+### **`DirectiveParser`**
+
+Responsible for validating and parsing raw JSON directives into the strictly-typed `AgentDirective` model.
 
 ---
 

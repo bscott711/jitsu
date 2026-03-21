@@ -12,6 +12,7 @@ The Domain layer is kept strictly isolated from the rest of the application (Cor
 2. **Zero-Dependency Policy**: By avoiding external dependencies (other than Pydantic), Layer 0 ensures that changes in providers or transport layers cannot break the basic data structures.
 3. **Portability**: These models can be easily shared or mirrored in other environments (like the MCP client side) without bringing along the entire Jitsu engine.
 4. **Deterministic Serialization**: Pydantic V2 ensures that `AgentDirective` and `PhaseReport` objects are always serialized/deserialized consistently, preventing "Schema Drift."
+5. **Framework Neutrality**: Layer 0 avoids any dependencies on transport frameworks (like MCP) or execution frameworks, remaining pure Python data contracts.
 
 ---
 

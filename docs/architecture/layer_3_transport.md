@@ -12,7 +12,7 @@ Jitsu follows a strict separation of concerns between its transport mechanism an
 
 ### **`mcp_server.py`: The Transport Layer**
 
-The `mcp_server.py` module acts strictly as a **transport mechanism**. It handles the MCP lifecycle (stdio/SSE), tool listing, and incoming call routing. Crucially, it **does not** contain business logic.
+The `mcp_server.py` module acts strictly as a **transport mechanism**. It primarily facilitates communication over **stdio** (standard input/output), which is the most common transport for locally-run AI IDE agents. Support for **SSE (Server-Sent Events)** is also architected but stdio remains the primary focus. Crucially, it **does not** contain business logic.
 
 - **Role**: Listener and Dispatcher.
 - **Delegation**: It delegates all tool execution to the `ToolHandlers` class via the `ToolRegistry`.
