@@ -41,7 +41,7 @@ class JitsuFuzzyParser:
     def parse_blueprint(cls, text: str) -> EpicBlueprint:
         """Extract the macro blueprint (Pass 1)."""
         epic_id = cls.extract_tag(text, ["epic_id", "epic", "id"], f"epic-{uuid.uuid4().hex[:6]}")
-        phases = []
+        phases: list[PhaseBlueprint] = []
 
         # Find all <phase> blocks
         phase_blocks = re.findall(r"<phase>(.*?)</phase>", text, re.IGNORECASE | re.DOTALL)

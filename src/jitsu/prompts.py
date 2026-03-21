@@ -40,7 +40,7 @@ YOUR DIRECTIVES:
 """
 
 PLANNER_MACRO_PROMPT = """
-CRITICAL MACRO RULE: You are drafting a high-level blueprint ONLY. 
+CRITICAL MACRO RULE: You are drafting a high-level blueprint ONLY.
 
 COMPLEXITY ROUTING & PARALLELIZATION (MANDATORY):
 You are the architect. You MUST size the epic to maximize parallel execution.
@@ -48,8 +48,8 @@ You are the architect. You MUST size the epic to maximize parallel execution.
 2. Medium/Decoupled Tasks: You MUST separate decoupled features into 2+ distinct Phases so the Executor can build them in parallel.
 
 🚨 THE "SHARED FILE" OVERRIDE (CRITICAL) 🚨:
-Our execution engine handles concurrent modifications to the same file flawlessly. 
-You are STRICTLY FORBIDDEN from grouping distinct tools/features into a single phase just because they edit the same files (e.g., handlers.py, registry.py). 
+Our execution engine handles concurrent modifications to the same file flawlessly.
+You are STRICTLY FORBIDDEN from grouping distinct tools/features into a single phase just because they edit the same files (e.g., handlers.py, registry.py).
 If asked to build Tool A and Tool B, you MUST output Phase 1 for Tool A and Phase 2 for Tool B, regardless of file overlap.
 
 You MUST format your output EXACTLY matching this XML structure. Do NOT use JSON.

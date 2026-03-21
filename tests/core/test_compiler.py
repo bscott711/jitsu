@@ -33,6 +33,7 @@ async def test_compile_empty_targets() -> None:
         phase_id="phase-1",
         module_scope=["test"],
         instructions="do stuff",
+        verification_commands=["just check"],
     )
     res = await compiler.compile_directive(directive)
     assert "No context targets." in res
@@ -49,6 +50,7 @@ async def test_compile_with_anti_patterns() -> None:
         module_scope=["test"],
         instructions="do stuff",
         anti_patterns=["Do not use MD5"],
+        verification_commands=["just check"],
     )
     res = await compiler.compile_directive(directive)
     assert "## Anti-Patterns" in res
@@ -75,6 +77,7 @@ async def test_compile_valid_provider() -> None:
                 target_identifier="test_target",
             )
         ],
+        verification_commands=["just check"],
     )
     res = await compiler.compile_directive(directive)
     assert "MOCK_FILE_CONTENT" in res
@@ -154,6 +157,7 @@ async def test_compile_context_manifest_inclusion() -> None:
                 resolution_mode=TargetResolutionMode.FULL_SOURCE,
             )
         ],
+        verification_commands=["just check"],
     )
     res = await compiler.compile_directive(directive)
     assert TAG_CONTEXT_MANIFEST in res
@@ -179,6 +183,7 @@ async def test_compile_auto_pydantic_trigger() -> None:
                 resolution_mode=TargetResolutionMode.AUTO,
             )
         ],
+        verification_commands=["just check"],
     )
     res = await compiler.compile_directive(directive)
     assert "SCHEMA_OUTPUT" in res
@@ -205,6 +210,7 @@ async def test_explicit_mode_failure_string_in_manifest() -> None:
                 resolution_mode=TargetResolutionMode.FULL_SOURCE,
             )
         ],
+        verification_commands=["just check"],
     )
 
     res = await compiler.compile_directive(directive)
@@ -230,6 +236,7 @@ async def test_compile_explicit_schema_mode() -> None:
                 resolution_mode=TargetResolutionMode.SCHEMA_ONLY,
             )
         ],
+        verification_commands=["just check"],
     )
     res = await compiler.compile_directive(directive)
     assert "SCHEMA_JSON" in res
@@ -254,6 +261,7 @@ async def test_explicit_mode_missing_provider_failure() -> None:
                 resolution_mode=TargetResolutionMode.STRUCTURE_ONLY,
             )
         ],
+        verification_commands=["just check"],
     )
     res = await compiler.compile_directive(directive)
     assert "FAILED" in res
@@ -277,7 +285,7 @@ async def test_compile_with_verification_and_criteria() -> None:
         phase_id="phase-1",
         module_scope=["test"],
         instructions="do stuff",
-        verification_commands=["just verify"],
+        verification_commands=["just check"],
         completion_criteria=["All tests pass"],
     )
     res = await compiler.compile_directive(directive)
@@ -286,7 +294,7 @@ async def test_compile_with_verification_and_criteria() -> None:
     assert "- [ ] All tests pass" in res
     assert "### Verification" in res
     assert "You MUST run the following commands" in res
-    assert "```bash\njust verify\n```" in res
+    assert "```bash\njust check\n```" in res
 
 
 @pytest.mark.asyncio
@@ -396,6 +404,7 @@ async def test_compiler_parallel_resolution() -> None:
             ContextTarget(provider_name="file", target_identifier=f"file{i}.py")
             for i in range(_EXPECTED_CALL_COUNT_5)
         ],
+        verification_commands=["just check"],
     )
 
     # Should complete in ~0.01s (parallel) not ~0.05s (sequential)
@@ -462,6 +471,7 @@ async def test_compile_required_target_failure() -> None:
                 is_required=True,  # <-- Key: mark as required
             )
         ],
+        verification_commands=["just check"],
     )
 
     res = await compiler.compile_directive(directive)

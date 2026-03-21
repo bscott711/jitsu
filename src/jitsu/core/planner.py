@@ -4,19 +4,17 @@ import asyncio
 import inspect
 import json
 import logging
-import re
-import uuid
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, get_args
+from typing import Any, cast, get_args
 
 import anyio
 import typer
 from openai import AsyncOpenAI
 
 from jitsu.config import settings
-from jitsu.core.parser import JitsuFuzzyParser
 from jitsu.core.client import LLMClientFactory
+from jitsu.core.parser import JitsuFuzzyParser
 from jitsu.models.core import (
     AgentDirective,
     ContextTarget,
@@ -85,7 +83,7 @@ class JitsuPlanner:
             if inspect.isawaitable(res):
                 await res
 
-    async def _elaborate_phase(
+    async def _elaborate_phase(  # noqa: PLR0913
         self,
         index: int,
         phase: PhaseBlueprint,
@@ -136,12 +134,9 @@ class JitsuPlanner:
         """Query the LLM and generate a validated list of directives using parallel passes."""
         opts = options or PlannerOptions()
         _model = opts.model or settings.planner_model
+        client: AsyncOpenAI
 
-        if self._client is not None:
-            client = self._client
-        else:
-            factory_client = LLMClientFactory.create()
-            client = factory_client.client if hasattr(factory_client, "client") else factory_client
+        client = self._client if self._client is not None else LLMClientFactory.create()
 
         allowed_providers = ", ".join(
             get_args(ContextTarget.model_fields["provider_name"].annotation)
@@ -189,7 +184,9 @@ class JitsuPlanner:
         )
 
         # FIX: Access choices[0].message.content (not choices.message)
-        content = blueprint_resp.choices[0].message.content or ""
+        # Use cast to satisfy strict Pyright unknown member checks
+        message = blueprint_resp.choices[0].message
+        content = cast("str | None", getattr(message, "content", "")) or ""
         blueprint = JitsuFuzzyParser.parse_blueprint(content)
         self.epic_id = blueprint.epic_id
 

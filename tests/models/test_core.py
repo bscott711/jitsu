@@ -117,7 +117,7 @@ def test_agent_directive_new_fields() -> None:
         verification_commands=["uv run pytest"],
         completion_criteria=["All tests pass"],
     )
-    assert directive.verification_commands == ["uv run pytest", "just verify"]
+    assert directive.verification_commands == ["uv run pytest"]
     assert directive.completion_criteria == ["All tests pass"]
 
 
@@ -207,22 +207,23 @@ def test_agent_directive_invalid_module_scope() -> None:
 
 
 def test_agent_directive_verification_bypass_prevention() -> None:
-    """Test that 'just verify' is automatically added to verification_commands."""
+    """Test that 'just verify' is automatically stripped from verification_commands."""
     directive = AgentDirective(
         epic_id="epic-001",
         phase_id="phase-001",
         module_scope=["src"],
         instructions="test",
-        verification_commands=["ls -R"],
+        verification_commands=["ls -R", "just verify"],
     )
-    assert "just verify" in directive.verification_commands
+    assert "just verify" not in directive.verification_commands
+    assert "ls -R" in directive.verification_commands
 
-    # Test when it's already there
-    directive2 = AgentDirective(
-        epic_id="epic-001",
-        phase_id="phase-001",
-        module_scope=["src"],
-        instructions="test",
-        verification_commands=["just verify", "other command"],
-    )
-    assert directive2.verification_commands.count("just verify") == 1
+    # Test when only 'just verify' is passed (should raise error because it becomes empty)
+    with pytest.raises(ValidationError, match="verification_commands cannot be empty"):
+        AgentDirective(
+            epic_id="epic-001",
+            phase_id="phase-001",
+            module_scope=["src"],
+            instructions="test",
+            verification_commands=["just verify"],
+        )

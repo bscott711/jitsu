@@ -52,10 +52,7 @@ async def main() -> None:
         typer.secho(f"  ⏳ {msg}", fg=typer.colors.CYAN)
 
     # 2. Set verbose=True to print the blueprint mid-flight
-    options = PlannerOptions(
-        verbose=True, 
-        on_progress=on_progress
-    )
+    options = PlannerOptions(verbose=True, on_progress=on_progress)
 
     start_time = time.perf_counter()
 
@@ -66,7 +63,7 @@ async def main() -> None:
 
         typer.echo(f"\n⏱️  LLM Generation Latency: {end_time - start_time:.2f} seconds")
         typer.echo(f"✅ Epic Plan Generated with {len(plan)} phases!")
-        
+
         if plan:
             typer.echo("\nSample Final Output (Phase 1):")
             typer.echo(plan[0].model_dump_json(indent=2))  # Single item has .model_dump_json()
