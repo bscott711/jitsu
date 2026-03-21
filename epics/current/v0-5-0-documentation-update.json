@@ -1,0 +1,249 @@
+[
+  {
+    "epic_id": "v0-5-0-documentation-update",
+    "phase_id": "update-version-and-tool-count",
+    "module_scope": [
+      ".",
+      "docs"
+    ],
+    "instructions": "# Phase Instructions: Update Version and Tool Count\n\n        ## Objective\n        Update the version number to `v0.5.0` and the total tool count to `10` in all specified documentation files.\n\n        ## Files to Update\n        - README.md        - docs/index.md\n        - docs/MCP Tools Reference.md\n        - docs/CLI Reference.md\n        - docs/Jitsu Architecture Overview.md\n        - docs/architecture/layer_0_domain.md\n        - docs/architecture/layer_1_providers.md\n        - docs/architecture/layer_2_core.md        - docs/architecture/layer_3_transport.md\n\n        ## Steps\n        1. For each file in the list above:\n            a. Replace the existing version string (e.g., \"v0.4.0\") with \"v0.5.0\".\n            b. Replace the existing tool count number (e.g., \"9\") with \"10\".\n        2. Ensure changes are limited to version and tool count fields only.\n        3. Verify markdown syntax remains intact after changes.\n\n        ## COVERAGE SPEC\n        N/A (no Python code modified in this phase)\n\n        ## TYPE CONTRACTS\n        N/A (no Python code modified in this phase)\n\n        ## Anti-Patterns to Avoid\n        - Do not update version or tool count in non-markdown files (e.g., source code, configuration).\n        - Do not alter any content outside of version and tool count specifications.\n        - Do not break markdown links, headers, or list syntax during replacement.\n\n        ## Completion Criteria        - All target files contain exactly \"v0.5.0\" as the version string.\n        - All target files contain exactly \"10\" as the tool count.\n        - `just lint` passes without errors for all modified files.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "README.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/index.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/MCP Tools Reference.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/CLI Reference.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/Jitsu Architecture Overview.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_0_domain.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_1_providers.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_2_core.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_3_transport.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not update version or tool count in non-markdown files (e.g., source code, configuration).",
+      "Do not alter any content outside of version and tool count specifications.",
+      "Do not break markdown links, headers, or list syntax during replacement."
+    ],
+    "verification_commands": [
+      "just lint"
+    ],
+    "completion_criteria": [
+      "All target files contain exactly \"v0.5.0\" as the version string.",
+      "All target files contain exactly \"10\" as the tool count.",
+      "`just lint` passes without errors for all modified files."
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "v0-5-0-documentation-update",
+    "phase_id": "document-jitsu-check-coverage",
+    "module_scope": [
+      "docs"
+    ],
+    "instructions": "COVERAGE SPEC:\n        - Update all documentation files to reflect v0.5.0 version and 10-tool architecture.\n        - Ensure no broken links or outdated version references remain.\n        - Verify all Markdown files pass pymarkdown linting.\n\n        TYPE CONTRACTS:\n        - Version strings must follow semver format (e.g., \"v0.5.0\").\n        - Tool count references must be updated to integer 10.\n        - Architecture documentation must accurately reflect src/jitsu/ directory structure.\n\n        STEPS:\n        1. Update README.md: \n            - Change version badge from v0.4.0 to v0.5.0\n            - Update \"9 tools\" to \"10 tools\" in description            - Update any version references in text\n        2. Update docs/index.md:\n            - Update version in title/header if present\n            - Update tool count references\n        3. Update docs/MCP Tools Reference.md:\n            - Add documentation for jitsu_check_coverage tool (see details below)\n            - Update total tool count to 10\n        4. Update docs/CLI Reference.md:\n            - Audit Typer usage against actual src/jitsu/cli/main.py\n            - Update version references\n            - Ensure command examples match current implementation\n        5. Update docs/Jitsu Architecture Overview.md:\n            - Update version references\n            - Verify architecture layers match current src/jitsu/ structure\n        6. Update docs/architecture/layer_0_domain.md:\n            - Update version references\n            - Confirm domain layer description matches models/\n        7. Update docs/architecture/layer_1_providers.md:\n            - Update version references\n            - Confirm provider layer matches providers/ directory\n        8. Update docs/architecture/layer_2_core.md:\n            - Update version references\n            - Confirm core layer matches core/ directory (excluding providers)\n        9. Update docs/architecture/layer_3_transport.md:\n            - Update version references\n            - Confirm transport layer matches server/ directory\n\n        jitsu_check_coverage TOOL DOCUMENTATION (for MCP Tools Reference.md):\n        ## jitsu_check_coverage\n        Checks test coverage for specified modules or files.\n        \n        **Parameters:**\n        - `module_scope` (string, optional): Python module path to check coverage for (e.g., \"src/jitsu/core\"). If omitted, checks entire project.\n        - `file_paths` (array of strings, optional): Specific file paths to check coverage for.\n        \n        **Returns:**\n        - Coverage percentage as float\n        - List of files with missing coverage\n        \n        **Usage Example:**\n        ```python        # Check coverage for core module\n        coverage = await mcp.jitsu_check_coverage({\"module_scope\": \"src/jitsu/core\"})\n                # Check specific files\n        coverage = await mcp.jitsu_check_coverage({\n            \"file_paths\": [\"src/jitsu/core/file.py\", \"tests/core/test_file.py\"]\n        })\n        ```\n        \n        **Notes:**\n        - Requires pytest-cov to be installed\n        - Reports coverage only for lines executed by tests\n        - Returns 0.0 if no tests found for scope",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "README.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/index.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/MCP Tools Reference.md        docs/CLI Reference.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/Jitsu Architecture Overview.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_0_domain.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_1_providers.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_2_core.md        docs/architecture/layer_3_transport.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not update version numbers in code files (only documentation)",
+      "Do not hardcode file paths in documentation; use relative paths where appropriate",
+      "Do not update tool count in code comments or strings (only documentation)",
+      "Do not bypass pymarkdown linting by skipping verification"
+    ],
+    "verification_commands": [
+      "just lint",
+      "just format README.md docs/index.md docs/MCP\\ Tools\\ Reference.md docs/CLI\\ Reference.md docs/Jitsu\\ Architecture\\ Overview.md docs/architecture/layer_0_domain.md docs/architecture/layer_1_providers.md docs/architecture/layer_2_core.md docs/architecture/layer_3_transport.md"
+    ],
+    "completion_criteria": [
+      "All documentation files updated to v0.5.0",
+      "All version references changed from v0.4.0 to v0.5.0        - All tool count references updated from 9 to 10",
+      "jitsu_check_coverage tool documented in MCP Tools Reference.md        - Architecture documentation matches src/jitsu/ tiered structure",
+      "CLI Reference audited against actual Typer implementation",
+      "just lint passes on all modified Markdown files",
+      "just format applied consistently"
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "v0-5-0-documentation-update",
+    "phase_id": "update-architecture-documentation",
+    "module_scope": [
+      "docs",
+      "docs/architecture"
+    ],
+    "instructions": "Update architecture documentation (Jitsu Architecture Overview.md and layer_0 to layer_3) to reflect the current src/jitsu/ tiered structure.\n\n        Steps:\n        1. For each target file, first use `jitsu_request_context` to fetch the AST of relevant src/jitsu/ source files to understand the current tiered structure:\n           - Layer 0 (Domain): src/jitsu/models/core.py, src/jitsu/models/execution.py\n           - Layer 1 (Providers): src/jitsu/providers/base.py, src/jitsu/providers/registry.py\n           - Layer 2 (Core): src/jitsu/core/planner.py, src/jitsu/core/runner.py, src/jitsu/core/client.py\n           - Layer 3 (Transport): src/jitsu/server/mcp_server.py, src/jitsu/server/handlers.py\n           - Overview: src/jitsu/__init__.py, src/jitsu/config.py\n\n        2. Update the following files with the current structure:\n           - docs/Jitsu Architecture Overview.md: \n               * Update the layer diagram to show 5 layers (including Layer 4: CLI/Server)\n               * Update tool count to 10 (list all providers: ast, env, file, git, markdown, pydantic, tree, base, registry, compiler)\n               * Update version to v0.5.0           - docs/architecture/layer_0_domain.md:\n               * Describe domain models (src/jitsu/models/) and use cases\n               * Clarify no framework dependencies\n           - docs/architecture/layer_1_providers.md:\n               * List all 10 tools as provider implementations\n               * Explain provider interface (src/jitsu/providers/base.py)\n               * Detail each provider's responsibility\n           - docs/architecture/layer_2_core.md:\n               * Detail planner, runner, client, compiler, parser, state, storage\n               * Explain core interfaces and data flow\n           - docs/architecture/layer_3_transport.md:\n               * Describe MCP server implementation\n               * Explain handlers and registry\n               * Note stdio/http transport options\n\n        3. Ensure all Markdown follows project style:\n               * Use consistent heading levels (H1 for title, H2 for sections)\n               * Use fenced code blocks for examples\n               * Keep lines under 100 characters\n               * Use active voice and present tense\n\n        COVERAGE SPEC:\n            - 100% of the five target documentation files must be updated\n            - All layer responsibilities must match current src/jitsu/ structure\n            - Tool count must be exactly 10 across all documents\n            - Version must be v0.5.0 everywhere\n\n        TYPE CONTRACTS:\n            - All module references must use fully qualified paths (e.g., `src.jitsu.core.planner`)\n            - Interface descriptions must match actual method signatures in source\n            - Data flow descriptions must reflect actual type dependencies\n            - No speculative or future-looking statements about unimplemented features",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/Jitsu Architecture Overview.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_0_domain.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_1_providers.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_2_core.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/architecture/layer_3_transport.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not copy-paste code snippets without verification",
+      "Do not assume layer boundaries without checking src/jitsu/ structure",
+      "Do not update version/tool count in non-architecture files (handled in other phases)"
+    ],
+    "verification_commands": [
+      "just lint",
+      "uv run pymarkdown scan docs/Jitsu Architecture Overview.md -q",
+      "uv run pymarkdown scan docs/architecture/layer_0_domain.md -q",
+      "uv run pymarkdown scan docs/architecture/layer_1_providers.md -q",
+      "uv run pymarkdown scan docs/architecture/layer_2_core.md -q",
+      "uv run pymarkdown scan docs/architecture/layer_3_transport.md -q"
+    ],
+    "completion_criteria": [
+      "All five documentation files pass pymarkdown linting",
+      "just lint passes with no new warnings",
+      "Tool count is consistently 10 across all updated files",
+      "Version is consistently v0.5.0 across all updated files"
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "v0-5-0-documentation-update",
+    "phase_id": "audit-cli-reference",
+    "module_scope": [
+      "."
+    ],
+    "instructions": "## PLANNING STEP: v0-5-0-documentation-update epic\n\n        We are initiating the planning phase for the `v0-5-0-documentation-update` epic using the `jitsu_plan_epic` tool.         This epic involves updating documentation to reflect the v0.5.0 release and 10-tool architecture.\n\n        **Epic Prompt**:\n        Update README.md and all files in docs/ to reflect the v0.5.0 release and 10-tool architecture.\n        Changes:\n          - Bump version to v0.5.0.\n          - Update total tool count to 10 in all references.\n          - Document 'jitsu_check_coverage' in 'MCP Tools Reference.md'.\n          - Update architecture documentation (Layer 0-3) to match the current 'src/jitsu/' tiered structure.\n          - Audit the Typer CLI usage in 'CLI Reference.md'.\n\n        **Relevant Files**:\n        - README.md\n        - docs/index.md\n        - docs/MCP Tools Reference.md        - docs/CLI Reference.md\n        - docs/Jitsu Architecture Overview.md\n        - docs/architecture/layer_0_domain.md        - docs/architecture/layer_1_providers.md\n        - docs/architecture/layer_2_core.md\n        - docs/architecture/layer_3_transport.md\n\n        After successful execution of `jitsu_plan_epic`, the epic will be broken down into executable phases. \n        The next step is to retrieve the first phase via `jitsu_get_next_phase`.\n\n        **Coverage Spec**:\n        - N/A (planning step does not modify source code)\n\n        **Type Contracts**:\n        - N/A (planning step does not modify source code)",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "<!-- No files are read or written during planning; context_targets remains empty -->",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not bypass the gatekeeper.",
+      "Do not hardcode paths."
+    ],
+    "verification_commands": [
+      "<!-- Verify linting compliance of relevant documentation files -->",
+      "uv run just lint README.md -q",
+      "uv run just lint docs/index.md -q        uv run just lint \"docs/MCP Tools Reference.md\" -q",
+      "uv run just lint \"docs/CLI Reference.md\" -q",
+      "uv run just lint \"docs/Jitsu Architecture Overview.md\" -q",
+      "uv run just lint docs/architecture/layer_0_domain.md -q",
+      "uv run just lint docs/architecture/layer_1_providers.md -q",
+      "uv run just lint docs/architecture/layer_2_core.md -q        uv run just lint docs/architecture/layer_3_transport.md -q"
+    ],
+    "completion_criteria": [
+      "The `jitsu_plan_epic` tool has been invoked successfully with the provided prompt and relevant files.",
+      "The epic has been decomposed into phases and placed in the execution queue.",
+      "The next phase can be retrieved via `jitsu_get_next_phase` without errors."
+    ],
+    "context_injection": null
+  }
+]

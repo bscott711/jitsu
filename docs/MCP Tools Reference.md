@@ -1,6 +1,6 @@
 # Jitsu MCP Tools Reference
 
-Jitsu exposes a suite of **9 core tools** via the Model Context Protocol (MCP) to allow IDE agents to self-orchestrate and pull context dynamically.
+Jitsu exposes a suite of **10 core tools** via the Model Context Protocol (MCP) to allow IDE agents to self-orchestrate and pull context dynamically.
 
 ## 1. Orchestration & Queue Management
 
@@ -63,3 +63,12 @@ Jitsu exposes a suite of **9 core tools** via the Model Context Protocol (MCP) t
 - **Parameters**:
   - `message` (string): A Conventional Commit message (e.g., `feat: added routing`).
   - `sync` (boolean): If true, runs `git push` after committing.
+
+## 5. Testing & Validation
+
+### `jitsu_check_coverage`
+
+- **Description**: Runs a scoped `pytest` coverage check on a specific test file and set of source modules. Returns a JSON mapping of missing line numbers per file.
+- **Parameters**:
+  - `test_file_path` (string): The path to the test file to execute.
+  - `module_scope` (array): A list of module strings to track (e.g., `["jitsu.core", "jitsu.providers"]`).

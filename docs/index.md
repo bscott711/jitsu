@@ -42,10 +42,8 @@ The MCP server and CLI that exposes Jitsu tools to IDEs like Antigravity, Cursor
 - [**Architecture Overview**](Jitsu%20Architecture%20Overview.md): Deep dive into the design and workflow.
 - [**Ecosystem Landscape & SOTA**](architecture/landscape.md): Comparative analysis vs. SOTA agents.
 - [**CLI Command Reference**](CLI%20Reference.md): Guide to the `serve` command.
-- [**MCP Tools Reference**](MCP%20Tools%20Reference.md): Documentation for the 9 core tools.
+- [**MCP Tools Reference**](MCP%20Tools%20Reference.md): Documentation for the 10 core tools.
 
 ---
 
 ## Getting Started
-
-To install Jitsu and start your first self-orchestrated epic, see the [README](../README.md#installation).

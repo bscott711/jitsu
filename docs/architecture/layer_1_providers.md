@@ -2,13 +2,13 @@
 
 > **Automatic Documentation Guarantee:** This documentation is automatically synchronized by Jitsu's self-documenting workflow as part of its core process.
 
-Layer 2 is responsible for "observing" the codebase. It consists of specialized Context Providers that translate raw filesystem data into LLM-optimized representations.
+Layer 1 is responsible for "observing" the codebase. It consists of specialized Context Providers that translate raw filesystem data into LLM-optimized representations.
 
 ---
 
 ## **The AST-First Philosophy**
 
-The core differentiator of Layer 2 is its **AST-First** parsing policy. Most AI tools provide full source code, which includes implementation details that act as "noise" for high-level reasoning. Jitsu prioritizes structural skeletons:
+The core differentiator of Layer 1 is its **AST-First** parsing policy. Most AI tools provide full source code, which includes implementation details that act as "noise" for high-level reasoning. Jitsu prioritizes structural skeletons:
 
 - **Signatures & Docstrings**: Provides the "what" and "how" of a function/class.
 - **Contract Clarity**: Stripping implementation logic saves **70-90% of tokens**, allowing agents to "see" more of the codebase simultaneously.
@@ -41,4 +41,3 @@ The `ProviderRegistry` allows for the dynamic registration and discovery of cont
 
 1. **Initialization**: Providers are initialized with the workspace root to ensure all paths are absolute and sandboxed.
 2. **Resolution**: The `resolve(target)` method is called with a specific identifier (module name, file path, or class name).
-3. **Optimized Output**: The provider returns a deterministic Markdown string optimized for LLM consumption.

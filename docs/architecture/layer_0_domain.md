@@ -43,4 +43,3 @@ The structured feedback submitted by the agent upon completion of a phase.
 - **`TargetResolutionMode`**: Controls how the `ContextCompiler` resolves a file (`AUTO`, `STRUCTURE_ONLY`, `FULL_SOURCE`, `SCHEMA_ONLY`).
 - **`ContextInjectionConfig`**: Configuration for deterministic context inclusion and exclusion.
 - **`PhaseBlueprint` / `EpicBlueprint`**: High-level structures for planning the sequence of tasks.
-- **`ContextTarget`**: A specific request for a file/module with a chosen provider and resolution mode.

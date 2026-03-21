@@ -59,7 +59,7 @@ The `jitsu.core` module parses directives and manages task state.
 
 The top layer exposes Jitsu tools to IDEs.
 
-* **Planning & Execution Tools**: An extensive tool suite (`jitsu_plan_epic`, `jitsu_get_next_phase`, `jitsu_request_context`) allows agents to gather intelligence and progress through epics.
+* **Planning & Execution Tools**: An extensive tool suite of 10 core tools (including `jitsu_plan_epic`, `jitsu_check_coverage`, and `jitsu_get_next_phase`) allows agents to gather intelligence, verify coverage, and progress through epics.
 * **Just-based Git Lifecycle**: Destructive operations are delegated to `just` recipes (`just commit`, `just sync`), providing a controlled security boundary.
 
 ---
@@ -85,4 +85,3 @@ graph TD
     F --> G[git_commit]
     G --> H[report_status]
     H --> D
-```

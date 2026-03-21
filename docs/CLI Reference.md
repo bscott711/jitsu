@@ -15,6 +15,3 @@ Starts the Jitsu MCP Server over `stdio`. This is the primary mode of operation 
 ---
 
 ## Global Options
-
-- `--quiet` / `-q`: Suppress all non-error output (Legacy/Deprecated).
-- `--help`: Show the global help message and available commands.

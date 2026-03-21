@@ -35,5 +35,3 @@ Routing is handled by a dedicated `ToolRegistry`. This registry maps tool names 
 2. **Setup**: The `ToolHandlers` are created (Dependency Injection) and registered with the `ToolRegistry`.
 3. **Transport**: `run_server()` starts the MCP transport over stdio.
 4. **Call**: When an IDE agent calls a tool, the transport layer asks the Registry for the handler and executes it.
-
-This design allows for high-fidelity testing of the orchestration logic in `handlers.py` while keeping the "messy" details of stdio communication isolated in `mcp_server.py`.

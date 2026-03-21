@@ -2,7 +2,7 @@
 
 > **Automatic Documentation Guarantee:** This documentation is automatically synchronized by Jitsu's self-documenting workflow as part of its core process.
 
-Layer 1 is the "Engine Room" of Jitsu. It implements the logic required to parse directives, manage the state of the execution queue, and compile optimized JIT context manifests for the agent.
+Layer 2 is the "Engine Room" of Jitsu. It implements the logic required to parse directives, manage the state of the execution queue, and compile optimized JIT context manifests for the agent.
 
 ---
 
@@ -43,10 +43,9 @@ A utility for executing shell commands and verification steps within the reposit
 
 ## **The Orchestration Loop**
 
-Layer 1 facilitates the following loop:
+Layer 2 facilitates the following loop:
 
 1. **State Manager** receives an Epic.
 2. **Agent** pulls the next `AgentDirective`.
 3. **Compiler** resolves the requested `ContextTargets` via Layer 1 Providers.
 4. **Agent** executes work and returns a `PhaseReport`.
-5. **State Manager** updates the status and prepares the next phase.

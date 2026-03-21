@@ -28,4 +28,3 @@ This document tracks the completed architectural milestones and the future visio
 
 - **Live State Inspection**: A web-based dashboard for visualizing the orchestration queue and phase reports.
 - **History & Rollback**: Built-in mechanisms for reverting specifically to a previously successful phase in an epic.
-- **Concurrency Support**: Enabling multiple agents to pull and report on different phases of the same epic concurrently.

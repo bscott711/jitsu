@@ -26,4 +26,3 @@ To keep this project rock solid, we adhere strictly to the following rules:
 3. **Maximum Type Strictness**: We operate with Pyright's strict mode. No `Any` types unless absolutely necessary.
 4. **Strict Dependency Enforcement**: We use `import-linter` to guarantee that `jitsu.models` never imports from `jitsu.server` or `jitsu.providers`.
 5. **Protocol Safety (MCP stdio)**: All CLI outputs and logs MUST be explicitly routed to `sys.stderr` to prevent protocol corruption on `stdout`.
-6. **No "Boilerplate Slop"**: Provide fully functioning code in code blocks. No "here is how you might do X".

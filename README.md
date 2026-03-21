@@ -4,7 +4,7 @@
 
 **Jitsu** is a high-performance orchestration layer designed to eliminate **Prompt Debt**, **Context Drift**, and **LLM Laziness** in AI-driven software engineering. It shifts context preparation from the agent's limited window to a powerful Python engine, serving the absolute "ground truth" of your codebase **Just-In-Time (JIT)** directly to your AI IDE.
 
-### **✨ v0.4.0 Architecture Highlights**
+### **✨ v0.5.0 Architecture Highlights**
 
 Jitsu operates as a stateful memory and context engine for your IDE agent:
 
@@ -51,7 +51,7 @@ To use Jitsu in an MCP-compatible IDE (Antigravity, Cursor, Windsurf, etc.):
    jitsu serve --epic path/to/epic_plan.json
    ```
 
-3. **Orchestrate**: Drive your agent using the **9 Core Jitsu Tools**:
+3. **Orchestrate**: Drive your agent using the **10 Core Jitsu Tools**:
    * `jitsu_get_planning_context`
    * `jitsu_plan_epic`
    * `jitsu_submit_epic`
@@ -61,6 +61,7 @@ To use Jitsu in an MCP-compatible IDE (Antigravity, Cursor, Windsurf, etc.):
    * `jitsu_request_context`
    * `jitsu_git_status`
    * `jitsu_git_commit`
+   * `jitsu_check_coverage`
 
 ## **📖 Documentation**
 
@@ -78,5 +79,3 @@ Jitsu is built with a strictly enforced "Zero-Regression" policy:
 ```bash
 just verify
 ```
-
-*Includes: Ruff (Linting), Pyright (Types), Pytest (100% Coverage), and Deptry (Dependencies).*
