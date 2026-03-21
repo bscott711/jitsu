@@ -90,8 +90,8 @@ graph TD
     D --> E[Execution & Request Context]
     E --> F[just verify]
     F --> G[git_commit]
-    G --> H[report_status]
     H --> D
+```
 
 ---
 
