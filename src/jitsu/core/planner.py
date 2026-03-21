@@ -15,6 +15,7 @@ import typer
 from openai import AsyncOpenAI
 
 from jitsu.config import settings
+from jitsu.core.parser import JitsuFuzzyParser
 from jitsu.core.client import LLMClientFactory
 from jitsu.models.core import (
     AgentDirective,
@@ -39,78 +40,6 @@ from jitsu.prompts import (
 from jitsu.providers.tree import DirectoryTreeProvider
 
 logger = logging.getLogger(__name__)
-
-
-class JitsuFuzzyParser:
-    """Extracts structured data safely from XML-tagged LLM output."""
-
-    @staticmethod
-    def extract_tag(text: str, tag: str, default: str = "") -> str:
-        """Extract content from an XML-like tag, handling missing closing tags."""
-        pattern = rf"<{tag}>(.*?)(?:</{tag}>|<(?=[a-zA-Z_]+>)|$)"
-        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
-        return match.group(1).strip() if match else default
-
-    @classmethod
-    def parse_blueprint(cls, text: str) -> EpicBlueprint:
-        """Extract the macro blueprint."""
-        epic_id = cls.extract_tag(text, "epic_id", f"epic-{uuid.uuid4().hex[:6]}")
-        phases = []
-        phase_blocks = re.findall(r"<phase>(.*?)</phase>", text, re.IGNORECASE | re.DOTALL)
-
-        for block in phase_blocks:
-            pid = cls.extract_tag(block, "phase_id")
-            desc = cls.extract_tag(block, "description")
-            if pid:
-                phases.append(PhaseBlueprint(phase_id=pid, description=desc))
-
-        return EpicBlueprint(epic_id=epic_id, phases=phases)
-
-    @classmethod
-    def parse_directive(cls, text: str, epic_id: str, phase_id: str) -> AgentDirective:
-        """Extract the micro directive."""
-        scope_raw = cls.extract_tag(text, "module_scope")
-        scope_list = [s.strip() for s in scope_raw.split(",")] if scope_raw else []
-
-        targets_raw = cls.extract_tag(text, "context_targets")
-        target_list = [t.strip() for t in targets_raw.split("\n") if t.strip()]
-
-        context_targets = [
-            ContextTarget(
-                provider_name="file",
-                target_identifier=t,
-                is_required=True,
-                resolution_mode=TargetResolutionMode.FULL_SOURCE,
-            )
-            for t in target_list
-        ]
-
-        anti_patterns = [
-            a.strip().lstrip("-* ")
-            for a in cls.extract_tag(text, "anti_patterns").split("\n")
-            if a.strip()
-        ]
-        verification = [
-            v.strip()
-            for v in cls.extract_tag(text, "verification_commands").split("\n")
-            if v.strip()
-        ]
-        completion = [
-            c.strip().lstrip("-* ")
-            for c in cls.extract_tag(text, "completion_criteria").split("\n")
-            if c.strip()
-        ]
-
-        return AgentDirective(
-            epic_id=epic_id,
-            phase_id=phase_id,
-            module_scope=scope_list,
-            instructions=cls.extract_tag(text, "instructions", "No instructions provided."),
-            context_targets=context_targets,
-            anti_patterns=anti_patterns,
-            verification_commands=verification,
-            completion_criteria=completion,
-        )
 
 
 class JitsuPlanner:

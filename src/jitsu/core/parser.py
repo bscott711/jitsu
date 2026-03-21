@@ -31,7 +31,7 @@ class JitsuFuzzyParser:
 
         # 2. Fallback: Missing closing tag.
         # Stop at the next MAJOR known tag or EOF. Do NOT stop at random <words>.
-        major_tags = "phase_id|description|module_scope|instructions|context_targets|anti_patterns|verification_commands|completion_criteria"
+        major_tags = "phase|phase_id|description|module_scope|instructions|context_targets|anti_patterns|verification_commands|completion_criteria"
         fallback_pattern = rf"<\s*(?:{tag_group})\s*>(.*?)(?=<\s*/?(?:{major_tags})\s*>|$)"
 
         match = re.search(fallback_pattern, text, re.IGNORECASE | re.DOTALL)
