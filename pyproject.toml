@@ -30,6 +30,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-asyncio",
+    "pytest-xdist",
     "ruff",
     "pyright",
     "import-linter",

@@ -1,0 +1,37 @@
+[
+  {
+    "epic_id": "integrate-pytest-xdist",
+    "phase_id": "update-test-configuration-for-parallel-execution",
+    "module_scope": [
+      "."
+    ],
+    "instructions": "## Instructions\n\n        1. Update `pyproject.toml` to add pytest-xdist as a test dependency.\n           - Locate the `[project.optional-dependencies]` section (create if missing).\n           - Under this section, ensure the `test` list includes `\"pytest-xdist\"`.\n           - If the `test` list does not exist, create it with `[\"pytest\", \"pytest-xdist\"]`.\n           - Example:\n                 [project.optional-dependencies]\n                 test = [\n                     \"pytest\",\n                     \"pytest-xdist\",\n                     ... \n                 ]\n\n        2. Update `JustFile` to enable parallel test execution.\n           - Locate the `test` recipe.\n           - Within the recipe body, replace the existing `pytest` command with `pytest -n auto`.\n           - Preserve any additional flags or arguments (e.g., `--tb=short`).\n           - Example change:\n                 test:\n                     pytest -n auto --tb=short\n\n        COVERAGE SPEC: N/A (no Python source code modified in this phase)\n        TYPE CONTRACTS: N/A (no Python source code modified in this phase)",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "pyproject.toml",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "JustFile",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not bypass the gatekeeper.",
+      "Do not hardcode paths."
+    ],
+    "verification_commands": [
+      "uv run python -c \"import tomllib; tomllib.load(open('pyproject.toml', 'rb'))\" -q",
+      "just --list -q"
+    ],
+    "completion_criteria": [
+      "All tests pass.",
+      "100% coverage achieved."
+    ],
+    "context_injection": null
+  }
+]

@@ -65,5 +65,5 @@ verify: format lint check-types check-deps contracts check-complexity test-unit
 
 # Run tests with strict 100% coverage limit (configured in pyproject.toml)
 test-unit:
-	@echo "🧪 Running strict tests..."
-	uv run pytest
+	@echo "🧪 Running strict tests in parallel..."
+	uv run pytest -n auto
