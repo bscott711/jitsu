@@ -1,0 +1,43 @@
+[
+  {
+    "epic_id": "ast-auto-refactor-toolkit",
+    "phase_id": "implement-ast-transformer-and-tests",
+    "module_scope": [
+      "src/jitsu/providers",
+      "tests/providers"
+    ],
+    "instructions": "## Phase Objective\n        Implement the `ASTTransformer` class in `src/jitsu/providers/ast.py` with methods for renaming functions, renaming classes, and adding parameters to functions. Write comprehensive unit tests in `tests/providers/test_ast_transformer.py` to verify all functionality.\n\n        ## COVERAGE SPEC\n        - Achieve 100% line coverage for the `ASTTransformer` class in `src/jitsu/providers/ast.py`.\n        - All public methods (`rename_function`, `rename_class`, `add_parameter`) must be fully covered by unit tests.\n        - Test edge cases: non-existent functions/classes, duplicate parameters, nested functions/methods, async functions, and invalid syntax recovery.\n\n        ## TYPE CONTRACTS\n        - All methods must be strictly typed using Python 3.12 syntax.\n        - Use `from __future__ import annotations` to enable postponed evaluation.\n        - Parameter and return types:\n          - `rename_function(self, file_path: str, old_name: str, new_name: str) -> None`\n          - `rename_class(self, file_path: str, old_name: str, new_name: str) -> None`\n          - `add_parameter(self, file_path: str, func_name: str, param_name: str, default_value: Any = None) -> None`\n        - Internal helper methods must use precise AST node types from the `ast` module.\n        - Use `typing.Any` only for `default_value` parameter since it accepts any valid Python constant.\n\n        ## IMPLEMENTATION PLAN\n        1. **Update `src/jitsu/providers/ast.py`:**\n           - Add imports: `ast`, `sys`, `typing` (for `Any`)\n           - Implement `ASTTransformer` class with:\n             - `_parse_source()`: Reads file, returns AST tree             - `_validate_and_write()`: Unparses AST, validates syntax, writes to file\n             - Three public methods implementing the specified transformations using nested `ast.NodeTransformer` subclasses\n           - Ensure all methods handle file I/O errors and AST transformation errors appropriately\n           - Add docstrings explaining behavior and limitations\n\n        2. **Create `tests/providers/test_ast_transformer.py`:**\n           - Test file setup: create temporary Python files for each test case\n           - Test `rename_function`:\n             - Simple function rename\n             - Method rename inside class\n             - Async function rename\n             - Non-existent function (should not modify file)\n             - Function in nested scope\n           - Test `rename_class`:\n             - Simple class rename             - Class with methods (verify methods unaffected)\n             - Nested class\n             - Non-existent class\n           - Test `add_parameter`:\n             - Add parameter without default (positional-only at end)\n             - Add parameter with default value (keyword-only)\n             - Add parameter to async function\n             - Add parameter to method\n             - Attempt to add duplicate parameter (should not modify)\n             - Add parameter to function with complex args (*args, **kwargs)\n           - Verify syntax validity after each transformation\n           - Test error handling: unwriteable file, invalid Python syntax\n\n        ## WORKFLOW\n        1. Implement the `ASTTransformer` class in `src/jitsu/providers/ast.py`\n        2. Create the test file `tests/providers/test_ast_transformer.py`\n        3. Run verification commands iteratively until all pass\n\n        ## VERIFICATION COMMANDS\n        uv run ruff check src/jitsu/providers/ast.py -q\n        uv run pyright src/jitsu/providers/ast.py\n        uv run pytest tests/providers/test_ast_transformer.py -q --tb=short --cov=jitsu.providers.ast\n        uv run ruff check tests/providers/test_ast_transformer.py -q\n        uv run pyright tests/providers/test_ast_transformer.py",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/providers/ast.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/providers/test_ast_transformer.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not modify files outside the specified context_targets",
+      "Do not bypass AST validation by writing unparsed source without syntax check        - Do not hardcode file paths; use parameters provided to methods",
+      "Do not use print() or logging to stdout; route all output to sys.stderr"
+    ],
+    "verification_commands": [
+      "uv run ruff check src/jitsu/providers/ast.py -q",
+      "uv run pyright src/jitsu/providers/ast.py",
+      "uv run pytest tests/providers/test_ast_transformer.py -q --tb=short --cov=jitsu.providers.ast",
+      "uv run ruff check tests/providers/test_ast_transformer.py -q",
+      "uv run pyright tests/providers/test_ast_transformer.py"
+    ],
+    "completion_criteria": [
+      "All tests in tests/providers/test_ast_transformer.py pass        - 100% coverage reported for jitsu.providers.ast module",
+      "Zero Ruff linting errors",
+      "Zero Pyright type errors"
+    ],
+    "context_injection": null
+  }
+]

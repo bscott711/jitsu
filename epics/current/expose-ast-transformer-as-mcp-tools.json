@@ -1,0 +1,129 @@
+[
+  {
+    "epic_id": "expose-ast-transformer-as-mcp-tools",
+    "phase_id": "implement-ast-rename-function-tool",
+    "module_scope": [
+      "src/jitsu/server",
+      "tests/server"
+    ],
+    "instructions": "Implement the `jitsu_ast_rename_function` MCP tool in `src/jitsu/server/handlers.py` and its unit tests in `tests/server/test_ast_handlers.py`.\n\n        COVERAGE SPEC:\n        - Handler function: 100% line coverage\n        - Error handling paths: 100% coverage\n        - Registration in `register_all`: 100% coverage\n        - Unit tests: 100% line coverage for the handler\n\n        TYPE CONTRACTS:\n        - Handler function must be async and return `dict[str, str]`\n        - Parameters: `file_path` (str), `old_name` (str), `new_name` (str)\n        - Return dict must contain keys: \"status\" (either \"success\" or \"error\") and \"message\" (str)\n        - Must raise no exceptions; all errors caught and returned in dict        STEPS:\n        1. In `src/jitsu/server/handlers.py`:\n            a. Import `ASTTransformer` from `jitsu.providers.ast`\n            b. Implement async function `jitsu_ast_rename_function`:\n                - Try to instantiate `ASTTransformer` and call its `rename_function` method (assumed to exist)\n                - On success: return {\"status\": \"success\", \"message\": f\"Renamed function {old_name} to {new_name} in {file_path}\"}\n                - On `FileNotFoundError`: return {\"status\": \"error\", \"message\": f\"File not found: {file_path}\"}\n                - On `SyntaxError`: return {\"status\": \"error\", \"message\": f\"Invalid Python syntax in {file_path}\"}\n                - On `ValueError` (e.g., function not found): return {\"status\": \"error\", \"message\": f\"Function {old_name} not found in {file_path}\"}\n                - On any other exception: return {\"status\": \"error\", \"message\": str(exc)}\n            c. In `register_all`:\n                - Add tool definition with:\n                    name: \"jitsu_ast_rename_function\"\n                    description: \"Renames a function or method in a Python file.\"\n                    inputSchema: {\n                        \"type\": \"object\",\n                        \"properties\": {\n                            \"file_path\": {\"type\": \"string\"},\n                            \"old_name\": {\"type\": \"string\"},\n                            \"new_name\": {\"type\": \"string\"}\n                        },\n                        \"required\": [\"file_path\", \"old_name\", \"new_name\"]\n                    }\n                - Map to the handler function\n\n        2. In `tests/server/test_ast_handlers.py`:\n            a. Create test class `TestAstRenameFunctionHandler`\n            b. Test successful rename:\n                - Mock `ASTTransformer.rename_function` to return True\n                - Verify handler returns success dict\n            c. Test function not found:\n                - Mock `ASTTransformer.rename_function` to raise ValueError\n                - Verify handler returns error dict with \"not found\" message\n            d. Test file not found:\n                - Mock `ASTTransformer.__init__` to raise FileNotFoundError\n                - Verify handler returns error dict\n            e. Test syntax error:\n                - Mock `ASTTransformer.__init__` to raise SyntaxError\n                - Verify handler returns error dict\n            f. Test generic exception:\n                - Mock `ASTTransformer.rename_function` to raise Exception\n                - Verify handler returns error dict with exception message\n\n        IMPLEMENTATION NOTES:\n        - Use `typing` for type hints (Python 3.12)\n        - Follow existing code style in handlers.py (Ruff compliant)\n        - Tests must use `unittest.mock` to patch `ASTTransformer`\n        - Do not touch actual file system in tests\n        - Ensure async test methods are marked with `pytest.mark.asyncio` if needed\n        - Keep handler focused: only handle MCP tool logic, delegate AST work to provider        REFERENCE EXISTING PATTERNS:\n        - Follow the pattern of other MCP tools in handlers.py (e.g., if any exist)\n        - Follow existing test patterns in tests/server/test_handlers.py\n</parameter>\n<parameter name=\"file_path\">src/jitsu/server/handlers.py</parameter>",
+    "context_targets": [],
+    "anti_patterns": [],
+    "verification_commands": [
+      "uv run ruff check src/jitsu/server/handlers.py -quv run pytest tests/server/test_ast_handlers.py -q"
+    ],
+    "completion_criteria": [
+      "All tests pass.",
+      "100% coverage achieved."
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "expose-ast-transformer-as-mcp-tools",
+    "phase_id": "implement-ast-rename-class-tool",
+    "module_scope": [
+      "src/jitsu/core",
+      "tests/core"
+    ],
+    "instructions": "## Instructions\n\n        Implement the underlying functionality for the `jitsu_ast_rename_class` tool in the file provider. This involves adding a helper function in `src/jitsu/core/file.py` that performs AST-based class renaming, which will later be used by the MCP tool handler in `src/jitsu/server/handlers.py`.\n\n        ### COVERAGE SPEC        - Achieve 100% line coverage for the new function `rename_class_in_file` in `src/jitsu/core/file.py`.\n        - Achieve 100% line coverage for the test file `tests/core/test_file.py` related to this function.\n\n        ### TYPE CONTRACTS\n        The function `rename_class_in_file` must have the following type signature:\n            async def rename_class_in_file(file_path: str, old_name: str, new_name: str) -> None: ...\n\n        ### Implementation Steps\n\n        1. **Modify `src/jitsu/core/file.py`**:\n           - Add the import: `from jitsu.providers.ast import ASTTransformer` at the top of the file.\n           - Define an asynchronous function `rename_class_in_file` with the specified signature.\n           - Inside the function:\n                a. Read the file content from `file_path` using standard synchronous I/O (acceptable for now as the function is async-aligned).\n                b. Parse the content into an AST using `ast.parse`.\n                c. Define a transient class `RenameClassTransformer` that inherits from `ASTTransformer` and overrides `visit_ClassDef` to rename the class if its name matches `old_name`.\n                d. Instantiate the transformer and apply it to the AST using `transformer.visit(tree)`.\n                e. Use `ast.fix_missing_locations` to correct the AST after transformation.\n                f. Convert the modified AST back to source code using `ast.unparse` (Python 3.9+).\n                g. Write the transformed source back to the same file.\n           - Wrap the entire process in a try-except block to catch any Exception (including `SyntaxError`, `FileNotFoundError`, etc.) and re-raise as a `RuntimeError` with a descriptive message containing the original error.\n\n        2. **Modify `tests/core/test_file.py`**:\n           - Add a test suite for the `rename_class_in_file` function.\n           - Use `pytest` and `tmpdir` fixture for isolated file system testing.\n           - Test Cases:\n                a. **Happy Path**: \n                    - Create a temporary Python file containing a class definition (e.g., `class OldName: pass`).\n                    - Call `rename_class_in_file` with `old_name=\"OldName\"` and `new_name=\"NewName\"`.\n                    - Assert that the file content is now `class NewName: pass`.\n                b. **No Change When Class Not Found**:\n                    - Create a temporary Python file without the target class.\n                    - Call the function and assert that the file content remains unchanged.\n                c. **File Not Found**:\n                    - Call the function with a non-existent file path and assert that a `RuntimeError` is raised.\n                d. **Syntax Error in File**:\n                    - Create a temporary Python file with invalid syntax (e.g., `class Test:` without indented body).\n                    - Call the function and assert that a `RuntimeError` is raised.\n                e. **Nested Class**:\n                    - Create a temporary Python file with a class inside a function or another class.\n                    - Rename the inner class and assert that only the inner class is renamed.\n                f. **Multiple Classes**:\n                    - Create a temporary Python file with multiple classes, only one matching `old_name`.\n                    - Assert that only the matching class is renamed.\n           - Remember to mark async tests with `@pytest.mark.asyncio` or use `asyncio.run()` in the test.\n\n        ### Important Notes        - Do not modify any files outside the specified `context_targets`.\n        - Ensure that all changes adhere to the project's Ruff formatting rules.\n        - The function must be asynchronous to align with the MCP tool handler pattern, even though the current implementation uses blocking I/O. This is acceptable for now and can be refactored to use async I/O (e.g., `aiofiles`) in a future phase if required.\n        - The AST transformer extension assumes that `ASTTransformer` from `jitsu.providers.ast` is a base class intended for custom transformations (similar to `ast.NodeTransformer`). If the actual provider differs, adjust the inheritance or usage accordingly based on its documented interface.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/core/file.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/core/test_file.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not bypass the gatekeeper.",
+      "Do not hardcode paths."
+    ],
+    "verification_commands": [
+      "uv run ruff check src/jitsu/core/file.py -q",
+      "uv run pytest tests/core/test_file.py -q"
+    ],
+    "completion_criteria": [
+      "All tests pass.",
+      "100% coverage achieved."
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "expose-ast-transformer-as-mcp-tools",
+    "phase_id": "implement-ast-add-parameter-tool",
+    "module_scope": [
+      "src/jitsu/server",
+      "tests/server"
+    ],
+    "instructions": "## COVERAGE SPEC\n        - 100% line coverage for src/jitsu/server/handlers.py (specifically the jitsu_ast_add_parameter function and its registration)\n        - 100% line coverage for tests/server/test_ast_handlers.py (specifically the test cases for jitsu_ast_add_parameter)\n\n        ## TYPE CONTRACTS\n        ```python\n        # In src/jitsu/server/handlers.py\n        from typing import Optional\n        from jitsu.providers.ast import ASTTransformer\n\n        async def jitsu_ast_add_parameter(\n            file_path: str,\n            func_name: str,\n            param_name: str,\n            default_value: Optional[str] = None\n        ) -> str:\n            \"\"\"Add a parameter to a function's signature in a Python file using AST transformation.\n            \n            Args:\n                file_path: Path to the Python file to modify\n                func_name: Name of the function to modify\n                param_name: Name of the parameter to add\n                default_value: Optional default value for the parameter (as a string representation)\n                            Returns:\n                Success message or error description            \"\"\"\n            ...\n        \n        # In tests/server/test_ast_handlers.py\n        from unittest.mock import patch, MagicMock\n        import pytest\n        \n        @patch(\"jitsu.server.handlers.ASTTransformer\")\n        async def test_jitsu_ast_add_parameter_success(mock_transformer: MagicMock) -> None:\n            ...\n                    @patch(\"jitsu.server.handlers.ASTTransformer\")\n        async def test_jitsu_ast_add_parameter_error(mock_transformer: MagicMock) -> None:\n            ...\n        ```\n\n        ### Implementation Steps\n\n        1. **Modify `src/jitsu/server/handlers.py`**:\n           - Import `Optional` from `typing` and `ASTTransformer` from `jitsu.providers.ast`\n           - Implement the async function `jitsu_ast_add_parameter` with the signature above           - Inside the function:\n             * Instantiate `ASTTransformer()`\n             * Call `transformer.add_parameter(file_path, func_name, param_name, default_value)`\n             * Return success message: `f\"Successfully added parameter '{param_name}' to function '{func_name}' in {file_path}\"`\n             * Catch `Exception` and return error message: `f\"Error: {str(e)}\"`\n           - In the `register_all` function, register the tool:\n             ```python             mcp.tool(\n                 name=\"jitsu_ast_add_parameter\",\n                 description=\"Add a parameter to a function's signature in a Python file.\",\n             )(jitsu_ast_add_parameter)\n             ```\n\n        2. **Create `tests/server/test_ast_handlers.py`** (if it doesn't exist) or modify it:\n           - Add two test cases using `unittest.mock.patch` to mock `ASTTransformer`:\n             * **Success case**: \n               - Configure mock transformer's `add_parameter` to return None (no exception)\n               - Call `jitsu_ast_add_parameter` with test arguments               - Assert return value contains success message\n             * **Error case**:\n               - Configure mock transformer's `add_parameter` to raise a `SyntaxError`\n               - Call `jitsu_ast_add_parameter` with test arguments\n               - Assert return value starts with \"Error:\"\n\n        3. **Follow existing patterns** in the files for imports, function structure, and registration.\n\n        ### Important Notes\n        - The ASTTransformer's `add_parameter` method is assumed to exist (if not, it must be implemented in `src/jitsu/providers/ast.py` in a separate task)\n        - All file operations are handled by the ASTTransformer; the handler only orchestrates and reports\n        - Default value is passed as a string to be interpreted by the ASTTransformer (e.g., \"None\", \"\\\"default\\\"\", \"42\")\n        - Error handling must be broad to catch any AST/syntax or file issues and return user-friendly messages\n        - Do not hardcode paths; rely on parameters passed to the function\n        - The handler must be fully async but may call synchronous ASTTransformer methods (assumed to be fast)",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "src/jitsu/server/handlers.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      },
+      {
+        "provider_name": "file",
+        "target_identifier": "tests/server/test_ast_handlers.py",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not bypass the gatekeeper by directly manipulating files without using ASTTransformer",
+      "Do not hardcode file paths or function names in the handler",
+      "Do not neglect error handling for AST transformation failures",
+      "Do not forget to register the tool in the register_all function",
+      "Do not write tests that actually modify files on disk (use mocking)"
+    ],
+    "verification_commands": [
+      "uv run ruff check src/jitsu/server/handlers.py -q",
+      "uv run ruff check tests/server/test_ast_handlers.py -q        uv run pytest tests/server/test_ast_handlers.py::test_jitsu_ast_add_parameter_success -q",
+      "uv run pytest tests/server/test_ast_handlers.py::test_jitsu_ast_add_parameter_error -q",
+      "uv run pytest tests/server/test_ast_handlers.py -q --cov=src/jitsu/server/handlers --cov-report=term-missing"
+    ],
+    "completion_criteria": [
+      "The jitsu_ast_add_parameter function is implemented in handlers.py with proper type hints and error handling",
+      "The tool is successfully registered in the register_all function",
+      "Unit tests for both success and error cases pass with 100% coverage for the handler function",
+      "Ruff passes with no errors on the modified files",
+      "No regressions in existing handler functionality (verified by running existing handler tests)"
+    ],
+    "context_injection": null
+  },
+  {
+    "epic_id": "expose-ast-transformer-as-mcp-tools",
+    "phase_id": "update-mcp-tools-documentation",
+    "module_scope": [
+      "docs"
+    ],
+    "instructions": "Update the MCP Tools Reference.md documentation to include the three new AST transformer tools. Follow these steps:\n\n        1. Open the file `docs/MCP Tools Reference.md`.\n        2. Locate the section that lists available MCP tools (typically under a header like \"## Available Tools\" or similar).\n        3. Add documentation for each new tool in the same format as existing tools. For each tool, include:\n           - A header (e.g., \"### jitsu_ast_rename_function\")\n           - A brief description of what the tool does\n           - An \"Args:\" section listing each parameter with its type and description\n\n        4. For `jitsu_ast_rename_function`:\n           ```\n           ### jitsu_ast_rename_function\n           Renames a function or method in a Python file.\n\n           Args:\n             - file_path (str): Path to the target Python file\n             - old_name (str): Current name of the function/method to rename\n             - new_name (str): New name to assign to the function/method\n           ```\n\n        5. For `jitsu_ast_rename_class`:\n           ```\n           ### jitsu_ast_rename_class\n           Renames a class in a Python file.\n\n           Args:\n             - file_path (str): Path to the target Python file\n             - old_name (str): Current name of the class to rename             - new_name (str): New name to assign to the class\n           ```\n\n        6. For `jitsu_ast_add_parameter`:\n           ```\n           ### jitsu_ast_add_parameter\n           Adds a parameter to a function's signature in a Python file.\n\n           Args:\n             - file_path (str): Path to the target Python file\n             - func_name (str): Name of the function to modify\n             - param_name (str): Name of the parameter to add\n             - default_value (any, optional): Default value for the new parameter. If omitted, parameter is added without a default.\n           ```\n\n        7. Ensure the added documentation follows the existing markdown style in the file (consistent header levels, indentation, and phrasing).\n\n        8. Save the file.\n\n        COVERAGE SPEC: N/A - This is a documentation-only change with no executable code coverage implications.\n        TYPE CONTRACTS: N/A - No type signatures or interfaces are modified in this documentation update.\n\n        After updating, verify the markdown syntax is correct using pymarkdown.",
+    "context_targets": [
+      {
+        "provider_name": "file",
+        "target_identifier": "docs/MCP Tools Reference.md",
+        "is_required": true,
+        "resolution_mode": "FULL_SOURCE"
+      }
+    ],
+    "anti_patterns": [
+      "Do not bypass the gatekeeper.",
+      "Do not hardcode paths."
+    ],
+    "verification_commands": [
+      "uv run pymarkdown scan docs/MCP Tools Reference.md --quiet"
+    ],
+    "completion_criteria": [
+      "The file `docs/MCP Tools Reference.md` contains documentation for all three new AST tools.",
+      "The markdown file passes pymarkdown linting with zero errors."
+    ],
+    "context_injection": null
+  }
+]

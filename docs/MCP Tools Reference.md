@@ -1,6 +1,6 @@
 # Jitsu MCP Tools Reference
 
-Jitsu exposes a suite of **10 core tools** via the Model Context Protocol (MCP) to allow IDE agents to self-orchestrate and pull context dynamically.
+Jitsu exposes a suite of **13 core tools** via the Model Context Protocol (MCP) to allow IDE agents to self-orchestrate and pull context dynamically.
 
 ## 1. Orchestration & Queue Management
 
@@ -72,3 +72,30 @@ Jitsu exposes a suite of **10 core tools** via the Model Context Protocol (MCP) 
 - **Parameters**:
   - `test_file_path` (string): The path to the test file to execute.
   - `module_scope` (array): A list of module strings to track (e.g., `["jitsu.core", "jitsu.providers"]`).
+
+## 6. AST-Based Code Modification
+
+### `jitsu_ast_rename_function`
+
+- **Description**: Renames a function or method in a Python file using AST transformation.
+- **Parameters**:
+  - `file_path` (string): Path to the target Python file.
+  - `old_name` (string): Current name of the function or method to rename.
+  - `new_name` (string): New name to assign to the function or method.
+
+### `jitsu_ast_rename_class`
+
+- **Description**: Renames a class in a Python file using AST transformation.
+- **Parameters**:
+  - `file_path` (string): Path to the target Python file.
+  - `old_name` (string): Current name of the class to rename.
+  - `new_name` (string): New name to assign to the class.
+
+### `jitsu_ast_add_parameter`
+
+- **Description**: Adds a parameter to a function's signature in a Python file using AST transformation.
+- **Parameters**:
+  - `file_path` (string): Path to the target Python file.
+  - `func_name` (string): Name of the function to modify.
+  - `param_name` (string): Name of the parameter to add.
+  - `default_value` (string, optional): String representation of the default value for the new parameter (e.g., `"None"`, `"'default'"`).

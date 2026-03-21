@@ -14,7 +14,7 @@ from jitsu.core.state import JitsuStateManager
 from jitsu.models.core import AgentDirective
 from jitsu.server.handlers import ToolHandlers
 
-EXPECTED_TOOL_COUNT = 10
+EXPECTED_TOOL_COUNT = 13
 
 
 @pytest.fixture

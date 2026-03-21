@@ -12,7 +12,7 @@ from mcp.types import TextContent
 from jitsu.models.core import AgentDirective
 from jitsu.server.mcp_server import handle_call_tool, handle_list_tools, run_server, state_manager
 
-EXPECTED_TOOL_COUNT = 11
+EXPECTED_TOOL_COUNT = 14
 
 
 @pytest.mark.asyncio

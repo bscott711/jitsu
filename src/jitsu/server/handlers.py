@@ -1,5 +1,6 @@
 """Tool handlers for the Jitsu MCP server."""
 
+import ast
 import contextlib
 import json
 import re
@@ -22,7 +23,7 @@ from jitsu.core.state import JitsuStateManager
 from jitsu.core.storage import EpicStorage
 from jitsu.models.core import AgentDirective, PhaseReport, PhaseStatus
 from jitsu.models.execution import PlannerOptions
-from jitsu.providers import DirectoryTreeProvider, GitProvider, ProviderRegistry
+from jitsu.providers import ASTTransformer, DirectoryTreeProvider, GitProvider, ProviderRegistry
 from jitsu.server.registry import ToolRegistry
 
 
@@ -350,6 +351,214 @@ class ToolHandlers:
             )
             return [types.TextContent(type="text", text=error_msg)]
 
+    async def handle_ast_rename_function(
+        self, arguments: dict[str, object] | None
+    ) -> list[types.TextContent]:
+        """Handle 'jitsu_ast_rename_function' tool request."""
+        if (
+            not arguments
+            or "file_path" not in arguments
+            or "old_name" not in arguments
+            or "new_name" not in arguments
+        ):
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "error", "message": "Missing arguments"}),
+                )
+            ]
+
+        file_path = str(arguments["file_path"])
+        old_name = str(arguments["old_name"])
+        new_name = str(arguments["new_name"])
+
+        transformer = ASTTransformer()
+        try:
+            await transformer.rename_function(file_path, old_name, new_name)
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "status": "success",
+                            "message": f"Renamed function {old_name} to {new_name} in {file_path}",
+                        }
+                    ),
+                )
+            ]
+        except FileNotFoundError:
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "error", "message": f"File not found: {file_path}"}),
+                )
+            ]
+        except SyntaxError:
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {"status": "error", "message": f"Invalid Python syntax in {file_path}"}
+                    ),
+                )
+            ]
+        except ValueError as e:
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "error", "message": str(e)}),
+                )
+            ]
+        except Exception as e:  # noqa: BLE001
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "error", "message": str(e)}),
+                )
+            ]
+
+    async def handle_ast_rename_class(
+        self, arguments: dict[str, object] | None
+    ) -> list[types.TextContent]:
+        """Handle 'jitsu_ast_rename_class' tool request."""
+        if (
+            not arguments
+            or "file_path" not in arguments
+            or "old_name" not in arguments
+            or "new_name" not in arguments
+        ):
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "error", "message": "Missing arguments"}),
+                )
+            ]
+
+        file_path = str(arguments["file_path"])
+        old_name = str(arguments["old_name"])
+        new_name = str(arguments["new_name"])
+
+        transformer = ASTTransformer()
+        try:
+            await transformer.rename_class(file_path, old_name, new_name)
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "status": "success",
+                            "message": f"Renamed class {old_name} to {new_name} in {file_path}",
+                        }
+                    ),
+                )
+            ]
+        except FileNotFoundError:
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "error", "message": f"File not found: {file_path}"}),
+                )
+            ]
+        except SyntaxError:
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {"status": "error", "message": f"Invalid Python syntax in {file_path}"}
+                    ),
+                )
+            ]
+        except ValueError as e:
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "error", "message": str(e)}),
+                )
+            ]
+        except Exception as e:  # noqa: BLE001
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "error", "message": str(e)}),
+                )
+            ]
+
+    async def handle_ast_add_parameter(
+        self, arguments: dict[str, object] | None
+    ) -> list[types.TextContent]:
+        """Handle 'jitsu_ast_add_parameter' tool request."""
+        if (
+            not arguments
+            or "file_path" not in arguments
+            or "func_name" not in arguments
+            or "param_name" not in arguments
+        ):
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "error", "message": "Missing arguments"}),
+                )
+            ]
+
+        file_path = str(arguments["file_path"])
+        func_name = str(arguments["func_name"])
+        param_name = str(arguments["param_name"])
+        default_val_raw = arguments.get("default_value")
+
+        default_value = None
+        if default_val_raw is not None:
+            try:
+                # Try to interpret string representation of constants
+                default_value = ast.literal_eval(str(default_val_raw))
+            except (ValueError, SyntaxError):
+                # Fallback to the raw value if it's not a valid literal
+                default_value = default_val_raw
+
+        transformer = ASTTransformer()
+        try:
+            await transformer.add_parameter(file_path, func_name, param_name, default_value)
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "status": "success",
+                            "message": f"Successfully added parameter '{param_name}' to function '{func_name}' in {file_path}",
+                        }
+                    ),
+                )
+            ]
+        except FileNotFoundError:
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "error", "message": f"File not found: {file_path}"}),
+                )
+            ]
+        except SyntaxError:
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {"status": "error", "message": f"Invalid Python syntax in {file_path}"}
+                    ),
+                )
+            ]
+        except ValueError as e:
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "error", "message": str(e)}),
+                )
+            ]
+        except Exception as e:  # noqa: BLE001
+            return [
+                types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "error", "message": str(e)}),
+                )
+            ]
+
     def register_all(self, registry: ToolRegistry) -> None:
         """Register all tools with the registry."""
         registry.register(
@@ -533,4 +742,59 @@ class ToolHandlers:
                 },
             ),
             self.handle_check_coverage,
+        )
+
+        registry.register(
+            types.Tool(
+                name="jitsu_ast_rename_function",
+                description="Renames a function or method in a Python file.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "file_path": {"type": "string"},
+                        "old_name": {"type": "string"},
+                        "new_name": {"type": "string"},
+                    },
+                    "required": ["file_path", "old_name", "new_name"],
+                },
+            ),
+            self.handle_ast_rename_function,
+        )
+
+        registry.register(
+            types.Tool(
+                name="jitsu_ast_rename_class",
+                description="Renames a class in a Python file.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "file_path": {"type": "string"},
+                        "old_name": {"type": "string"},
+                        "new_name": {"type": "string"},
+                    },
+                    "required": ["file_path", "old_name", "new_name"],
+                },
+            ),
+            self.handle_ast_rename_class,
+        )
+
+        registry.register(
+            types.Tool(
+                name="jitsu_ast_add_parameter",
+                description="Adds a parameter to a function's signature in a Python file.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "file_path": {"type": "string"},
+                        "func_name": {"type": "string"},
+                        "param_name": {"type": "string"},
+                        "default_value": {
+                            "type": "string",
+                            "description": "Optional default value for the parameter as a string representation.",
+                        },
+                    },
+                    "required": ["file_path", "func_name", "param_name"],
+                },
+            ),
+            self.handle_ast_add_parameter,
         )
