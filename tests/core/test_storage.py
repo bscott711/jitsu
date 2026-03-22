@@ -20,13 +20,13 @@ class TestEpicStorageDirectories:
     def test_current_dir_created(self, storage: EpicStorage, tmp_path: Path) -> None:
         """current_dir creates and returns the correct path."""
         d = storage.current_dir
-        assert d == tmp_path / "epics" / "current"
+        assert d == tmp_path / ".jitsu" / "epics"
         assert d.exists()
 
     def test_completed_dir_created(self, storage: EpicStorage, tmp_path: Path) -> None:
         """completed_dir creates and returns the correct path."""
         d = storage.completed_dir
-        assert d == tmp_path / "epics" / "completed"
+        assert d == tmp_path / ".jitsu" / "completed"
         assert d.exists()
 
     def test_default_base_dir(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -38,7 +38,7 @@ class TestEpicStorageDirectories:
     def test_get_current_path(self, storage: EpicStorage, tmp_path: Path) -> None:
         """get_current_path returns the correct path for an epic_id."""
         p = storage.get_current_path("epic-123")
-        assert p == tmp_path / "epics" / "current" / "epic-123.json"
+        assert p == tmp_path / ".jitsu" / "epics" / "epic-123.json"
 
 
 class TestEpicStorageReadText:
@@ -83,7 +83,7 @@ class TestEpicStorageArchive:
 
         dest = storage.archive(src)
 
-        assert dest == tmp_path / "epics" / "completed" / "epic.json"
+        assert dest == tmp_path / ".jitsu" / "completed" / "epic.json"
         assert dest.exists()
         assert not src.exists()
 
@@ -114,6 +114,6 @@ class TestEpicStorageCompletedRel:
         self, storage: EpicStorage, tmp_path: Path
     ) -> None:
         """completed_rel returns path relative to the base dir."""
-        dest = tmp_path / "epics" / "completed" / "epic.json"
+        dest = tmp_path / ".jitsu" / "completed" / "epic.json"
         rel = storage.completed_rel(dest)
-        assert rel == "epics/completed/epic.json"
+        assert rel == ".jitsu/completed/epic.json"

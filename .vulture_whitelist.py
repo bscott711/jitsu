@@ -11,6 +11,7 @@ thoughts
 # Pytest Fixtures
 clear_state
 _clean_cache
+_mock_cwd
 
 # Prompts
 TAG_INSTRUCTIONS

@@ -1,7 +1,20 @@
 """Unit tests for the Jitsu Core State Manager."""
 
+import typing
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
 from jitsu.core.state import JitsuStateManager
 from jitsu.models.core import AgentDirective, PhaseReport, PhaseStatus
+
+
+@pytest.fixture(autouse=True)
+def _mock_cwd(tmp_path: Path) -> typing.Generator[None, None, None]:
+    """Mock Path.cwd() to return a temporary directory."""
+    with patch("jitsu.core.state.Path.cwd", return_value=tmp_path):
+        yield
 
 
 def test_state_manager_initialization() -> None:

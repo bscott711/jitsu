@@ -1,13 +1,18 @@
 """State management for the Jitsu MCP Server."""
 
+from pathlib import Path
+
 from jitsu.models.core import AgentDirective, PhaseReport
 
 
 class JitsuStateManager:
     """Manages the in-memory state of agent directives and phase reports."""
 
-    def __init__(self) -> None:
+    def __init__(self, base_dir: Path | None = None) -> None:
         """Initialize an empty state manager."""
+        self.base_dir = base_dir or (Path.cwd() / ".jitsu")
+        self.queue_dir = self.base_dir / "queue"
+        self.queue_dir.mkdir(parents=True, exist_ok=True)
         self._queue: list[AgentDirective] = []
         self._reports: list[PhaseReport] = []
         self._phase_to_epic: dict[str, str] = {}

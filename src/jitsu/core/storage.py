@@ -25,8 +25,8 @@ class EpicStorage:
 
     @property
     def current_dir(self) -> Path:
-        """Return the epics/current directory, creating it if necessary."""
-        p = self.base_dir / "epics" / "current"
+        """Return the epics directory, creating it if necessary."""
+        p = self.base_dir / ".jitsu" / "epics"
         p.mkdir(parents=True, exist_ok=True)
         return p
 
@@ -36,8 +36,8 @@ class EpicStorage:
 
     @property
     def completed_dir(self) -> Path:
-        """Return the epics/completed directory, creating it if necessary."""
-        p = self.base_dir / "epics" / "completed"
+        """Return the completed directory, creating it if necessary."""
+        p = self.base_dir / ".jitsu" / "completed"
         p.mkdir(parents=True, exist_ok=True)
         return p
 
