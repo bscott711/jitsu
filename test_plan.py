@@ -21,12 +21,22 @@ async def main() -> None:
     """Run a manual planning cycle to test model latency and progress streaming."""
     load_dotenv()
 
-    # The multi-phase stress test prompt
+    # The Observability Epic stress test prompt
     prompt = (
-        "We need to aggressively expand Jitsu's diagnostic capabilities by adding TWO new MCP tools. "
-        "1. `jitsu_check_coverage`: Takes a test file path and module scope, runs pytest with coverage, and returns missing line numbers. "
-        "2. `jitsu_run_linter`: Takes a target directory, runs 'uv run ruff check', and returns the parsed error output. "
-        "Both tools must be fully implemented in handlers.py, registered in registry.py, and rigorously tested in test_handlers.py."
+        "Implement dynamic observability for the Jitsu Planner to expose LLM generation and Pydantic validation errors without restarting the server.\n\n"
+        "Phase 1: Update the `jitsu_plan_epic` tool schema in `src/jitsu/server/registry.py` and `src/jitsu/server/handlers.py` to accept an optional `verbose: bool = False` parameter.\n"
+        "Phase 2: Inside the `jitsu_plan_epic` handler, if `verbose` is true, create a `PlannerOptions(verbose=True)` object. CRITICAL: Define an `on_progress` async callback that writes strictly to `sys.stderr` (e.g., `sys.stderr.write(msg + '\\n')` and `sys.stderr.flush()`) so it does not corrupt the MCP stdout JSON-RPC stream. Pass these options to `planner.generate_plan(options=options)`.\n"
+        "Phase 3: Update `src/jitsu/core/planner.py` to ensure that when a Pydantic `ValidationError` or generic Exception occurs during the retry loop, the full traceback is printed to `sys.stderr` if `verbose` is True.\n\n"
+        "CRITICAL CONSTRAINT: Use strictly scoped `verification_commands` (e.g., `uv run ruff check src/jitsu/server/handlers.py` and `uv run pytest tests/server -n auto`). Do NOT use empty arrays or 'just verify'."
+    )
+
+    planner = JitsuPlanner(
+        objective=prompt,
+        relevant_files=[
+            "src/jitsu/server/handlers.py",
+            "src/jitsu/server/registry.py",
+            "src/jitsu/core/planner.py",
+        ],
     )
 
     typer.echo("🚀 Booting Jitsu Planner...")

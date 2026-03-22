@@ -595,3 +595,71 @@ async def test_planner_parse_error_handling() -> None:
     # Invalid directive (missing fields will raise ValidationError)
     with pytest.raises(ValidationError):
         JitsuFuzzyParser.parse_directive("", "e1", "p1")
+
+
+@pytest.mark.asyncio
+async def test_planner_generate_plan_verbose_validation_error() -> None:
+    """Test that the planner logs traceback on validation error when verbose is True."""
+    mock_client = MagicMock()
+    # Malformed XML will cause parse_blueprint to fail with ValidationError
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_response("INVALID_CONTENT"))
+
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+
+    with (
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+        patch("sys.stderr.write") as mock_stderr,
+        pytest.raises(ValidationError),
+    ):
+        await planner.generate_plan(options=PlannerOptions(verbose=True))
+
+    # traceback.print_exc() writes multiple lines, so just check it was called.
+    assert mock_stderr.called
+
+
+@pytest.mark.asyncio
+async def test_planner_generate_plan_verbose_false_validation_error() -> None:
+    """Test that the planner raises traceback on validation error when verbose is False."""
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_response("INVALID_CONTENT"))
+
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+
+    with (
+        patch("jitsu.core.planner.anyio.Path.exists", return_value=False),
+        patch("jitsu.core.planner.DirectoryTreeProvider.resolve", return_value="tree"),
+        pytest.raises(ValidationError),
+    ):
+        await planner.generate_plan(options=PlannerOptions(verbose=False))
+
+
+@pytest.mark.asyncio
+async def test_planner_elaborate_phase_verbose_validation_error() -> None:
+    """Test that _elaborate_phase logs traceback on validation error when verbose is True."""
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_response("INVALID_CONTENT"))
+
+    planner = JitsuPlanner(objective="Test", relevant_files=[], client=mock_client)
+    blueprint = EpicBlueprint(
+        epic_id="e1",
+        phases=[PhaseBlueprint(phase_id="p1", description="test phase")],
+    )
+
+    with (
+        patch("sys.stderr.write") as mock_stderr,
+        pytest.raises(ValidationError),
+    ):
+        await planner._elaborate_phase(
+            index=0,
+            phase=blueprint.phases[0],
+            blueprint=blueprint,
+            base_prompt="",
+            user_message="",
+            allowed_providers="",
+            _model="test",
+            client=mock_client,
+            opts=PlannerOptions(verbose=True),
+        )
+
+    assert mock_stderr.called

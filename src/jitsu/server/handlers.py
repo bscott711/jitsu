@@ -196,7 +196,7 @@ class ToolHandlers:
         self,
         prompt: str,
         relevant_files: list[str],
-        on_progress: typing.Callable[[str], typing.Awaitable[None]],
+        options: PlannerOptions,
     ) -> tuple[str, str] | None:
         """
         Execute the full planning workflow.
@@ -206,7 +206,7 @@ class ToolHandlers:
 
         """
         planner = JitsuPlanner(objective=prompt, relevant_files=relevant_files)
-        await planner.generate_plan(options=PlannerOptions(on_progress=on_progress))
+        await planner.generate_plan(options=options)
 
         if not planner.directives:
             return None
@@ -233,9 +233,23 @@ class ToolHandlers:
 
         prompt = str(arguments["prompt"])
         relevant_files = typing.cast("list[str]", arguments.get("relevant_files", []))
+        verbose = bool(arguments.get("verbose", False))
 
         on_progress = await self._create_progress_callback(arguments)
-        result = await self._execute_plan_workflow(prompt, relevant_files, on_progress)
+        options = PlannerOptions()
+
+        if verbose:
+            options.verbose = True
+
+            async def stderr_progress(msg: str) -> None:
+                sys.stderr.write(msg + "\n")
+                sys.stderr.flush()
+
+            options.on_progress = stderr_progress
+        else:
+            options.on_progress = on_progress
+
+        result = await self._execute_plan_workflow(prompt, relevant_files, options)
 
         if result is None:
             return [types.TextContent(type="text", text="Error: Failed to generate plan.")]
@@ -720,6 +734,11 @@ class ToolHandlers:
                             "type": "array",
                             "items": {"type": "string"},
                             "description": "Optional list of files relevant to the planning task.",
+                        },
+                        "verbose": {
+                            "type": "boolean",
+                            "description": "If true, logs internal planner errors to stderr.",
+                            "default": False,
                         },
                     },
                     "required": ["prompt"],

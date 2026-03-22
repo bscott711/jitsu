@@ -4,6 +4,8 @@ import asyncio
 import inspect
 import json
 import logging
+import sys
+import traceback
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast, get_args
@@ -11,6 +13,7 @@ from typing import Any, cast, get_args
 import anyio
 import typer
 from openai import AsyncOpenAI
+from pydantic import ValidationError
 
 from jitsu.config import settings
 from jitsu.core.client import LLMClientFactory
@@ -125,7 +128,12 @@ class JitsuPlanner:
         )
         # FIX: Access choices[0].message.content (not choices.message)
         content = response.choices[0].message.content or ""
-        return JitsuFuzzyParser.parse_directive(content, blueprint.epic_id, phase.phase_id)
+        try:
+            return JitsuFuzzyParser.parse_directive(content, blueprint.epic_id, phase.phase_id)
+        except (ValidationError, Exception):
+            if opts and opts.verbose:
+                traceback.print_exc(file=sys.stderr)
+            raise
 
     async def generate_plan(
         self,
@@ -187,7 +195,12 @@ class JitsuPlanner:
         # Use cast to satisfy strict Pyright unknown member checks
         message = blueprint_resp.choices[0].message
         content = cast("str | None", getattr(message, "content", "")) or ""
-        blueprint = JitsuFuzzyParser.parse_blueprint(content)
+        try:
+            blueprint = JitsuFuzzyParser.parse_blueprint(content)
+        except (ValidationError, Exception):
+            if opts and opts.verbose:
+                traceback.print_exc(file=sys.stderr)
+            raise
         self.epic_id = blueprint.epic_id
 
         if opts.verbose:
