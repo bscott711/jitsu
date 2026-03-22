@@ -36,6 +36,7 @@ htmlcov/
 .cursor/
 .windsurf/
 .agents/
+.jitsu/
 *.swp
 *.swo
 .DS_Store

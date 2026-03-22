@@ -330,12 +330,12 @@ async def test_handle_plan_epic_success(handlers: ToolHandlers) -> None:
 
         mock_storage = mock_storage_cls.return_value
         mock_storage.get_current_path.return_value = Path("epic-planned.json")
-        mock_storage.rel_path.return_value = "epics/current/epic-planned.json"
+        mock_storage.rel_path.return_value = ".jitsu/epics/epic-planned.json"
 
         result = await handlers.handle_plan_epic({"prompt": "New epic"})
 
         assert "Successfully generated epic 'epic-planned'" in result[0].text
-        assert "epics/current/epic-planned.json" in result[0].text
+        assert ".jitsu/epics/epic-planned.json" in result[0].text
         mock_planner.generate_plan.assert_called_once()
         mock_planner.save_plan.assert_called_once()
 

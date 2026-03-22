@@ -52,7 +52,7 @@ async def handle_agent_plan(arguments: dict[str, object] | None) -> list[types.T
     msg = (
         f"Use `jitsu / plan_epic` to plan this objective: {objective}. "
         f"You must generate a JSON array of AgentDirectives strictly matching this schema: {schema_json}. "
-        f"Write the resulting JSON directly to epics/planned/ using your file-writing capabilities. "
+        f"Write the resulting JSON directly to .jitsu/epics/ using your file-writing capabilities. "
         f"Do not execute the epic yet."
     )
     return [types.TextContent(type="text", text=msg)]

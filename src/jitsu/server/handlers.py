@@ -214,7 +214,7 @@ class ToolHandlers:
         if not planner.epic_id:
             return None
 
-        storage = EpicStorage(Path.cwd())
+        storage = EpicStorage()
         path = storage.get_current_path(planner.epic_id)
         planner.save_plan(path)
         rel_path = storage.rel_path(path)
