@@ -10,7 +10,7 @@ class JitsuStateManager:
 
     def __init__(self, base_dir: Path | None = None) -> None:
         """Initialize an empty state manager."""
-        self.base_dir = base_dir or (Path.cwd() / ".jitsu")
+        self.base_dir = base_dir or (Path.home() / ".jitsu")
         self.queue_dir = self.base_dir / "queue"
         self.queue_dir.mkdir(parents=True, exist_ok=True)
         self._queue: list[AgentDirective] = []

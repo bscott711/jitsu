@@ -30,8 +30,12 @@ class TestEpicStorageDirectories:
         assert d.exists()
 
     def test_default_base_dir(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        """EpicStorage defaults to Path.cwd() when base_dir is not given."""
-        monkeypatch.chdir(tmp_path)
+        """EpicStorage defaults to Path.home() when base_dir is not given."""
+
+        def mock_home() -> Path:
+            return tmp_path
+
+        monkeypatch.setattr(Path, "home", mock_home)
         s = EpicStorage()
         assert s.base_dir == tmp_path
 

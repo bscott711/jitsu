@@ -17,7 +17,7 @@ class EpicStorage:
 
     def __init__(self, base_dir: Path | None = None) -> None:
         """Initialise storage with an optional base directory."""
-        self.base_dir = base_dir or Path.cwd()
+        self.base_dir = base_dir or Path.home()
 
     # ------------------------------------------------------------------
     # Directory helpers
